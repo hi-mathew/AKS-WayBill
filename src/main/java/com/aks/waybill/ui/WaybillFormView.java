@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /** Reusable New/Edit/View waybill form. */
@@ -33,6 +34,7 @@ public class WaybillFormView extends AppView {
     private final Runnable onCancel;
     private final Runnable onCreateNew;
     private final Consumer<Long> onViewSaved;
+    private boolean newWaybillSaved;
 
     private final Label numberLabel = new Label();
     private final DatePicker waybillDate = new DatePicker(LocalDate.now());
@@ -430,7 +432,7 @@ public class WaybillFormView extends AppView {
             saveAndView.getStyleClass().add("secondary-button");
             saveAndView.setOnAction(event -> saveNew(true));
 
-            Button saveAndCreate = new Button("Save & Create New");
+            Button saveAndCreate = new Button("Save");
             saveAndCreate.getStyleClass().add("primary-button");
             saveAndCreate.setOnAction(event -> saveNew(false));
 
@@ -582,8 +584,13 @@ public class WaybillFormView extends AppView {
 
     private void saveNew(boolean viewSavedWaybills) {
         clearMessage();
+        if (mode == Mode.NEW && newWaybillSaved) {
+            showError("This waybill has already been saved. Choose Create New to start another waybill.");
+            return;
+        }
         WaybillService.SavedWaybill saved = persistNew();
         if (saved == null) return;
+        newWaybillSaved = true;
         if (viewSavedWaybills) {
             onSaved.run();
         } else {
@@ -592,32 +599,53 @@ public class WaybillFormView extends AppView {
     }
 
     private void showSaveSuccessDialog(WaybillService.SavedWaybill saved) {
-        Alert dialog = new Alert(Alert.AlertType.INFORMATION);
-        dialog.setTitle("Waybill Saved");
-        dialog.setHeaderText("Waybill saved successfully");
-        dialog.setContentText("Waybill " + saved.waybillNumber() + " saved successfully.");
-        if (getScene() != null && getScene().getWindow() != null) {
-            dialog.initOwner(getScene().getWindow());
-        }
-
-        ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
-        ButtonType pdf = new ButtonType("Generate PDF", ButtonBar.ButtonData.OTHER);
-        ButtonType word = new ButtonType("Generate Word", ButtonBar.ButtonData.OTHER);
-        ButtonType createNew = new ButtonType("Create New", ButtonBar.ButtonData.OTHER);
-        dialog.getButtonTypes().setAll(view, pdf, word, createNew, ButtonType.CANCEL);
-
-        dialog.showAndWait().ifPresent(result -> {
-            if (result == view) {
-                onViewSaved.accept(saved.id());
-            } else if (result == pdf) {
-                WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id());
-            } else if (result == word) {
-                WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id());
-            } else if (result == createNew) {
-                clearForm();
-                onCreateNew.run();
+        while (true) {
+            Alert dialog = new Alert(Alert.AlertType.INFORMATION);
+            dialog.setTitle("Waybill Saved");
+            dialog.setHeaderText("Waybill saved successfully");
+            dialog.setContentText("Waybill " + saved.waybillNumber() + " saved successfully.");
+            if (getScene() != null && getScene().getWindow() != null) {
+                dialog.initOwner(getScene().getWindow());
             }
-        });
+
+            ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
+            ButtonType pdf = new ButtonType("Generate PDF", ButtonBar.ButtonData.OTHER);
+            ButtonType word = new ButtonType("Generate Word", ButtonBar.ButtonData.OTHER);
+            ButtonType createNew = new ButtonType("Create New", ButtonBar.ButtonData.OTHER);
+            dialog.getButtonTypes().setAll(view, pdf, word, createNew, ButtonType.CANCEL);
+
+            Optional<ButtonType> result = dialog.showAndWait();
+            if (result.isEmpty() || result.get() == ButtonType.CANCEL) {
+                // The current form contains an already-saved waybill. Do not leave it
+                // available as a NEW form, because saving it again would create a duplicate.
+                onSaved.run();
+                return;
+            }
+
+            if (result.get() == view) {
+                onViewSaved.accept(saved.id());
+                return;
+            }
+
+            if (result.get() == pdf) {
+                WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id());
+                // Keep the post-save dialog available after report generation so the
+                // user can explicitly choose Create New or leave the screen safely.
+                continue;
+            }
+
+            if (result.get() == word) {
+                WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id());
+                continue;
+            }
+
+            if (result.get() == createNew) {
+                clearForm();
+                newWaybillSaved = false;
+                onCreateNew.run();
+                return;
+            }
+        }
     }
 
     private WaybillService.SavedWaybill persistNew() {
