@@ -26,12 +26,12 @@ public final class Database {
                 ensureDefaultUserCodes(c);
                 s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_app_user_user_code ON app_user(user_code)");
                 s.execute("CREATE TABLE IF NOT EXISTS application_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
-                s.execute("CREATE TABLE IF NOT EXISTS company (id INTEGER PRIMARY KEY AUTOINCREMENT, company_name TEXT NOT NULL, contact_person TEXT, address TEXT, phone_number TEXT, email_address TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+                ensureSeparateCompanyMasters(c);
                 s.execute("CREATE TABLE IF NOT EXISTS saved_carrier (id INTEGER PRIMARY KEY AUTOINCREMENT, carrier_name TEXT NOT NULL UNIQUE COLLATE NOCASE, driver_name TEXT, vehicle_trailer_no TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 ensureColumn(c, "saved_carrier", "driver_name", "TEXT");
                 ensureColumn(c, "saved_carrier", "vehicle_trailer_no", "TEXT");
                 s.execute("CREATE TABLE IF NOT EXISTS saved_location (id INTEGER PRIMARY KEY AUTOINCREMENT, location_name TEXT NOT NULL UNIQUE COLLATE NOCASE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
-                s.execute("CREATE TABLE IF NOT EXISTS waybill (id INTEGER PRIMARY KEY AUTOINCREMENT, waybill_number TEXT NOT NULL UNIQUE, waybill_date TEXT NOT NULL, shipper_company_id INTEGER, consignee_company_id INTEGER, carrier_name TEXT, driver_name TEXT, vehicle_trailer_no TEXT, origin_loading_point TEXT, destination_unloading_point TEXT, estimated_delivery_date TEXT, special_instructions TEXT, hazardous_materials INTEGER NOT NULL DEFAULT 0, remarks TEXT, shipper_declaration_name TEXT, shipper_declaration_date TEXT, carrier_receipt_driver_name TEXT, carrier_receipt_date TEXT, consignee_pod_receiver_name TEXT, consignee_pod_date TEXT, created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(shipper_company_id) REFERENCES company(id), FOREIGN KEY(consignee_company_id) REFERENCES company(id), FOREIGN KEY(created_by) REFERENCES app_user(id))");
+                s.execute("CREATE TABLE IF NOT EXISTS waybill (id INTEGER PRIMARY KEY AUTOINCREMENT, waybill_number TEXT NOT NULL UNIQUE, waybill_date TEXT NOT NULL, shipper_company_id INTEGER, consignee_company_id INTEGER, carrier_name TEXT, driver_name TEXT, vehicle_trailer_no TEXT, origin_loading_point TEXT, destination_unloading_point TEXT, estimated_delivery_date TEXT, special_instructions TEXT, hazardous_materials INTEGER NOT NULL DEFAULT 0, remarks TEXT, shipper_declaration_name TEXT, shipper_declaration_date TEXT, carrier_receipt_driver_name TEXT, carrier_receipt_date TEXT, consignee_pod_receiver_name TEXT, consignee_pod_date TEXT, created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(shipper_company_id) REFERENCES shipper_company(id), FOREIGN KEY(consignee_company_id) REFERENCES consignee_company(id), FOREIGN KEY(created_by) REFERENCES app_user(id))");
                 ensureColumn(c, "waybill", "shipper_declaration_name", "TEXT");
                 ensureColumn(c, "waybill", "shipper_declaration_date", "TEXT");
                 ensureColumn(c, "waybill", "carrier_receipt_driver_name", "TEXT");
@@ -43,6 +43,40 @@ public final class Database {
             }
         } catch (IOException | SQLException e) {
             throw new IllegalStateException("Unable to initialize AKS Waybill database", e);
+        }
+    }
+
+
+    private static void ensureSeparateCompanyMasters(Connection c) throws SQLException {
+        boolean legacyCompany = tableExists(c, "company");
+        try (Statement s = c.createStatement()) {
+            s.execute("CREATE TABLE IF NOT EXISTS shipper_company (id INTEGER PRIMARY KEY AUTOINCREMENT, company_name TEXT NOT NULL, contact_person TEXT, address TEXT, phone_number TEXT, email_address TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS consignee_company (id INTEGER PRIMARY KEY AUTOINCREMENT, company_name TEXT NOT NULL, contact_person TEXT, address TEXT, phone_number TEXT, email_address TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+        }
+        if (!legacyCompany) return;
+
+        c.createStatement().execute("PRAGMA foreign_keys = OFF");
+        try (Statement s = c.createStatement()) {
+            // Existing data is preserved, but copied into two independent masters.
+            s.execute("INSERT OR IGNORE INTO shipper_company(id, company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) SELECT id, company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at FROM company");
+            s.execute("INSERT OR IGNORE INTO consignee_company(id, company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) SELECT id, company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at FROM company");
+            if (tableExists(c, "waybill")) {
+                s.execute("DROP TABLE IF EXISTS waybill_new");
+                s.execute("CREATE TABLE waybill_new (id INTEGER PRIMARY KEY AUTOINCREMENT, waybill_number TEXT NOT NULL UNIQUE, waybill_date TEXT NOT NULL, shipper_company_id INTEGER, consignee_company_id INTEGER, carrier_name TEXT, driver_name TEXT, vehicle_trailer_no TEXT, origin_loading_point TEXT, destination_unloading_point TEXT, estimated_delivery_date TEXT, special_instructions TEXT, hazardous_materials INTEGER NOT NULL DEFAULT 0, remarks TEXT, shipper_declaration_name TEXT, shipper_declaration_date TEXT, carrier_receipt_driver_name TEXT, carrier_receipt_date TEXT, consignee_pod_receiver_name TEXT, consignee_pod_date TEXT, created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(shipper_company_id) REFERENCES shipper_company(id), FOREIGN KEY(consignee_company_id) REFERENCES consignee_company(id), FOREIGN KEY(created_by) REFERENCES app_user(id))");
+                s.execute("INSERT INTO waybill_new SELECT * FROM waybill");
+                s.execute("DROP TABLE waybill");
+                s.execute("ALTER TABLE waybill_new RENAME TO waybill");
+            }
+            s.execute("DROP TABLE company");
+        } finally {
+            c.createStatement().execute("PRAGMA foreign_keys = ON");
+        }
+    }
+
+    private static boolean tableExists(Connection c, String table) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")) {
+            p.setString(1, table);
+            try (ResultSet r = p.executeQuery()) { return r.next(); }
         }
     }
 

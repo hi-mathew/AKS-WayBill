@@ -39,13 +39,13 @@ public class WaybillFormView extends AppView {
     private final DatePicker estimatedDelivery = new DatePicker();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
-    private final CompanySelector shipperSelector = new CompanySelector(this::populateShipper, this::refreshCompanySelectors);
+    private final CompanySelector shipperSelector = new CompanySelector(CompanyService.CompanyType.SHIPPER, this::populateShipper, this::refreshCompanySelectors);
     private final TextField shipperContact = field("Contact person", InputLimits.CONTACT_PERSON);
     private final TextArea shipperAddress = area("Address", 2);
     private final TextField shipperPhone = field("Phone number", InputLimits.PHONE);
     private final TextField shipperEmail = field("Email address", InputLimits.EMAIL);
 
-    private final CompanySelector consigneeSelector = new CompanySelector(this::populateConsignee, this::refreshCompanySelectors);
+    private final CompanySelector consigneeSelector = new CompanySelector(CompanyService.CompanyType.CONSIGNEE, this::populateConsignee, this::refreshCompanySelectors);
     private final TextField consigneeContact = field("Contact person", InputLimits.CONTACT_PERSON);
     private final TextArea consigneeAddress = area("Address", 2);
     private final TextField consigneePhone = field("Phone number", InputLimits.PHONE);

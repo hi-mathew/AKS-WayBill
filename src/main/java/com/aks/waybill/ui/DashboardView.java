@@ -224,7 +224,7 @@ public class DashboardView extends BorderPane {
         HBox statsRow = new HBox(16,
                 stat(String.valueOf(stats.monthWaybills()), "Waybills this month", SessionContext.isAdmin() ? "All users" : "Created by you"),
                 stat(String.valueOf(stats.totalWaybills()), "Total saved waybills", SessionContext.isAdmin() ? "Across all users" : "Created by you"),
-                stat(String.valueOf(stats.companies()), "Saved companies", "Shared company master"));
+                stat(String.valueOf(stats.companies()), "Saved companies", "Shipper + Consignee masters"));
         statsRow.setFillHeight(true);
 
         Label quickTitle = label("Quick Actions", "section-heading");
@@ -266,8 +266,7 @@ public class DashboardView extends BorderPane {
         LocalDate firstOfMonth = today.withDayOfMonth(1);
         WaybillService.WaybillPage month = WaybillService.findPageForCurrentUser(null, firstOfMonth, today, 0, 1);
         WaybillService.WaybillPage total = WaybillService.findPageForCurrentUser(null, null, null, 0, 1);
-        CompanyService.CompanyPage companies = CompanyService.findPage(null, 0, 1);
-        return new DashboardStats(month.totalRows(), total.totalRows(), companies.totalRows());
+        return new DashboardStats(month.totalRows(), total.totalRows(), CompanyService.countAll());
     }
 
     private VBox stat(String value, String title, String hint) {
