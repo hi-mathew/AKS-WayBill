@@ -1,6 +1,7 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.service.CompanyService;
+import com.aks.waybill.service.SettingsService;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -10,7 +11,7 @@ import javafx.stage.Modality;
 
 /** Company master-data screen shared by shipper and consignee selection. */
 public final class CompaniesView extends AppView {
-    private static final int PAGE_SIZE = 20;
+    private int pageSize = SettingsService.getPageSize();
 
     private final TextField searchField = new TextField();
     { InputLimits.maxLength(searchField, 400); }
@@ -109,7 +110,7 @@ public final class CompaniesView extends AppView {
 
     private void loadPage(int requestedPage) {
         try {
-            CompanyService.CompanyPage page = CompanyService.findPage(searchField.getText(), requestedPage, PAGE_SIZE);
+            CompanyService.CompanyPage page = CompanyService.findPage(searchField.getText(), requestedPage, pageSize);
             currentPage = page.page();
             totalRows = page.totalRows();
             table.setItems(FXCollections.observableArrayList(page.rows()));
@@ -121,7 +122,7 @@ public final class CompaniesView extends AppView {
         }
     }
 
-    private int totalPages() { return (int) Math.max(1, (totalRows + PAGE_SIZE - 1) / PAGE_SIZE); }
+    private int totalPages() { return (int) Math.max(1, (totalRows + pageSize - 1) / pageSize); }
 
     private void editSelected() {
         CompanyService.CompanyRecord selected = table.getSelectionModel().getSelectedItem();

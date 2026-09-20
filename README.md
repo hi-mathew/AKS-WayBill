@@ -41,3 +41,18 @@ The project uses JDK 21 and JavaFX 21.0.6.
 
 ## Latest update
 See `NEW_MASTER_DATA_BUTTONS_UPDATE.md` for the direct-create Carrier and Location actions added to the Waybill form.
+
+
+## Productivity and Administration Features
+
+This build also includes:
+- SQLite database Backup and Restore from Settings.
+- Duplicate/Copy Waybill from Saved Waybills.
+- Live current date/time in the application header.
+- Admin-only Audit Log.
+- Excel export of the currently filtered Saved Waybills.
+- Configurable list page size (10, 20, 50 or 100) for paginated screens that use the shared setting.
+- Keyboard shortcuts for common navigation, save and report actions.
+- About dialog with application version information.
+
+Text-area fields such as Addresses, Special Instructions and Remarks are intentionally not restricted by UI character limits; single-line fields retain their configured limits and numeric item fields retain numeric validation.

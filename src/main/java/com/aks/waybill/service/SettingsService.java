@@ -10,9 +10,11 @@ import java.sql.ResultSet;
 public final class SettingsService {
     public static final String WAYBILL_PART_1 = "waybill.part1";
     public static final String WAYBILL_NEXT_SEQUENCE = "waybill.next_sequence";
+    public static final String LIST_PAGE_SIZE = "application.list_page_size";
 
     private static final String DEFAULT_PART_1 = "AKS";
     private static final long DEFAULT_NEXT_SEQUENCE = 1001L;
+    private static final int DEFAULT_PAGE_SIZE = 20;
 
     private SettingsService() {}
 
@@ -37,6 +39,22 @@ public final class SettingsService {
             finally { c.setAutoCommit(true); }
         } catch (IllegalArgumentException e) { throw e; }
         catch (Exception e) { throw new IllegalStateException("Unable to save waybill number settings", e); }
+    }
+
+
+    public static int getPageSize() {
+        try (Connection c = Database.getConnection()) {
+            ensureDefault(c, LIST_PAGE_SIZE, String.valueOf(DEFAULT_PAGE_SIZE));
+            return Integer.parseInt(getValue(c, LIST_PAGE_SIZE));
+        } catch (Exception e) { throw new IllegalStateException("Unable to load pagination setting", e); }
+    }
+
+    public static void savePageSize(int pageSize) {
+        if (pageSize != 10 && pageSize != 20 && pageSize != 50 && pageSize != 100) {
+            throw new IllegalArgumentException("Page size must be 10, 20, 50 or 100.");
+        }
+        try (Connection c = Database.getConnection()) { upsert(c, LIST_PAGE_SIZE, String.valueOf(pageSize)); }
+        catch (Exception e) { throw new IllegalStateException("Unable to save pagination setting", e); }
     }
 
     private static String normalizePart(String v) { return v == null ? "" : v.trim().toUpperCase(); }

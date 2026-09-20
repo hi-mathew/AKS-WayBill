@@ -3,10 +3,15 @@ package com.aks.waybill.ui;
 import com.aks.waybill.security.SessionContext;
 import com.aks.waybill.service.ReportProfileService;
 import com.aks.waybill.service.SettingsService;
+import com.aks.waybill.service.BackupService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
+import javafx.application.Platform;
+import java.nio.file.Path;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -22,14 +27,15 @@ public final class SettingsView extends AppView {
     private final TextArea address = new TextArea();
     private final TextField phone = new TextField();
     private final TextField email = new TextField();
-    { InputLimits.maxLength(part1, InputLimits.PART1); InputLimits.numeric(sequence, InputLimits.SEQUENCE, 0); InputLimits.maxLength(companyName, InputLimits.COMPANY_NAME); InputLimits.maxLength(crNumber, InputLimits.CR_NUMBER); InputLimits.maxLength(vatNumber, InputLimits.VAT_NUMBER); InputLimits.maxLength(phone, InputLimits.PHONE); InputLimits.maxLength(email, InputLimits.EMAIL); InputLimits.maxLength(address, InputLimits.ADDRESS); }
+    private final ComboBox<Integer> pageSize = new ComboBox<>();
+    { InputLimits.maxLength(part1, InputLimits.PART1); InputLimits.numeric(sequence, InputLimits.SEQUENCE, 0); InputLimits.maxLength(companyName, InputLimits.COMPANY_NAME); InputLimits.maxLength(crNumber, InputLimits.CR_NUMBER); InputLimits.maxLength(vatNumber, InputLimits.VAT_NUMBER); InputLimits.maxLength(phone, InputLimits.PHONE); InputLimits.maxLength(email, InputLimits.EMAIL); }
     private final Label numberingMessage = new Label();
     private final Label profileMessage = new Label();
     private final Label preview = new Label();
 
     public SettingsView() {
         super("Settings", "Configure waybill numbering and the issuing company information used on reports.");
-        VBox content = new VBox(18, numberingCard(), profileCard());
+        VBox content = new VBox(18, numberingCard(), profileCard(), paginationCard(), backupCard());
         content.setMaxWidth(900);
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true); scroll.getStyleClass().add("content-scroll");
@@ -69,11 +75,43 @@ public final class SettingsView extends AppView {
         card.getChildren().addAll(title,desc,form,profileMessage,buttons); return card;
     }
 
+    private VBox paginationCard() {
+        VBox card=card();
+        Label title=new Label("List Pagination"); title.getStyleClass().add("settings-card-title");
+        Label desc=new Label("Choose how many records are shown per page in paginated lists such as Saved Waybills and Companies."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        pageSize.getItems().setAll(10,20,50,100); pageSize.setPrefWidth(160); pageSize.getStyleClass().add("settings-field");
+        Button save=primary("Save Page Size"); save.setOnAction(e->{try{SettingsService.savePageSize(pageSize.getValue()); setMessage(profileMessage,"Page size saved. It will apply when list screens are opened or refreshed.",false);}catch(Exception ex){setMessage(profileMessage,message(ex),true);}});
+        HBox row=new HBox(12,new Label("Rows per page"),pageSize,save); row.setAlignment(Pos.CENTER_LEFT);
+        card.getChildren().addAll(title,desc,row); return card;
+    }
+
+    private VBox backupCard() {
+        VBox card=card();
+        Label title=new Label("Database Backup & Restore"); title.getStyleClass().add("settings-card-title");
+        Label desc=new Label("Back up the local SQLite database to a safe location, or restore from a previous backup. A restore also creates a safety copy of the current database and requires an application restart."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        Button backup=primary("Backup Now"); backup.setOnAction(e->backupDatabase());
+        Button restore=secondary("Restore Backup"); restore.setOnAction(e->restoreDatabase());
+        card.getChildren().addAll(title,desc,new HBox(10,backup,restore)); return card;
+    }
+
+    private void backupDatabase() {
+        FileChooser chooser=new FileChooser(); chooser.setTitle("Save AKS Waybill Database Backup"); chooser.setInitialFileName(BackupService.defaultBackupPath().getFileName().toString()); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite Database (*.db)","*.db"));
+        Window owner=getScene()==null?null:getScene().getWindow(); java.io.File file=chooser.showSaveDialog(owner); if(file==null)return;
+        try{Path saved=BackupService.backupTo(file.toPath()); new Alert(Alert.AlertType.INFORMATION,"Database backup created successfully:\n"+saved,ButtonType.OK).showAndWait();}catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Backup failed: "+message(ex),ButtonType.OK).showAndWait();}
+    }
+
+    private void restoreDatabase() {
+        FileChooser chooser=new FileChooser(); chooser.setTitle("Select AKS Waybill Database Backup"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite Database (*.db)","*.db"));
+        Window owner=getScene()==null?null:getScene().getWindow(); java.io.File file=chooser.showOpenDialog(owner); if(file==null)return;
+        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,"Restore this database backup? The current database will first be preserved as a safety copy, and the application will close after restore.",ButtonType.OK,ButtonType.CANCEL); confirm.setHeaderText("Restore Database"); if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+        try{BackupService.restoreFrom(file.toPath());new Alert(Alert.AlertType.INFORMATION,"Database restored successfully. The application will now close. Start AKS Waybill again to continue.",ButtonType.OK).showAndWait();Platform.exit();}catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Restore failed: "+message(ex),ButtonType.OK).showAndWait();}
+    }
+
     private VBox card(){VBox v=new VBox(18);v.getStyleClass().add("settings-card");v.setPadding(new Insets(24));return v;}
     private Button primary(String s){Button b=new Button(s);b.getStyleClass().add("primary-button");b.setDefaultButton(true);return b;}
     private Button secondary(String s){Button b=new Button(s);b.getStyleClass().add("secondary-button");return b;}
     private void addField(GridPane g,int row,String label,TextField f,String prompt){Label l=new Label(label);l.getStyleClass().add("field-label");f.setPromptText(prompt);f.setPrefHeight(40);f.setMaxWidth(Double.MAX_VALUE);f.getStyleClass().add("settings-field");GridPane.setHgrow(f,Priority.ALWAYS);g.add(l,0,row);g.add(f,1,row);}
-    private void loadAll(){loadNumbering();loadProfile();}
+    private void loadAll(){loadNumbering();loadProfile(); pageSize.setValue(SettingsService.getPageSize());}
     private void loadNumbering(){try{var s=SettingsService.getWaybillNumberSettings();part1.setText(s.part1());sequence.setText(String.valueOf(s.nextSequence()));setMessage(numberingMessage,"Numbering settings loaded.",false);updatePreview();}catch(Exception e){setMessage(numberingMessage,message(e),true);}}
     private void saveNumbering(){try{SettingsService.saveWaybillNumberSettings(part1.getText(),Long.parseLong(sequence.getText().trim()));loadNumbering();setMessage(numberingMessage,"Waybill numbering settings saved.",false);}catch(NumberFormatException e){setMessage(numberingMessage,"Next sequence number must be a valid whole number.",true);}catch(Exception e){setMessage(numberingMessage,message(e),true);}}
     private void updatePreview(){try{String p=part1.getText().isBlank()?"AKS":part1.getText().trim().toUpperCase();String c=SessionContext.requireUserCode();String n=sequence.getText().isBlank()?"1001":sequence.getText().trim();preview.setText(p+"/"+c+"/"+DATE.format(LocalDate.now())+"/"+n);}catch(Exception e){preview.setText("Log in with a configured User Code to preview the number.");}}

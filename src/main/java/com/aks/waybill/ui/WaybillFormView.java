@@ -567,6 +567,19 @@ public class WaybillFormView extends AppView {
         }
     }
 
+    public void handleShortcutSave() {
+        if (mode == Mode.NEW) saveNew(false);
+        else if (mode == Mode.EDIT) updateExisting();
+    }
+
+    public void handleShortcutPrint() {
+        if (mode == Mode.NEW) {
+            showError("Save the waybill before generating a PDF report.");
+            return;
+        }
+        WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), waybillId);
+    }
+
     private void saveNew(boolean viewSavedWaybills) {
         clearMessage();
         WaybillService.SavedWaybill saved = persistNew();

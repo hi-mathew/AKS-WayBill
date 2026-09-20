@@ -49,6 +49,10 @@ public final class WaybillService {
                                  String shipperName, String consigneeName, String carrierName) {
     }
 
+    public record WaybillExportRow(String waybillNumber, LocalDate waybillDate, String shipperName, String consigneeName,
+                                   String carrierName, String driverName, String vehicleTrailerNo, String origin, String destination,
+                                   LocalDate estimatedDeliveryDate, String createdBy, String createdAt) {}
+
     public record WaybillDetails(long id, String waybillNumber, LocalDate waybillDate,
                                  CompanyData shipper, CompanyData consignee,
                                  String carrierName, String driverName, String vehicleTrailerNo,
@@ -154,6 +158,44 @@ public final class WaybillService {
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to load waybill", e);
         }
+    }
+
+    public static List<WaybillListRow> findAllForCurrentUser(String search, LocalDate fromDate, LocalDate toDate) {
+        List<WaybillListRow> result = new ArrayList<>();
+        int page = 0;
+        while (true) {
+            WaybillPage batch = findPageForCurrentUser(search, fromDate, toDate, page, 100);
+            result.addAll(batch.rows());
+            if (batch.rows().isEmpty() || page >= batch.totalPages() - 1) break;
+            page++;
+        }
+        return result;
+    }
+
+    public static List<WaybillExportRow> findAllForExcelForCurrentUser(String search, LocalDate fromDate, LocalDate toDate) {
+        Long ownerId = SessionContext.isAdmin() ? null : SessionContext.requireUserId();
+        String term = search == null ? "" : search.trim();
+        StringBuilder where = new StringBuilder(" WHERE 1=1 "); List<Object> params = new ArrayList<>();
+        if(ownerId!=null){where.append(" AND w.created_by=? ");params.add(ownerId);}
+        if(!term.isBlank()){where.append(" AND (w.waybill_number LIKE ? COLLATE NOCASE OR COALESCE(sc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(cc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(w.carrier_name,'') LIKE ? COLLATE NOCASE) ");String like="%"+term+"%";Collections.addAll(params,like,like,like,like);}
+        if(fromDate!=null){where.append(" AND w.waybill_date>=? ");params.add(DB_DATE.format(fromDate));}
+        if(toDate!=null){where.append(" AND w.waybill_date<=? ");params.add(DB_DATE.format(toDate));}
+        String sql="SELECT w.waybill_number,w.waybill_date,COALESCE(sc.company_name,''),COALESCE(cc.company_name,''),COALESCE(w.carrier_name,''),COALESCE(w.driver_name,''),COALESCE(w.vehicle_trailer_no,''),COALESCE(w.origin_loading_point,''),COALESCE(w.destination_unloading_point,''),w.estimated_delivery_date,COALESCE(u.username,''),w.created_at FROM waybill w LEFT JOIN company sc ON sc.id=w.shipper_company_id LEFT JOIN company cc ON cc.id=w.consignee_company_id LEFT JOIN app_user u ON u.id=w.created_by"+where+" ORDER BY w.waybill_date DESC,w.id DESC";
+        List<WaybillExportRow> rows=new ArrayList<>();
+        try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(sql)){bind(p,params);try(ResultSet r=p.executeQuery()){while(r.next())rows.add(new WaybillExportRow(r.getString(1),LocalDate.parse(r.getString(2),DB_DATE),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getString(7),r.getString(8),r.getString(9),parseDate(r.getString(10)),r.getString(11),r.getString(12)));}return rows;}catch(SQLException e){throw new IllegalStateException("Unable to load waybills for Excel export",e);}
+    }
+
+    public static SavedWaybill duplicate(long waybillId) {
+        WaybillDetails source = findById(waybillId);
+        if (source == null) throw new IllegalArgumentException("The selected waybill no longer exists or is not accessible.");
+        WaybillData data = new WaybillData(
+                LocalDate.now(), source.shipper(), source.consignee(), source.carrierName(), source.driverName(),
+                source.vehicleTrailerNo(), source.originLoadingPoint(), source.destinationUnloadingPoint(), null,
+                source.specialInstructions(), source.hazardousMaterials(), source.remarks(),
+                null, null, null, null, null, null, SessionContext.requireUserId(), source.items());
+        SavedWaybill saved = save(data);
+        AuditLogService.log("DUPLICATE", "WAYBILL", saved.id(), "Duplicated " + source.waybillNumber() + " as " + saved.waybillNumber());
+        return saved;
     }
 
     private static void validateData(WaybillData data) {
@@ -263,7 +305,7 @@ public final class WaybillService {
                 }
 
                 insertItems(connection, waybillId, data.items());
-                insertAudit(connection, data.createdBy(), waybillId, waybillNumber);
+                insertAudit(connection, data.createdBy(), waybillId, waybillNumber, "CREATE");
 
                 connection.commit();
                 return new SavedWaybill(waybillId, waybillNumber);
@@ -333,7 +375,7 @@ public final class WaybillService {
                 insertItems(connection, waybillId, data.items());
 
                 String number = loadWaybillNumber(connection, waybillId);
-                insertAudit(connection, data.createdBy(), waybillId, number);
+                insertAudit(connection, data.createdBy(), waybillId, number, "UPDATE");
                 connection.commit();
             } catch (SQLException | RuntimeException exception) {
                 connection.rollback();
@@ -470,11 +512,11 @@ public final class WaybillService {
         }
     }
 
-    private static void insertAudit(Connection connection, Long userId, long waybillId, String number) throws SQLException {
+    private static void insertAudit(Connection connection, Long userId, long waybillId, String number, String action) throws SQLException {
         String sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             if (userId == null) statement.setNull(1, java.sql.Types.INTEGER); else statement.setLong(1, userId);
-            statement.setString(2, "CREATE");
+            statement.setString(2, action);
             statement.setString(3, "WAYBILL");
             statement.setLong(4, waybillId);
             statement.setString(5, "Created waybill " + number);

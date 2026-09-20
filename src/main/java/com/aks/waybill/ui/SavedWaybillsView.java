@@ -1,6 +1,8 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.service.WaybillService;
+import com.aks.waybill.service.SettingsService;
+import com.aks.waybill.service.ExcelExportService;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -8,6 +10,7 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 
 import java.io.InputStream;
 import java.time.LocalDate;
@@ -16,7 +19,7 @@ import java.time.format.DateTimeFormatter;
 /** Searchable, paginated saved-waybill register. */
 public final class SavedWaybillsView extends AppView {
     private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    private static final int PAGE_SIZE = 20;
+    private int pageSize = SettingsService.getPageSize();
 
     private final Runnable onBack;
     private final java.util.function.LongConsumer onView;
@@ -70,19 +73,21 @@ public final class SavedWaybillsView extends AppView {
         TableColumn<WaybillService.WaybillListRow,String> carrier = column("Carrier", r -> r.carrierName(), 150);
 
         TableColumn<WaybillService.WaybillListRow, Void> actions = new TableColumn<>("Actions");
-        actions.setPrefWidth(150);
-        actions.setMinWidth(150);
-        actions.setMaxWidth(150);
+        actions.setPrefWidth(205);
+        actions.setMinWidth(205);
+        actions.setMaxWidth(205);
         actions.setCellFactory(column -> new TableCell<>() {
             private final Button viewButton = iconButton("/com/aks/waybill/images/view-icon.png", "View Waybill");
             private final Button editButton = iconButton("/com/aks/waybill/images/edit-icon.png", "Edit Waybill");
+            private final Button copyButton = new Button("Copy");
             private final MenuButton documentButton = new MenuButton();
-            private final HBox box = new HBox(5, viewButton, editButton, documentButton);
+            private final HBox box = new HBox(5, viewButton, editButton, copyButton, documentButton);
 
             {
                 box.setAlignment(Pos.CENTER);
                 viewButton.setPrefSize(36, 32);
                 editButton.setPrefSize(36, 32);
+                copyButton.setPrefHeight(32); copyButton.getStyleClass().add("secondary-button"); copyButton.setTooltip(new Tooltip("Duplicate Waybill"));
                 documentButton.setPrefSize(36, 32);
                 ImageView downloadIcon = new ImageView(new Image(
                         SavedWaybillsView.class.getResourceAsStream("/com/aks/waybill/images/download-icon.png")));
@@ -110,6 +115,7 @@ public final class SavedWaybillsView extends AppView {
                 long waybillId = row.id();
                 viewButton.setOnAction(event -> openView(waybillId));
                 editButton.setOnAction(event -> openEdit(waybillId));
+                copyButton.setOnAction(event -> duplicateWaybill(waybillId));
 
                 MenuItem pdf = new MenuItem("Generate PDF");
                 MenuItem word = new MenuItem("Generate Word");
@@ -136,7 +142,8 @@ public final class SavedWaybillsView extends AppView {
 
         HBox actionsBar = new HBox(10); actionsBar.setAlignment(Pos.CENTER_RIGHT);
         Button refresh = button("Refresh", "secondary-button"); refresh.setOnAction(event -> loadPage(currentPage));
-        actionsBar.getChildren().add(refresh);
+        Button export = button("Export Excel", "secondary-button"); export.setOnAction(event -> exportExcel());
+        actionsBar.getChildren().addAll(export, refresh);
 
         HBox paging = new HBox(12); paging.setAlignment(Pos.CENTER);
         previousButton.getStyleClass().add("secondary-button"); nextButton.getStyleClass().add("secondary-button");
@@ -153,16 +160,28 @@ public final class SavedWaybillsView extends AppView {
         return root;
     }
 
+    private void duplicateWaybill(long id) {
+        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,"Create a new waybill by copying this waybill's operational details? The new waybill will use today's date and will have blank signature/declaration fields.",ButtonType.OK,ButtonType.CANCEL);
+        confirm.setHeaderText("Duplicate Waybill"); if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+        try{WaybillService.SavedWaybill saved=WaybillService.duplicate(id);new Alert(Alert.AlertType.INFORMATION,"New waybill created successfully: "+saved.waybillNumber(),ButtonType.OK).showAndWait();loadPage(0);}catch(Exception ex){showError(ex.getMessage());}
+    }
+
+    private void exportExcel() {
+        FileChooser chooser=new FileChooser(); chooser.setTitle("Export Saved Waybills to Excel"); chooser.setInitialFileName("AKS-Waybills-"+java.time.LocalDate.now()+".xlsx"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)","*.xlsx"));
+        java.io.File file=chooser.showSaveDialog(getScene()==null?null:getScene().getWindow()); if(file==null)return;
+        try{var rows=WaybillService.findAllForExcelForCurrentUser(searchField.getText(),fromDate.getValue(),toDate.getValue());ExcelExportService.export(file.toPath(),rows);new Alert(Alert.AlertType.INFORMATION,"Excel export created successfully.\nRecords exported: "+rows.size(),ButtonType.OK).showAndWait();}catch(Exception ex){showError(ex.getMessage());}
+    }
+
     private void openView(long id) { onView.accept(id); }
 
     private void openEdit(long id) { onEdit.accept(id); }
 
     private void loadPage(int page) {
         try {
-            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), Math.max(0, page), PAGE_SIZE);
+            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), Math.max(0, page), pageSize);
             currentPage = result.page(); totalPages = result.totalPages(); table.getItems().setAll(result.rows());
-            long start = result.totalRows() == 0 ? 0 : (long) currentPage * PAGE_SIZE + 1;
-            long end = Math.min(result.totalRows(), (long) (currentPage + 1) * PAGE_SIZE);
+            long start = result.totalRows() == 0 ? 0 : (long) currentPage * pageSize + 1;
+            long end = Math.min(result.totalRows(), (long) (currentPage + 1) * pageSize);
             resultInfo.setText("Showing " + start + "–" + end + " of " + result.totalRows());
             pageInfo.setText("Page " + (currentPage + 1) + " of " + totalPages);
             previousButton.setDisable(currentPage <= 0); nextButton.setDisable(currentPage >= totalPages - 1); buildPageButtons();

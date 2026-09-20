@@ -11,6 +11,11 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.util.Duration;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -31,6 +36,9 @@ public class DashboardView extends BorderPane {
     private final Button companiesButton = nav("▦  Saved Data", false);
     private final Button settingsButton = nav("⚙  Settings", false);
     private final Button usersButton = nav("♟  User Management", false);
+    private final Button auditButton = nav("▤  Audit Log", false);
+    private final Button aboutButton = nav("ⓘ  About", false);
+    private final Label clockLabel = label("", "topbar-clock");
 
     public DashboardView(AuthService.UserRecord currentUser, Runnable logout) {
         this.currentUser = currentUser;
@@ -40,6 +48,7 @@ public class DashboardView extends BorderPane {
         setTop(topbar());
         setCenter(content);
         showDashboard();
+        installShortcuts();
     }
 
     private VBox sidebar() {
@@ -68,7 +77,11 @@ public class DashboardView extends BorderPane {
         companiesButton.setOnAction(e -> showSavedData());
         settingsButton.setOnAction(e -> showSettings());
         usersButton.setOnAction(e -> showUserManagement());
+        auditButton.setOnAction(e -> showAuditLog());
+        aboutButton.setOnAction(e -> showAbout());
         usersButton.setVisible(SessionContext.isAdmin());
+        auditButton.setVisible(SessionContext.isAdmin());
+        auditButton.setManaged(SessionContext.isAdmin());
         usersButton.setManaged(SessionContext.isAdmin());
         settingsButton.setVisible(SessionContext.isAdmin());
         settingsButton.setManaged(SessionContext.isAdmin());
@@ -79,7 +92,7 @@ public class DashboardView extends BorderPane {
 
         s.getChildren().addAll(lb, workspace, dashboardButton, newWaybillButton,
                 savedWaybillsButton, companiesButton, spacer, administration,
-                settingsButton, usersButton, signOut);
+                settingsButton, usersButton, auditButton, aboutButton, signOut);
         return s;
     }
 
@@ -107,8 +120,51 @@ public class DashboardView extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Label user = label(currentUser.displayName() + "  •  " + currentUser.role(), "user-pill");
-        h.getChildren().addAll(pageTitle, spacer, user);
+        h.getChildren().addAll(pageTitle, spacer, clockLabel, user);
+        updateClock();
+        Timeline clock = new Timeline(new KeyFrame(Duration.seconds(1), e -> updateClock()));
+        clock.setCycleCount(Timeline.INDEFINITE);
+        clock.play();
         return h;
+    }
+
+    private void updateClock() {
+        clockLabel.setText(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy  hh:mm:ss a")));
+    }
+
+    private void installShortcuts() {
+        setFocusTraversable(true);
+        addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.isControlDown() && event.getCode() == KeyCode.N) { showNewWaybill(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.L) { showSavedWaybills(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.DIGIT1) { showDashboard(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.DIGIT2) { showNewWaybill(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.DIGIT3) { showSavedWaybills(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.DIGIT4) { showSavedData(); event.consume(); }
+            else if (event.isControlDown() && event.getCode() == KeyCode.S) {
+                if (!content.getChildren().isEmpty() && content.getChildren().get(0) instanceof WaybillFormView form) form.handleShortcutSave();
+                event.consume();
+            }
+            else if (event.isControlDown() && event.getCode() == KeyCode.P) {
+                if (!content.getChildren().isEmpty() && content.getChildren().get(0) instanceof WaybillFormView form) form.handleShortcutPrint();
+                event.consume();
+            }
+            else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.A) { showAbout(); event.consume(); }
+        });
+    }
+
+    private void showAuditLog() {
+        if (!SessionContext.isAdmin()) return;
+        activate(auditButton, "Audit Log", new AuditLogView());
+    }
+
+    private void showAbout() {
+        Alert dialog=new Alert(Alert.AlertType.INFORMATION);
+        dialog.setTitle("About AKS Waybill");
+        dialog.setHeaderText("AKS Waybill");
+        dialog.setContentText("Version 1.0.0\n\nAKS Global Logistics\n\nA local desktop application for transportation waybill data entry, reporting and management.\n\n© 2026 AKS Global Logistics");
+        if(getScene()!=null) dialog.initOwner(getScene().getWindow());
+        dialog.showAndWait();
     }
 
     private void showDashboard() {
@@ -146,7 +202,7 @@ public class DashboardView extends BorderPane {
     }
 
     private void activate(Button selected, String title, Node view) {
-        for (Button button : new Button[]{dashboardButton, newWaybillButton, savedWaybillsButton, companiesButton, settingsButton, usersButton}) {
+        for (Button button : new Button[]{dashboardButton, newWaybillButton, savedWaybillsButton, companiesButton, settingsButton, usersButton, auditButton, aboutButton}) {
             button.getStyleClass().remove("nav-selected");
         }
         selected.getStyleClass().add("nav-selected");

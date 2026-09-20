@@ -40,3 +40,9 @@
 
 /* Compact Saved Waybills row action buttons */
 .icon-action-button{-fx-padding:4px;-fx-min-width:36px;-fx-pref-width:36px;-fx-max-width:36px;-fx-min-height:32px;-fx-pref-height:32px;-fx-max-height:32px;-fx-background-color:#eef4f8;-fx-background-radius:6px;-fx-cursor:hand}.icon-action-button:hover{-fx-background-color:#dfeaf1}.icon-action-button .image-view{-fx-opacity:1.0}
+
+.topbar-clock {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #52647a;
+}
