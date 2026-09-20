@@ -1,0 +1,42 @@
+.root{-fx-font-family:"Segoe UI","Arial";-fx-background-color:#f6f8fb}.login-root{-fx-background-color:#f6f8fb}.brand-panel{-fx-background-color:#0b4b7d}.brand-title{-fx-text-fill:white;-fx-font-size:30px;-fx-font-weight:700}.brand-subtitle{-fx-text-fill:#dcecf7;-fx-font-size:16px;-fx-line-spacing:5px}.brand-footer{-fx-text-fill:#b8d3e7;-fx-font-size:11px;-fx-font-weight:700}.login-panel{-fx-background-color:#f7f9fc}.eyebrow{-fx-text-fill:#0b4b7d;-fx-font-size:11px;-fx-font-weight:800}.login-heading{-fx-text-fill:#152235;-fx-font-size:32px;-fx-font-weight:700}.login-description{-fx-text-fill:#6c7787;-fx-font-size:14px;-fx-line-spacing:3px}.login-form .text-field,.login-form .password-field{-fx-background-color:white;-fx-border-color:#d6dde7;-fx-border-radius:7px;-fx-background-radius:7px;-fx-padding:0 13px;-fx-font-size:14px}.login-form .text-field:focused,.login-form .password-field:focused{-fx-border-color:#1f6ea5;-fx-border-width:1.5px}.field-label{-fx-text-fill:#344054;-fx-font-size:12px;-fx-font-weight:700}.primary-button{-fx-background-color:#0b4b7d;-fx-text-fill:white;-fx-font-size:14px;-fx-font-weight:700;-fx-background-radius:7px;-fx-cursor:hand}.primary-button:hover{-fx-background-color:#083a61}.form-message{-fx-font-size:12px;-fx-wrap-text:true}.error-message{-fx-text-fill:#b42318}.app-root{-fx-background-color:#f5f7fa}.sidebar{-fx-background-color:#0b2f4a}.sidebar-section{-fx-text-fill:#88a9c1;-fx-font-size:10px;-fx-font-weight:800;-fx-padding:8px 12px 6px 12px}.nav-button{-fx-background-color:transparent;-fx-text-fill:#d9e6ef;-fx-font-size:13px;-fx-font-weight:600;-fx-background-radius:7px;-fx-padding:0 14px;-fx-cursor:hand}.nav-button:hover{-fx-background-color:#164766}.nav-selected{-fx-background-color:#1b5d87;-fx-text-fill:white}.topbar{-fx-background-color:white;-fx-border-color:#e4e8ee;-fx-border-width:0 0 1px 0}.topbar-title{-fx-font-size:20px;-fx-font-weight:700;-fx-text-fill:#152235}.user-pill{-fx-background-color:#eef4f8;-fx-text-fill:#24577c;-fx-font-weight:700;-fx-padding:9px 14px;-fx-background-radius:18px}.content-area{-fx-background-color:#f5f7fa}.content-scroll,.content-scroll .viewport{-fx-background-color:#f5f7fa}.page-heading{-fx-font-size:27px;-fx-font-weight:700;-fx-text-fill:#16263a}.page-subheading{-fx-font-size:14px;-fx-text-fill:#697586}.stat-card,.action-card,.empty-state{-fx-background-color:white;-fx-background-radius:10px;-fx-border-color:#e1e6ed;-fx-border-radius:10px}.stat-card{ -fx-padding:18px}.stat-value{-fx-font-size:28px;-fx-font-weight:700;-fx-text-fill:#0b4b7d}.stat-title{-fx-font-size:13px;-fx-font-weight:700;-fx-text-fill:#344054}.stat-hint{-fx-font-size:11px;-fx-text-fill:#8792a2}.action-card{-fx-padding:20px;-fx-cursor:hand}.action-card:hover{-fx-border-color:#9dbbd0;-fx-effect:dropshadow(gaussian,rgba(17,55,82,0.08),14,0.15,0,4)}.action-icon{-fx-text-fill:#0b4b7d;-fx-font-size:24px;-fx-font-weight:700}.action-title{-fx-text-fill:#1e2d3d;-fx-font-size:15px;-fx-font-weight:700}.action-description{-fx-text-fill:#748092;-fx-font-size:12px}.section-heading{-fx-text-fill:#1e2d3d;-fx-font-size:17px;-fx-font-weight:700}.empty-state{-fx-padding:28px;-fx-text-fill:#8792a2;-fx-font-size:13px}
+
+.settings-card{-fx-background-color:white;-fx-background-radius:10px;-fx-border-color:#e1e6ed;-fx-border-radius:10px}.settings-card-title{-fx-text-fill:#1e2d3d;-fx-font-size:17px;-fx-font-weight:700}.settings-card-description{-fx-text-fill:#697586;-fx-font-size:12px;-fx-line-spacing:2px}.settings-field{-fx-background-color:white;-fx-border-color:#d6dde7;-fx-border-radius:7px;-fx-background-radius:7px;-fx-padding:0 12px;-fx-font-size:14px}.settings-field:focused{-fx-border-color:#1f6ea5;-fx-border-width:1.5px}.secondary-button{-fx-background-color:#eef2f6;-fx-text-fill:#344054;-fx-font-size:13px;-fx-font-weight:700;-fx-background-radius:7px;-fx-padding:10px 16px;-fx-cursor:hand}.secondary-button:hover{-fx-background-color:#e1e7ed}.settings-preview-caption{-fx-text-fill:#344054;-fx-font-size:12px;-fx-font-weight:700}.settings-preview{-fx-background-color:#f3f6f9;-fx-border-color:#dce3ea;-fx-border-radius:7px;-fx-background-radius:7px;-fx-padding:12px 14px;-fx-text-fill:#0b4b7d;-fx-font-size:15px;-fx-font-weight:700}.settings-message{-fx-min-height:18px;-fx-font-size:12px}.success-message{-fx-text-fill:#067647}.settings-note{-fx-text-fill:#697586;-fx-font-size:11px;-fx-padding:4px 2px}
+.waybill-number{-fx-background-color:#f3f6f9;-fx-border-color:#dce3ea;-fx-border-radius:7px;-fx-background-radius:7px;-fx-padding:13px 15px;-fx-text-fill:#0b4b7d;-fx-font-size:18px;-fx-font-weight:800}.card-description{-fx-text-fill:#697586;-fx-font-size:12px;-fx-line-spacing:2px}.table-view{-fx-background-color:white;-fx-border-color:#e1e6ed;-fx-border-radius:7px;-fx-background-radius:7px}.table-view .column-header-background{-fx-background-color:#f3f6f9}.table-view .column-header .label{-fx-text-fill:#344054;-fx-font-size:11px;-fx-font-weight:700}.table-view .table-cell{-fx-padding:8px 10px;-fx-font-size:12px}.date-picker,.date-picker .text-field{-fx-background-color:white;-fx-border-color:#d6dde7;-fx-border-radius:7px;-fx-background-radius:7px}.check-box{-fx-text-fill:#344054;-fx-font-size:12px;-fx-font-weight:600}
+
+/* New Waybill form */
+.waybill-number{-fx-text-fill:#0b4b7d;-fx-font-size:24px;-fx-font-weight:800}
+.settings-card{-fx-background-color:white;-fx-background-radius:10px;-fx-border-color:#e1e6ed;-fx-border-radius:10px}
+.settings-field{-fx-background-color:white;-fx-border-color:#d6dde7;-fx-border-radius:7px;-fx-background-radius:7px;-fx-padding:9px 11px;-fx-font-size:13px}
+.settings-field:focused{-fx-border-color:#1f6ea5;-fx-border-width:1.5px}
+.card-description{-fx-text-fill:#748092;-fx-font-size:12px}
+.secondary-button{-fx-background-color:#eef4f8;-fx-text-fill:#24577c;-fx-font-size:12px;-fx-font-weight:700;-fx-background-radius:7px;-fx-cursor:hand}
+.secondary-button:hover{-fx-background-color:#dfeaf1}
+.success-message{-fx-text-fill:#067647}
+.party-panel{-fx-background-color:#f8fafc;-fx-background-radius:8px;-fx-border-color:#e5eaf0;-fx-border-radius:8px;-fx-padding:16px}
+.table-view{-fx-background-color:white;-fx-border-color:#dfe5ec;-fx-border-radius:7px}
+.table-view .column-header-background{-fx-background-color:#f2f5f8}
+.table-view .column-header,.table-view .filler{-fx-background-color:#f2f5f8;-fx-size:34px}
+.table-view .column-header .label{-fx-text-fill:#344054;-fx-font-size:11px;-fx-font-weight:800}
+.table-cell{-fx-border-color:transparent #eef1f4 transparent transparent;-fx-padding:6px 8px;-fx-font-size:12px}
+.table-row-cell:filled:selected{-fx-background-color:#eaf3f8;-fx-text-fill:#152235}
+.table-cell .text-field{-fx-background-color:white;-fx-border-color:#9dbbd0;-fx-border-radius:4px;-fx-background-radius:4px;-fx-padding:5px}
+
+/* Waybill item grid: readable text and compact dynamic height */
+.table-view .table-cell {
+    -fx-text-fill: #111827;
+}
+.table-view .table-row-cell:filled:selected,
+.table-view .table-row-cell:filled:selected .table-cell {
+    -fx-text-fill: #111827;
+}
+.table-view .table-cell .text-field {
+    -fx-text-fill: #111827;
+    -fx-prompt-text-fill: #98a2b3;
+    -fx-control-inner-background: white;
+}
+.table-view .placeholder .label {
+    -fx-text-fill: #667085;
+}
+
+/* Compact Saved Waybills row action buttons */
+.icon-action-button{-fx-padding:4px;-fx-min-width:36px;-fx-pref-width:36px;-fx-max-width:36px;-fx-min-height:32px;-fx-pref-height:32px;-fx-max-height:32px;-fx-background-color:#eef4f8;-fx-background-radius:6px;-fx-cursor:hand}.icon-action-button:hover{-fx-background-color:#dfeaf1}.icon-action-button .image-view{-fx-opacity:1.0}
