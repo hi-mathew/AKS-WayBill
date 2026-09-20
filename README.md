@@ -37,3 +37,7 @@ The project uses JDK 21 and JavaFX 21.0.6.
 - View Waybill provides Generate PDF and Generate Word.
 - PDF uses OpenPDF and Word uses Apache POI.
 - Generated filenames are based on the waybill number and the user chooses the save location.
+
+
+## Latest update
+See `NEW_MASTER_DATA_BUTTONS_UPDATE.md` for the direct-create Carrier and Location actions added to the Waybill form.

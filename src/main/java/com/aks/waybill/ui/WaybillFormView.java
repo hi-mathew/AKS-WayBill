@@ -13,6 +13,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.Modality;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -77,6 +78,9 @@ public class WaybillFormView extends AppView {
     private final Button cancelButton = new Button("Cancel");
     private final Button addItemButton = new Button("＋ Add Item");
     private final Button removeItemButton = new Button("Remove Selected");
+    private final Button newCarrierButton = new Button("+ New Carrier");
+    private final Button newOriginButton = new Button("+ New Location");
+    private final Button newDestinationButton = new Button("+ New Location");
 
     public WaybillFormView(Mode mode, long waybillId, Runnable onSaved, Runnable onCancel, Runnable onCreateNew) {
         this(mode, waybillId, onSaved, onCancel, onCreateNew, id -> {});
@@ -201,10 +205,15 @@ public class WaybillFormView extends AppView {
         card.getChildren().add(heading("3. CARRIER & TRANSIT DETAILS"));
         GridPane grid = grid2();
 
-        VBox carrierBox = new VBox(6, label("Select Saved Carrier (optional)", "field-label"), savedCarrier, carrier);
-        VBox originBox = new VBox(6, label("Origin / Loading Point", "field-label"), savedOrigin, origin);
+        configureMasterDataButtons();
+
+        VBox carrierLabelRow = fieldLabelWithButton("Select Saved Carrier (optional)", newCarrierButton);
+        VBox carrierBox = new VBox(6, carrierLabelRow, savedCarrier, carrier);
+        VBox originLabelRow = fieldLabelWithButton("Origin / Loading Point", newOriginButton);
+        VBox originBox = new VBox(6, originLabelRow, savedOrigin, origin);
         VBox driverBox = new VBox(6, label("Driver Name", "field-label"), driver);
-        VBox destinationBox = new VBox(6, label("Destination / Unloading Point", "field-label"), savedDestination, destination);
+        VBox destinationLabelRow = fieldLabelWithButton("Destination / Unloading Point", newDestinationButton);
+        VBox destinationBox = new VBox(6, destinationLabelRow, savedDestination, destination);
         VBox vehicleBox = new VBox(6, label("Vehicle / Trailer No.", "field-label"), vehicle);
         VBox deliveryBox = new VBox(6, label("Estimated Delivery Date", "field-label"), estimatedDelivery);
 
@@ -216,6 +225,90 @@ public class WaybillFormView extends AppView {
         grid.add(deliveryBox, 1, 2);
         card.getChildren().add(grid);
         return card;
+    }
+
+    private VBox fieldLabelWithButton(String text, Button button) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        Label fieldLabel = label(text, "field-label");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        button.getStyleClass().add("secondary-button");
+        button.setMinHeight(28);
+        button.setFocusTraversable(false);
+        row.getChildren().addAll(fieldLabel, spacer, button);
+        VBox wrapper = new VBox(row);
+        return wrapper;
+    }
+
+    private void configureMasterDataButtons() {
+        newCarrierButton.setOnAction(event -> openNewCarrierDialog());
+        newOriginButton.setOnAction(event -> openNewLocationDialog(true));
+        newDestinationButton.setOnAction(event -> openNewLocationDialog(false));
+    }
+
+    private void openNewCarrierDialog() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("New Carrier");
+        dialog.setHeaderText("Add a reusable carrier with driver and vehicle details.");
+        dialog.initModality(Modality.APPLICATION_MODAL);
+
+        TextField name = field("Carrier name", InputLimits.CARRIER);
+        TextField driverField = field("Driver name", InputLimits.DRIVER);
+        TextField vehicleField = field("Vehicle / Trailer No.", InputLimits.VEHICLE);
+
+        VBox form = new VBox(10,
+                label("Carrier Name", "field-label"), name,
+                label("Driver Name", "field-label"), driverField,
+                label("Vehicle / Trailer No.", "field-label"), vehicleField);
+        form.setPrefWidth(520);
+        dialog.getDialogPane().setContent(form);
+
+        ButtonType save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(save, ButtonType.CANCEL);
+        dialog.setResultConverter(button -> button == save ? save : null);
+
+        dialog.showAndWait().ifPresent(result -> {
+            if (result != save) return;
+            try {
+                SavedDataService.CarrierRecord record = SavedDataService.createCarrier(
+                        name.getText(), driverField.getText(), vehicleField.getText());
+                loadSavedCarriers();
+                selectSavedCarrier(record.name(), true);
+            } catch (RuntimeException ex) {
+                showError(ex.getMessage() == null ? "Unable to save carrier." : ex.getMessage());
+            }
+        });
+    }
+
+    private void openNewLocationDialog(boolean originField) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("New Location");
+        dialog.setHeaderText("Add a reusable loading or unloading location.");
+        dialog.initModality(Modality.APPLICATION_MODAL);
+
+        TextField name = field("Location name", InputLimits.LOCATION);
+        VBox form = new VBox(10, label("Location Name", "field-label"), name);
+        form.setPrefWidth(520);
+        dialog.getDialogPane().setContent(form);
+
+        ButtonType save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(save, ButtonType.CANCEL);
+        dialog.setResultConverter(button -> button == save ? save : null);
+
+        dialog.showAndWait().ifPresent(result -> {
+            if (result != save) return;
+            try {
+                SavedDataService.LocationRecord record = SavedDataService.saveIfMissingLocation(name.getText());
+                loadSavedLocations();
+                if (originField) selectSavedValue(savedOrigin, record.name());
+                else selectSavedValue(savedDestination, record.name());
+                if (originField) origin.setText(record.name());
+                else destination.setText(record.name());
+            } catch (RuntimeException ex) {
+                showError(ex.getMessage() == null ? "Unable to save location." : ex.getMessage());
+            }
+        });
     }
 
     private VBox itemsCard() {
@@ -383,6 +476,9 @@ public class WaybillFormView extends AppView {
         savedCarrier.setDisable(!editable);
         savedOrigin.setDisable(!editable);
         savedDestination.setDisable(!editable);
+        newCarrierButton.setDisable(!editable);
+        newOriginButton.setDisable(!editable);
+        newDestinationButton.setDisable(!editable);
         updatePartyDetailsState();
 
         if (mode == Mode.VIEW) itemsTable.setEditable(false);
