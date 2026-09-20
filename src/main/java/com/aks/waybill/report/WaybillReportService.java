@@ -454,6 +454,10 @@ public final class WaybillReportService {
         XWPFParagraph paragraph = cell.getParagraphs().isEmpty() ? cell.addParagraph() : cell.getParagraphs().get(0);
         for (XWPFRun run : paragraph.getRuns()) run.setText("", 0);
         XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+        // Leave a physical signature area above the printed signature/name line.
+        // Use paragraph spacing rather than blank lines so the three declaration
+        // columns stay aligned and the approved report layout is preserved.
+        paragraph.setSpacingBefore(360); // 18 pt signature space
         run.setText(safe(line1));
         if (line2 != null && !line2.isBlank()) {
             run.addBreak();
