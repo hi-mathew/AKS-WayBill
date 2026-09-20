@@ -149,7 +149,6 @@ public final class CompaniesView extends AppView {
         TextField name = field("Company name *", existing == null ? "" : existing.companyName(), InputLimits.COMPANY_NAME);
         TextField contact = field("Contact person", existing == null ? "" : existing.contactPerson(), InputLimits.CONTACT_PERSON);
         TextArea address = new TextArea(safe(existing == null ? null : existing.address()));
-        InputLimits.maxLength(address, InputLimits.ADDRESS);
         address.setPromptText("Address"); address.setPrefRowCount(3); address.setWrapText(true); address.getStyleClass().add("settings-field");
         TextField phone = field("Phone number", existing == null ? "" : existing.phoneNumber(), InputLimits.PHONE);
         TextField email = field("Email address", existing == null ? "" : existing.emailAddress(), InputLimits.EMAIL);

@@ -28,7 +28,7 @@ public class DashboardView extends BorderPane {
     private final Button dashboardButton = nav("▦  Dashboard", true);
     private final Button newWaybillButton = nav("＋  New Waybill", false);
     private final Button savedWaybillsButton = nav("▤  Saved Waybills", false);
-    private final Button companiesButton = nav("♙  Companies", false);
+    private final Button companiesButton = nav("▦  Saved Data", false);
     private final Button settingsButton = nav("⚙  Settings", false);
     private final Button usersButton = nav("♟  User Management", false);
 
@@ -65,7 +65,7 @@ public class DashboardView extends BorderPane {
         dashboardButton.setOnAction(e -> showDashboard());
         newWaybillButton.setOnAction(e -> showNewWaybill());
         savedWaybillsButton.setOnAction(e -> showSavedWaybills());
-        companiesButton.setOnAction(e -> showCompanies());
+        companiesButton.setOnAction(e -> showSavedData());
         settingsButton.setOnAction(e -> showSettings());
         usersButton.setOnAction(e -> showUserManagement());
         usersButton.setVisible(SessionContext.isAdmin());
@@ -131,8 +131,8 @@ public class DashboardView extends BorderPane {
         activate(savedWaybillsButton, "Edit Waybill", new EditWaybillView(waybillId, this::showSavedWaybills, this::showSavedWaybills));
     }
 
-    private void showCompanies() {
-        activate(companiesButton, "Companies", new CompaniesView());
+    private void showSavedData() {
+        activate(companiesButton, "Saved Data", new SavedDataView());
     }
 
     private void showSettings() {
@@ -177,7 +177,7 @@ public class DashboardView extends BorderPane {
         actions.getChildren().addAll(
                 action("New Waybill", "Create a new transportation waybill", "＋", this::showNewWaybill),
                 action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", this::showSavedWaybills),
-                action("Companies", "Manage reusable shipper and consignee companies", "♙", this::showCompanies));
+                action("Saved Data", "Manage reusable companies, carriers and locations", "▦", this::showSavedData));
         for (Node node : actions.getChildren()) HBox.setHgrow(node, Priority.ALWAYS);
 
         HBox adminActions = new HBox(14);

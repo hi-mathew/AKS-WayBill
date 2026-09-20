@@ -3,6 +3,7 @@ package com.aks.waybill.ui;
 import com.aks.waybill.service.CompanyService;
 import com.aks.waybill.service.WaybillNumberService;
 import com.aks.waybill.service.WaybillService;
+import com.aks.waybill.service.SavedDataService;
 import com.aks.waybill.security.SessionContext;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -49,15 +50,25 @@ public class WaybillFormView extends AppView {
     private final TextField consigneePhone = field("Phone number", InputLimits.PHONE);
     private final TextField consigneeEmail = field("Email address", InputLimits.EMAIL);
 
+    private final ComboBox<String> savedCarrier = savedSelector("— Select saved carrier —");
     private final TextField carrier = field("Carrier name", InputLimits.CARRIER);
     private final TextField driver = field("Driver name", InputLimits.DRIVER);
     private final TextField vehicle = field("Vehicle / Trailer No.", InputLimits.VEHICLE);
-    private final TextField origin = field("Origin / Loading point", InputLimits.LOCATION);
-    private final TextField destination = field("Destination / Unloading point", InputLimits.LOCATION);
+    private final ComboBox<String> savedOrigin = savedSelector("— Select or type below —");
+    private final TextField origin = field("Type or edit", InputLimits.LOCATION);
+    private final ComboBox<String> savedDestination = savedSelector("— Select or type below —");
+    private final TextField destination = field("Type or edit", InputLimits.LOCATION);
 
     private final TextArea specialInstructions = area("Special instructions / handling", 3);
     private final CheckBox hazardous = new CheckBox("Yes — hazardous materials");
     private final TextArea remarks = area("Remarks", 3);
+
+    private final TextField shipperDeclarationName = field("Name", InputLimits.DISPLAY_NAME);
+    private final DatePicker shipperDeclarationDate = new DatePicker();
+    private final TextField carrierReceiptDriverName = field("Driver Name", InputLimits.DRIVER);
+    private final DatePicker carrierReceiptDate = new DatePicker();
+    private final TextField consigneePodReceiverName = field("Receiver Name", InputLimits.DISPLAY_NAME);
+    private final DatePicker consigneePodDate = new DatePicker();
 
     private final TableView<ItemRow> itemsTable = new TableView<>();
     private final Label message = new Label();
@@ -83,6 +94,10 @@ public class WaybillFormView extends AppView {
 
         numberLabel.getStyleClass().add("waybill-number");
         configureDatePicker(estimatedDelivery);
+        configureDatePicker(shipperDeclarationDate);
+        configureDatePicker(carrierReceiptDate);
+        configureDatePicker(consigneePodDate);
+        configureSavedSelectors();
         build();
         applyMode();
 
@@ -119,6 +134,7 @@ public class WaybillFormView extends AppView {
                 carrierTransitCard(),
                 itemsCard(),
                 handlingCard(),
+                declarationsCard(),
                 buttons()
         );
         ScrollPane scroll = new ScrollPane(page);
@@ -184,12 +200,20 @@ public class WaybillFormView extends AppView {
         VBox card = card();
         card.getChildren().add(heading("3. CARRIER & TRANSIT DETAILS"));
         GridPane grid = grid2();
-        addField(grid, 0, 0, "Carrier Name", carrier);
-        addField(grid, 1, 0, "Origin / Loading Point", origin);
-        addField(grid, 0, 1, "Driver Name", driver);
-        addField(grid, 1, 1, "Destination / Unloading Point", destination);
-        addField(grid, 0, 2, "Vehicle / Trailer No.", vehicle);
-        addField(grid, 1, 2, "Estimated Delivery Date", estimatedDelivery);
+
+        VBox carrierBox = new VBox(6, label("Select Saved Carrier (optional)", "field-label"), savedCarrier, carrier);
+        VBox originBox = new VBox(6, label("Origin / Loading Point", "field-label"), savedOrigin, origin);
+        VBox driverBox = new VBox(6, label("Driver Name", "field-label"), driver);
+        VBox destinationBox = new VBox(6, label("Destination / Unloading Point", "field-label"), savedDestination, destination);
+        VBox vehicleBox = new VBox(6, label("Vehicle / Trailer No.", "field-label"), vehicle);
+        VBox deliveryBox = new VBox(6, label("Estimated Delivery Date", "field-label"), estimatedDelivery);
+
+        grid.add(carrierBox, 0, 0);
+        grid.add(originBox, 1, 0);
+        grid.add(driverBox, 0, 1);
+        grid.add(destinationBox, 1, 1);
+        grid.add(vehicleBox, 0, 2);
+        grid.add(deliveryBox, 1, 2);
         card.getChildren().add(grid);
         return card;
     }
@@ -260,6 +284,43 @@ public class WaybillFormView extends AppView {
         return card;
     }
 
+    private VBox declarationsCard() {
+        VBox card = card();
+        card.getChildren().add(heading("SIGNATURES & DECLARATIONS"));
+
+        GridPane grid = new GridPane();
+        grid.setHgap(20);
+        grid.setVgap(10);
+        for (int i = 0; i < 3; i++) {
+            ColumnConstraints cc = new ColumnConstraints();
+            cc.setPercentWidth(33.333);
+            cc.setHgrow(Priority.ALWAYS);
+            grid.getColumnConstraints().add(cc);
+        }
+
+        grid.add(declarationPanel("SHIPPER DECLARATION",
+                "I declare that cargo details above are accurate and bound by Terms & Conditions on Page 2.",
+                shipperDeclarationName, shipperDeclarationDate, "Name"), 0, 0);
+        grid.add(declarationPanel("CARRIER RECEIPT",
+                "Received goods in apparent good order, subject to Carrier Terms & Conditions on Page 2.",
+                carrierReceiptDriverName, carrierReceiptDate, "Driver Name"), 1, 0);
+        grid.add(declarationPanel("CONSIGNEE PROOF OF DELIVERY",
+                "Received goods in good order and condition, except as noted.",
+                consigneePodReceiverName, consigneePodDate, "Receiver Name"), 2, 0);
+        card.getChildren().add(grid);
+        return card;
+    }
+
+    private VBox declarationPanel(String title, String description, TextField nameField, DatePicker datePicker, String nameLabel) {
+        VBox panel = new VBox(8);
+        panel.getStyleClass().add("party-panel");
+        Label titleLabel = label(title, "field-label");
+        Label desc = label(description, "card-description");
+        desc.setWrapText(true);
+        panel.getChildren().addAll(titleLabel, desc, labeledControl(nameLabel, nameField), labeledControl("Date", datePicker));
+        return panel;
+    }
+
     private HBox buttons() {
         HBox box = new HBox(10);
         box.setAlignment(Pos.CENTER_RIGHT);
@@ -309,7 +370,9 @@ public class WaybillFormView extends AppView {
 
         Control[] controls = {
                 carrier, driver, vehicle, origin, destination,
-                specialInstructions, remarks
+                specialInstructions, remarks,
+                shipperDeclarationName, shipperDeclarationDate, carrierReceiptDriverName, carrierReceiptDate,
+                consigneePodReceiverName, consigneePodDate
         };
         for (Control control : controls) control.setDisable(!editable);
         hazardous.setDisable(!editable);
@@ -317,6 +380,9 @@ public class WaybillFormView extends AppView {
         removeItemButton.setDisable(!editable);
         shipperSelector.setReadOnly(!editable);
         consigneeSelector.setReadOnly(!editable);
+        savedCarrier.setDisable(!editable);
+        savedOrigin.setDisable(!editable);
+        savedDestination.setDisable(!editable);
         updatePartyDetailsState();
 
         if (mode == Mode.VIEW) itemsTable.setEditable(false);
@@ -372,14 +438,22 @@ public class WaybillFormView extends AppView {
             shipperSelector.selectCompanyByName(details.shipper() == null ? "" : details.shipper().companyName());
             consigneeSelector.selectCompanyByName(details.consignee() == null ? "" : details.consignee().companyName());
 
-            carrier.setText(safe(details.carrierName()));
+            selectSavedCarrier(details.carrierName(), false);
             driver.setText(safe(details.driverName()));
             vehicle.setText(safe(details.vehicleTrailerNo()));
             origin.setText(safe(details.originLoadingPoint()));
             destination.setText(safe(details.destinationUnloadingPoint()));
+            selectSavedValue(savedOrigin, details.originLoadingPoint());
+            selectSavedValue(savedDestination, details.destinationUnloadingPoint());
             specialInstructions.setText(safe(details.specialInstructions()));
             hazardous.setSelected(details.hazardousMaterials());
             remarks.setText(safe(details.remarks()));
+            shipperDeclarationName.setText(safe(details.shipperDeclarationName()));
+            shipperDeclarationDate.setValue(details.shipperDeclarationDate());
+            carrierReceiptDriverName.setText(safe(details.carrierReceiptDriverName()));
+            carrierReceiptDate.setValue(details.carrierReceiptDate());
+            consigneePodReceiverName.setText(safe(details.consigneePodReceiverName()));
+            consigneePodDate.setValue(details.consigneePodDate());
 
             itemsTable.getItems().clear();
             for (WaybillService.WaybillItemData item : details.items()) {
@@ -507,12 +581,25 @@ public class WaybillFormView extends AppView {
                 company(shipperSelector, shipperContact, shipperAddress, shipperPhone, shipperEmail),
                 company(consigneeSelector, consigneeContact, consigneeAddress, consigneePhone, consigneeEmail),
                 carrier.getText(), driver.getText(), vehicle.getText(), origin.getText(), destination.getText(),
-                delivery, specialInstructions.getText(), hazardous.isSelected(), remarks.getText(), SessionContext.requireUserId(), rows);
+                delivery, specialInstructions.getText(), hazardous.isSelected(), remarks.getText(),
+                shipperDeclarationName.getText(), shipperDeclarationDate.getValue(),
+                carrierReceiptDriverName.getText(), carrierReceiptDate.getValue(),
+                consigneePodReceiverName.getText(), consigneePodDate.getValue(),
+                SessionContext.requireUserId(), rows);
     }
 
     private void clearForm() {
         waybillDate.setValue(LocalDate.now());
         estimatedDelivery.setValue(null);
+        shipperDeclarationName.clear();
+        shipperDeclarationDate.setValue(null);
+        carrierReceiptDriverName.clear();
+        carrierReceiptDate.setValue(null);
+        consigneePodReceiverName.clear();
+        consigneePodDate.setValue(null);
+        savedCarrier.getSelectionModel().clearSelection();
+        savedOrigin.getSelectionModel().clearSelection();
+        savedDestination.getSelectionModel().clearSelection();
         shipperSelector.clearSelection();
         consigneeSelector.clearSelection();
         for (TextField field : new TextField[]{shipperContact, shipperPhone, shipperEmail, consigneeContact, consigneePhone, consigneeEmail, carrier, driver, vehicle, origin, destination}) field.clear();
@@ -548,6 +635,81 @@ public class WaybillFormView extends AppView {
     private void refreshCompanySelectors() {
         shipperSelector.refreshCompanies();
         consigneeSelector.refreshCompanies();
+    }
+
+    private void configureSavedSelectors() {
+        loadSavedCarriers();
+        loadSavedLocations();
+        savedCarrier.setOnAction(e -> {
+            String value = savedCarrier.getSelectionModel().getSelectedItem();
+            if (value != null && !value.equals(savedCarrier.getPromptText())) {
+                SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, true);
+                if (record != null) {
+                    carrier.setText(safe(record.name()));
+                    driver.setText(safe(record.driverName()));
+                    vehicle.setText(safe(record.vehicleTrailerNo()));
+                }
+            }
+        });
+        savedOrigin.setOnAction(e -> {
+            String value = savedOrigin.getSelectionModel().getSelectedItem();
+            if (value != null && !value.equals(savedOrigin.getPromptText())) origin.setText(value);
+        });
+        savedDestination.setOnAction(e -> {
+            String value = savedDestination.getSelectionModel().getSelectedItem();
+            if (value != null && !value.equals(savedDestination.getPromptText())) destination.setText(value);
+        });
+    }
+
+    private void loadSavedCarriers() {
+        List<String> values = SavedDataService.findCarriers(null, true).stream().map(SavedDataService.CarrierRecord::name).toList();
+        savedCarrier.getItems().setAll(values);
+    }
+
+    private void loadSavedLocations() {
+        List<String> values = SavedDataService.findLocations(null, true).stream().map(SavedDataService.LocationRecord::name).toList();
+        savedOrigin.getItems().setAll(values);
+        savedDestination.getItems().setAll(values);
+    }
+
+    private static ComboBox<String> savedSelector(String prompt) {
+        ComboBox<String> box = new ComboBox<>();
+        box.setPromptText(prompt);
+        box.setMaxWidth(Double.MAX_VALUE);
+        box.getStyleClass().add("settings-field");
+        return box;
+    }
+
+    private void selectSavedCarrier(String value) {
+        selectSavedCarrier(value, true);
+    }
+
+    private void selectSavedCarrier(String value, boolean populateDetails) {
+        if (value == null || value.isBlank()) {
+            savedCarrier.getSelectionModel().clearSelection();
+            carrier.clear();
+            driver.clear();
+            vehicle.clear();
+            return;
+        }
+        if (!savedCarrier.getItems().contains(value)) savedCarrier.getItems().add(value);
+        savedCarrier.getSelectionModel().select(value);
+        SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, false);
+        if (record != null) {
+            carrier.setText(safe(record.name()));
+            if (populateDetails) {
+                driver.setText(safe(record.driverName()));
+                vehicle.setText(safe(record.vehicleTrailerNo()));
+            }
+        } else {
+            carrier.setText(value);
+        }
+    }
+
+    private static void selectSavedValue(ComboBox<String> box, String value) {
+        if (value == null || value.isBlank()) { box.getSelectionModel().clearSelection(); return; }
+        if (!box.getItems().contains(value)) box.getItems().add(value);
+        box.getSelectionModel().select(value);
     }
 
     private void populateShipper(CompanyService.CompanyRecord company) {

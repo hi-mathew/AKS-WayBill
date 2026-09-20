@@ -36,7 +36,10 @@ public final class WaybillService {
                               String vehicleTrailerNo, String originLoadingPoint,
                               String destinationUnloadingPoint, LocalDate estimatedDeliveryDate,
                               String specialInstructions, boolean hazardousMaterials,
-                              String remarks, Long createdBy, List<WaybillItemData> items) {
+                              String remarks, String shipperDeclarationName, LocalDate shipperDeclarationDate,
+                              String carrierReceiptDriverName, LocalDate carrierReceiptDate,
+                              String consigneePodReceiverName, LocalDate consigneePodDate,
+                              Long createdBy, List<WaybillItemData> items) {
     }
 
     public record SavedWaybill(long id, String waybillNumber) {
@@ -51,7 +54,9 @@ public final class WaybillService {
                                  String carrierName, String driverName, String vehicleTrailerNo,
                                  String originLoadingPoint, String destinationUnloadingPoint,
                                  LocalDate estimatedDeliveryDate, String specialInstructions,
-                                 boolean hazardousMaterials, String remarks,
+                                 boolean hazardousMaterials, String remarks, String shipperDeclarationName, LocalDate shipperDeclarationDate,
+                                 String carrierReceiptDriverName, LocalDate carrierReceiptDate,
+                                 String consigneePodReceiverName, LocalDate consigneePodDate,
                                  List<WaybillItemData> items) {
     }
 
@@ -125,7 +130,9 @@ public final class WaybillService {
                 + "sc.company_name, sc.contact_person, sc.address, sc.phone_number, sc.email_address, "
                 + "cc.company_name, cc.contact_person, cc.address, cc.phone_number, cc.email_address, "
                 + "w.carrier_name, w.driver_name, w.vehicle_trailer_no, w.origin_loading_point, w.destination_unloading_point, "
-                + "w.estimated_delivery_date, w.special_instructions, w.hazardous_materials, w.remarks "
+                + "w.estimated_delivery_date, w.special_instructions, w.hazardous_materials, w.remarks, "
+                + "w.shipper_declaration_name, w.shipper_declaration_date, w.carrier_receipt_driver_name, w.carrier_receipt_date, "
+                + "w.consignee_pod_receiver_name, w.consignee_pod_date "
                 + "FROM waybill w LEFT JOIN company sc ON sc.id=w.shipper_company_id LEFT JOIN company cc ON cc.id=w.consignee_company_id WHERE w.id=?"
                 + (SessionContext.isAdmin() ? "" : " AND w.created_by=?");
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -142,7 +149,7 @@ public final class WaybillService {
                         while (itemRs.next()) items.add(new WaybillItemData(itemRs.getString(1), itemRs.getString(2), nullableDouble(itemRs,3), nullableDouble(itemRs,4), nullableDouble(itemRs,5)));
                     }
                 }
-                return new WaybillDetails(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), shipper, consignee, rs.getString(14), rs.getString(15), rs.getString(16), rs.getString(17), rs.getString(18), parseDate(rs.getString(19)), rs.getString(20), rs.getInt(21) == 1, rs.getString(22), items);
+                return new WaybillDetails(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), shipper, consignee, rs.getString(14), rs.getString(15), rs.getString(16), rs.getString(17), rs.getString(18), parseDate(rs.getString(19)), rs.getString(20), rs.getInt(21) == 1, rs.getString(22), rs.getString(23), parseDate(rs.getString(24)), rs.getString(25), parseDate(rs.getString(26)), rs.getString(27), parseDate(rs.getString(28)), items);
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to load waybill", e);
@@ -158,7 +165,9 @@ public final class WaybillService {
         length(data.vehicleTrailerNo(), 200, "Vehicle / Trailer No.");
         length(data.originLoadingPoint(), 400, "Origin / Loading Point");
         length(data.destinationUnloadingPoint(), 400, "Destination / Unloading Point");
-        
+        length(data.shipperDeclarationName(), 200, "Shipper declaration name");
+        length(data.carrierReceiptDriverName(), 200, "Carrier receipt driver name");
+        length(data.consigneePodReceiverName(), 200, "Consignee proof of delivery receiver name");
         if (data.items() == null || data.items().isEmpty()) throw new IllegalArgumentException("At least one item is required.");
         for (WaybillItemData item : data.items()) {
             if (item == null) throw new IllegalArgumentException("Invalid item.");
@@ -206,13 +215,18 @@ public final class WaybillService {
 
                 long shipperCompanyId = findOrCreateCompany(connection, data.shipper());
                 long consigneeCompanyId = findOrCreateCompany(connection, data.consignee());
+                saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
+                saveLocationMaster(connection, data.originLoadingPoint());
+                saveLocationMaster(connection, data.destinationUnloadingPoint());
 
                 long waybillId;
                 String sql = "INSERT INTO waybill "
                         + "(waybill_number, waybill_date, shipper_company_id, consignee_company_id, carrier_name, driver_name, vehicle_trailer_no, "
                         + "origin_loading_point, destination_unloading_point, estimated_delivery_date, "
-                        + "special_instructions, hazardous_materials, remarks, created_by, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        + "special_instructions, hazardous_materials, remarks, shipper_declaration_name, shipper_declaration_date, "
+                        + "carrier_receipt_driver_name, carrier_receipt_date, consignee_pod_receiver_name, consignee_pod_date, "
+                        + "created_by, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
                     int i = 1;
@@ -230,6 +244,12 @@ public final class WaybillService {
                     statement.setString(i++, blankToNull(data.specialInstructions()));
                     statement.setInt(i++, data.hazardousMaterials() ? 1 : 0);
                     statement.setString(i++, blankToNull(data.remarks()));
+                    statement.setString(i++, blankToNull(data.shipperDeclarationName()));
+                    setNullableDate(statement, i++, data.shipperDeclarationDate());
+                    statement.setString(i++, blankToNull(data.carrierReceiptDriverName()));
+                    setNullableDate(statement, i++, data.carrierReceiptDate());
+                    statement.setString(i++, blankToNull(data.consigneePodReceiverName()));
+                    setNullableDate(statement, i++, data.consigneePodDate());
                     if (data.createdBy() == null) statement.setNull(i++, java.sql.Types.INTEGER);
                     else statement.setLong(i++, data.createdBy());
                     statement.setString(i++, DB_DATE_TIME.format(now));
@@ -270,11 +290,15 @@ public final class WaybillService {
                 assertCanAccessWaybill(connection, waybillId);
                 long shipperCompanyId = findOrCreateCompany(connection, data.shipper());
                 long consigneeCompanyId = findOrCreateCompany(connection, data.consignee());
+                saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
+                saveLocationMaster(connection, data.originLoadingPoint());
+                saveLocationMaster(connection, data.destinationUnloadingPoint());
                 LocalDateTime now = LocalDateTime.now();
 
                 String sql = "UPDATE waybill SET waybill_date=?, shipper_company_id=?, consignee_company_id=?, carrier_name=?, driver_name=?, vehicle_trailer_no=?, "
-                        + "origin_loading_point=?, destination_unloading_point=?, estimated_delivery_date=?, special_instructions=?, hazardous_materials=?, remarks=?, updated_at=? "
-                        + "WHERE id=?";
+                        + "origin_loading_point=?, destination_unloading_point=?, estimated_delivery_date=?, special_instructions=?, hazardous_materials=?, remarks=?, "
+                        + "shipper_declaration_name=?, shipper_declaration_date=?, carrier_receipt_driver_name=?, carrier_receipt_date=?, "
+                        + "consignee_pod_receiver_name=?, consignee_pod_date=?, updated_at=? WHERE id=?";
 
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
                     int i = 1;
@@ -291,6 +315,12 @@ public final class WaybillService {
                     statement.setString(i++, blankToNull(data.specialInstructions()));
                     statement.setInt(i++, data.hazardousMaterials() ? 1 : 0);
                     statement.setString(i++, blankToNull(data.remarks()));
+                    statement.setString(i++, blankToNull(data.shipperDeclarationName()));
+                    setNullableDate(statement, i++, data.shipperDeclarationDate());
+                    statement.setString(i++, blankToNull(data.carrierReceiptDriverName()));
+                    setNullableDate(statement, i++, data.carrierReceiptDate());
+                    statement.setString(i++, blankToNull(data.consigneePodReceiverName()));
+                    setNullableDate(statement, i++, data.consigneePodDate());
                     statement.setString(i++, DB_DATE_TIME.format(now));
                     statement.setLong(i, waybillId);
                     if (statement.executeUpdate() == 0) throw new IllegalArgumentException("The selected waybill no longer exists.");
@@ -337,6 +367,53 @@ public final class WaybillService {
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) throw new IllegalArgumentException("The selected waybill no longer exists.");
                 return rs.getString(1);
+            }
+        }
+    }
+
+    private static void saveCarrierMaster(Connection connection, String carrierName, String driverName, String vehicleTrailerNo) throws SQLException {
+        if (isBlank(carrierName)) return;
+        String find = "SELECT id FROM saved_carrier WHERE carrier_name=? COLLATE NOCASE LIMIT 1";
+        Long id = null;
+        try (PreparedStatement statement = connection.prepareStatement(find)) {
+            statement.setString(1, carrierName.trim());
+            try (ResultSet rs = statement.executeQuery()) { if (rs.next()) id = rs.getLong(1); }
+        }
+        if (id == null) {
+            String insert = "INSERT INTO saved_carrier(carrier_name, driver_name, vehicle_trailer_no, active, created_at, updated_at) VALUES(?,?,?,1,?,?)";
+            String now = DB_DATE_TIME.format(LocalDateTime.now());
+            try (PreparedStatement statement = connection.prepareStatement(insert)) {
+                statement.setString(1, carrierName.trim());
+                statement.setString(2, blankToNull(driverName));
+                statement.setString(3, blankToNull(vehicleTrailerNo));
+                statement.setString(4, now); statement.setString(5, now); statement.executeUpdate();
+            }
+        } else {
+            try (PreparedStatement statement = connection.prepareStatement("UPDATE saved_carrier SET driver_name=?, vehicle_trailer_no=?, active=1, updated_at=? WHERE id=?")) {
+                statement.setString(1, blankToNull(driverName));
+                statement.setString(2, blankToNull(vehicleTrailerNo));
+                statement.setString(3, DB_DATE_TIME.format(LocalDateTime.now()));
+                statement.setLong(4, id); statement.executeUpdate();
+            }
+        }
+    }
+
+    private static void saveLocationMaster(Connection connection, String locationName) throws SQLException {
+        if (isBlank(locationName)) return;
+        String find = "SELECT id FROM saved_location WHERE location_name=? COLLATE NOCASE LIMIT 1";
+        Long id = null;
+        try (PreparedStatement statement = connection.prepareStatement(find)) {
+            statement.setString(1, locationName.trim());
+            try (ResultSet rs = statement.executeQuery()) { if (rs.next()) id = rs.getLong(1); }
+        }
+        String now = DB_DATE_TIME.format(LocalDateTime.now());
+        if (id == null) {
+            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,1,?,?)")) {
+                statement.setString(1, locationName.trim()); statement.setString(2, now); statement.setString(3, now); statement.executeUpdate();
+            }
+        } else {
+            try (PreparedStatement statement = connection.prepareStatement("UPDATE saved_location SET active=1, updated_at=? WHERE id=?")) {
+                statement.setString(1, now); statement.setLong(2, id); statement.executeUpdate();
             }
         }
     }
@@ -404,6 +481,10 @@ public final class WaybillService {
             statement.setString(6, DB_DATE_TIME.format(LocalDateTime.now()));
             statement.executeUpdate();
         }
+    }
+
+    private static void setNullableDate(PreparedStatement statement, int index, LocalDate value) throws SQLException {
+        if (value == null) statement.setNull(index, java.sql.Types.VARCHAR); else statement.setString(index, DB_DATE.format(value));
     }
 
     private static void setNullableDouble(PreparedStatement statement, int index, Double value) throws SQLException {

@@ -105,7 +105,7 @@ public final class WaybillReportService {
             populateTransit(tables.get(2), waybill);
             populateItems(tables.get(3), waybill.items());
             populateSpecialInstructions(tables.get(3), waybill.specialInstructions(), waybill.hazardousMaterials());
-            populateDeclarations(tables.get(4));
+            populateDeclarations(tables.get(4), waybill);
             populateTermsIntro(document, waybill);
             populateRemarks(document, waybill.remarks());
             // Terms & Conditions are explicitly forced to start on the next page
@@ -231,21 +231,18 @@ public final class WaybillReportService {
         }
     }
 
-    private static void populateDeclarations(XWPFTable table) {
-        // Keep the signature row together. The previous implementation allowed
-        // Word/docx4j to split the labels from the signature lines across pages.
+    private static void populateDeclarations(XWPFTable table, WaybillService.WaybillDetails waybill) {
+        // Keep the signature row together.
         if (table.getRows().size() > 2) {
             org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTrPr trPr =
                     table.getRows().get(2).getCtRow().getTrPr();
-            if (trPr == null) {
-                trPr = table.getRows().get(2).getCtRow().addNewTrPr();
-            }
-            if (trPr.sizeOfCantSplitArray() == 0) {
-                trPr.addNewCantSplit();
-            }
+            if (trPr == null) trPr = table.getRows().get(2).getCtRow().addNewTrPr();
+            if (trPr.sizeOfCantSplitArray() == 0) trPr.addNewCantSplit();
+
+            setDeclarationCell(table.getRows().get(2).getCell(0), "Signature: " + safe(waybill.shipperDeclarationName()), "Date: " + formatLongDate(waybill.shipperDeclarationDate()), "");
+            setDeclarationCell(table.getRows().get(2).getCell(1), "Driver Signature: " + safe(waybill.carrierReceiptDriverName()), "Date: " + formatLongDate(waybill.carrierReceiptDate()), "");
+            setDeclarationCell(table.getRows().get(2).getCell(2), "Receiver Signature: " + safe(waybill.consigneePodReceiverName()), "Date: " + formatLongDate(waybill.consigneePodDate()), "");
         }
-        // Declaration wording, signature labels and table layout are controlled
-        // by the supplied template. No hard-coded replacement is performed here.
     }
 
     private static void populateTermsIntro(XWPFDocument document, WaybillService.WaybillDetails waybill) {
@@ -451,6 +448,22 @@ public final class WaybillReportService {
 
     private static void replaceRunText(XWPFTableCell cell, int runIndex, String value) {
         setRunText(cell, runIndex, value);
+    }
+
+    private static void setDeclarationCell(XWPFTableCell cell, String line1, String line2, String line3) {
+        XWPFParagraph paragraph = cell.getParagraphs().isEmpty() ? cell.addParagraph() : cell.getParagraphs().get(0);
+        for (XWPFRun run : paragraph.getRuns()) run.setText("", 0);
+        XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+        run.setText(safe(line1));
+        if (line2 != null && !line2.isBlank()) {
+            run.addBreak();
+            run.setText(line2);
+        }
+        if (line3 != null && !line3.isBlank()) {
+            run.addBreak();
+            run.setText(line3);
+        }
+        run.setFontSize(8);
     }
 
     private static void setCellText(XWPFTableCell cell, String value) {
