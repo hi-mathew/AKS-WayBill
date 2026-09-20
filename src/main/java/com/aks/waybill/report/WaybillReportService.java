@@ -18,10 +18,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -396,15 +393,36 @@ public final class WaybillReportService {
     }
 
     private static void convertDocxToPdf(Path docx, Path pdf) throws IOException {
+        Path temporaryPdf = null;
+
         try {
-            WordprocessingMLPackage wordPackage = WordprocessingMLPackage.load(docx.toFile());
+            WordprocessingMLPackage wordPackage =
+                    WordprocessingMLPackage.load(docx.toFile());
+
             wordPackage.setFontMapper(new IdentityPlusMapper());
 
-            FOSettings foSettings = Docx4J.createFOSettings();
-            foSettings.setWmlPackage(wordPackage);
-            try (OutputStream out = Files.newOutputStream(pdf)) {
-                Docx4J.toFO(foSettings, out, Docx4J.FLAG_EXPORT_PREFER_XSL);
+            temporaryPdf = Files.createTempFile(
+                    pdf.toAbsolutePath().getParent(),
+                    "aks-waybill-pdf-",
+                    ".pdf"
+            );
+
+            try (OutputStream out = Files.newOutputStream(temporaryPdf)) {
+                Docx4J.toPDF(wordPackage, out);
             }
+
+            if (!Files.exists(temporaryPdf) || Files.size(temporaryPdf) == 0) {
+                throw new IOException("PDF conversion completed without producing PDF content.");
+            }
+
+            Files.move(
+                    temporaryPdf,
+                    pdf,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+
+            temporaryPdf = null;
+
         } catch (Exception e) {
             throw new IOException("Unable to convert the approved Word waybill template to PDF.", e);
         }

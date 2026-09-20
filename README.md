@@ -56,3 +56,7 @@ This build also includes:
 - About dialog with application version information.
 
 Text-area fields such as Addresses, Special Instructions and Remarks are intentionally not restricted by UI character limits; single-line fields retain their configured limits and numeric item fields retain numeric validation.
+
+## Windows EXE Packaging
+
+Use `packaging/package-windows.ps1` on a Windows build machine with JDK 21, Maven and WiX Toolset 3.x. The resulting installer bundles the runtime and stores production database data under `%LOCALAPPDATA%\\AKS-Waybill` rather than the installation directory.

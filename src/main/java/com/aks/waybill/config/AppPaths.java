@@ -5,19 +5,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/** Centralized paths for application binaries and persistent user data. */
 public final class AppPaths {
+    private static final String APP_NAME = "AKS-Waybill";
 
     private AppPaths() {
     }
 
     /**
-     * Returns the directory containing the running application.
-     *
-     * For a jpackage Windows application, jpackage.app-path points to the
-     * actual launcher (.exe), so the database is kept beside the executable.
-     * During development, the code source is used; when running from
-     * target/classes, the project root is used so the database is not hidden
-     * inside the compiled classes directory.
+     * Returns the directory containing the running application/launcher.
+     * This is used for application resources only; packaged builds do not
+     * store mutable database data here.
      */
     public static Path applicationDirectory() {
         String jpackageAppPath = System.getProperty("jpackage.app-path");
@@ -56,8 +54,36 @@ public final class AppPaths {
         }
     }
 
+    /** True when the application is running from a jpackage-generated launcher. */
+    public static boolean isPackaged() {
+        String path = System.getProperty("jpackage.app-path");
+        return path != null && !path.isBlank();
+    }
+
+    /**
+     * Persistent user-data directory. Packaged Windows installations use
+     * %LOCALAPPDATA%\AKS-Waybill so database files are never written under
+     * Program Files. During IntelliJ/Maven development we retain the existing
+     * project-local data directory for convenience.
+     */
     public static Path dataDirectory() {
-        return applicationDirectory().resolve("data");
+        if (!isPackaged()) {
+            return applicationDirectory().resolve("data");
+        }
+
+        String localAppData = System.getenv("LOCALAPPDATA");
+        Path root;
+        if (localAppData != null && !localAppData.isBlank()) {
+            root = Paths.get(localAppData);
+        } else {
+            // Defensive fallback for unusual Windows environments.
+            root = Paths.get(System.getProperty("user.home"), "AppData", "Local");
+        }
+        return root.resolve(APP_NAME);
+    }
+
+    public static Path backupDirectory() {
+        return dataDirectory().resolve("backups");
     }
 
     public static Path databaseFile() {

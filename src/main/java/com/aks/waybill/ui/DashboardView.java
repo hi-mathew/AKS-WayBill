@@ -162,7 +162,7 @@ public class DashboardView extends BorderPane {
         Alert dialog=new Alert(Alert.AlertType.INFORMATION);
         dialog.setTitle("About AKS Waybill");
         dialog.setHeaderText("AKS Waybill");
-        dialog.setContentText("Version 1.0.0\n\nAKS Global Logistics\n\nA local desktop application for transportation waybill data entry, reporting and management.\n\n© 2026 AKS Global Logistics");
+        dialog.setContentText("Version 1.3.0\n\nAKS Global Logistics\n\nA local desktop application for transportation waybill data entry, reporting and management.\n\n© 2026 AKS Global Logistics");
         if(getScene()!=null) dialog.initOwner(getScene().getWindow());
         dialog.showAndWait();
     }

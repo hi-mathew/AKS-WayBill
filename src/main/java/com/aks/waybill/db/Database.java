@@ -18,6 +18,8 @@ public final class Database {
     public static void initialize() {
         try {
             Files.createDirectories(AppPaths.dataDirectory());
+            Files.createDirectories(AppPaths.databaseFile().getParent());
+            migrateLegacyPackagedDatabaseIfNeeded();
             try (Connection c = getConnection(); Statement s = c.createStatement()) {
                 s.execute("PRAGMA foreign_keys = ON");
                 s.execute("PRAGMA journal_mode = WAL");
@@ -46,6 +48,19 @@ public final class Database {
         }
     }
 
+
+    /**
+     * Older packaged development builds stored the database beside the application
+     * under <app>\data\waybill.db. If that file exists and the new persistent
+     * AppData database does not, migrate it once. This keeps upgrades safe while
+     * the production database location is moved outside Program Files.
+     */
+    private static void migrateLegacyPackagedDatabaseIfNeeded() throws IOException {
+        if (!AppPaths.isPackaged() || Files.exists(AppPaths.databaseFile())) return;
+        java.nio.file.Path legacy = AppPaths.applicationDirectory().resolve("data").resolve("waybill.db");
+        if (!Files.isRegularFile(legacy)) return;
+        Files.copy(legacy, AppPaths.databaseFile());
+    }
 
     private static void ensureSeparateCompanyMasters(Connection c) throws SQLException {
         boolean legacyCompany = tableExists(c, "company");
