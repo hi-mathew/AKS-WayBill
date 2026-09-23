@@ -16,6 +16,7 @@ import javafx.animation.Timeline;
 import javafx.util.Duration;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.stage.Stage;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -23,10 +24,12 @@ import java.util.List;
 
 /** Main application shell and dashboard. */
 public class DashboardView extends BorderPane {
+    private boolean lifecycleActionInProgress;
     private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     private final AuthService.UserRecord currentUser;
     private final Runnable logout;
+    private final Runnable exit;
     private final StackPane content = new StackPane();
     private final Label pageTitle = label("Dashboard", "topbar-title");
 
@@ -41,8 +44,13 @@ public class DashboardView extends BorderPane {
     private final Label clockLabel = label("", "topbar-clock");
 
     public DashboardView(AuthService.UserRecord currentUser, Runnable logout) {
+        this(currentUser, logout, javafx.application.Platform::exit);
+    }
+
+    public DashboardView(AuthService.UserRecord currentUser, Runnable logout, Runnable exit) {
         this.currentUser = currentUser;
         this.logout = logout;
+        this.exit = exit == null ? javafx.application.Platform::exit : exit;
         getStyleClass().add("app-root");
         setLeft(sidebar());
         setTop(topbar());
@@ -70,6 +78,14 @@ public class DashboardView extends BorderPane {
         Label workspace = label("WORKSPACE", "sidebar-section");
         Label administration = label("ADMINISTRATION", "sidebar-section");
         Button signOut = nav("⇥  Sign out", false);
+        Label footer1 = label("W.A.S.P", "app-footer-title");
+        Label footer2 = label("Simplifying Waybill Creation. Improving Operational Efficiency.", "app-footer");
+        footer2.setWrapText(true);
+        Label footer3 = label("© AKS Global Logistics. All Rights Reserved.", "app-footer");
+        Label footer4 = label("Developed by: Deepesh V. Thampi", "app-footer");
+        Label footer5 = label("Owned by: AKS Global Logistics", "app-footer");
+        VBox footer = new VBox(2, footer1, footer2, footer3, footer4, footer5);
+        footer.setPadding(new Insets(10, 4, 6, 4));
 
         dashboardButton.setOnAction(e -> showDashboard());
         newWaybillButton.setOnAction(e -> showNewWaybill());
@@ -85,14 +101,14 @@ public class DashboardView extends BorderPane {
         usersButton.setManaged(SessionContext.isAdmin());
         settingsButton.setVisible(SessionContext.isAdmin());
         settingsButton.setManaged(SessionContext.isAdmin());
-        signOut.setOnAction(e -> logout.run());
+        signOut.setOnAction(e -> requestLogout(logout));
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
         s.getChildren().addAll(lb, workspace, dashboardButton, newWaybillButton,
                 savedWaybillsButton, companiesButton, spacer, administration,
-                settingsButton, usersButton, auditButton, aboutButton, signOut);
+                settingsButton, usersButton, auditButton, aboutButton, footer, signOut);
         return s;
     }
 
@@ -120,7 +136,15 @@ public class DashboardView extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Label user = label(currentUser.displayName() + "  •  " + currentUser.role(), "user-pill");
-        h.getChildren().addAll(pageTitle, spacer, clockLabel, user);
+        Button minimize = new Button("—");
+        minimize.getStyleClass().add("window-control-button");
+        minimize.setTooltip(new Tooltip("Minimize"));
+        minimize.setOnAction(e -> { if (getScene() != null) ((Stage) getScene().getWindow()).setIconified(true); });
+        Button close = new Button("✕");
+        close.getStyleClass().addAll("window-control-button", "window-close-button");
+        close.setTooltip(new Tooltip("Close W.A.S.P"));
+        close.setOnAction(e -> requestExit(exit));
+        h.getChildren().addAll(pageTitle, spacer, clockLabel, user, minimize, close);
         updateClock();
         Timeline clock = new Timeline(new KeyFrame(Duration.seconds(1), e -> updateClock()));
         clock.setCycleCount(Timeline.INDEFINITE);
@@ -153,6 +177,79 @@ public class DashboardView extends BorderPane {
         });
     }
 
+    public void requestLogout(Runnable afterLogout) {
+        if (lifecycleActionInProgress) return;
+        lifecycleActionInProgress = true;
+        if (!confirmSimpleAction("Log out", "Are you sure you want to log out of W.A.S.P?")) {
+            lifecycleActionInProgress = false;
+            return;
+        }
+        if (hasUnsavedChanges()) {
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION);
+            a.setTitle("Unsaved Changes");
+            a.setHeaderText("You have unsaved changes.");
+            a.setContentText("Would you like to save before logging out?");
+            ButtonType save = new ButtonType("Save & Logout", ButtonBar.ButtonData.OK_DONE);
+            ButtonType discard = new ButtonType("Logout Without Saving", ButtonBar.ButtonData.OTHER);
+            ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            a.getButtonTypes().setAll(save, discard, cancel);
+            if (getScene()!=null) a.initOwner(getScene().getWindow());
+            ButtonType result=a.showAndWait().orElse(cancel);
+            if(result==cancel) { lifecycleActionInProgress = false; return; }
+            if(result==save && !saveCurrentForm()) { lifecycleActionInProgress = false; return; }
+        }
+        if (!MainConfirmBackup("log out")) { lifecycleActionInProgress = false; return; }
+        SessionContext.clear();
+        lifecycleActionInProgress = false;
+        afterLogout.run();
+    }
+
+    public void requestExit(Runnable finalExit) {
+        if (lifecycleActionInProgress) return;
+        lifecycleActionInProgress = true;
+        if (!confirmSimpleAction("Exit W.A.S.P", "Are you sure you want to exit W.A.S.P?")) {
+            lifecycleActionInProgress = false;
+            return;
+        }
+        if (hasUnsavedChanges()) {
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION);
+            a.setTitle("Unsaved Changes");
+            a.setHeaderText("You have unsaved changes.");
+            a.setContentText("Would you like to save before exiting?");
+            ButtonType save = new ButtonType("Save & Exit", ButtonBar.ButtonData.OK_DONE);
+            ButtonType discard = new ButtonType("Exit Without Saving", ButtonBar.ButtonData.OTHER);
+            ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            a.getButtonTypes().setAll(save, discard, cancel);
+            if (getScene()!=null) a.initOwner(getScene().getWindow());
+            ButtonType result=a.showAndWait().orElse(cancel);
+            if(result==cancel) { lifecycleActionInProgress = false; return; }
+            if(result==save && !saveCurrentForm()) { lifecycleActionInProgress = false; return; }
+        }
+        if (!MainConfirmBackup("exit")) { lifecycleActionInProgress = false; return; }
+        lifecycleActionInProgress = false;
+        finalExit.run();
+    }
+
+    private boolean confirmSimpleAction(String title, String message) {
+        Alert a=new Alert(Alert.AlertType.CONFIRMATION,message,ButtonType.OK,ButtonType.CANCEL);
+        a.setTitle(title); a.setHeaderText(null);
+        if(getScene()!=null) a.initOwner(getScene().getWindow());
+        return a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK;
+    }
+
+    private boolean hasUnsavedChanges() {
+        return !content.getChildren().isEmpty() && content.getChildren().get(0) instanceof WaybillFormView form && form.hasUnsavedChanges();
+    }
+
+    private boolean saveCurrentForm() {
+        if (!content.getChildren().isEmpty() && content.getChildren().get(0) instanceof WaybillFormView form) return form.saveForExit();
+        return true;
+    }
+
+    private boolean MainConfirmBackup(String action) {
+        return com.aks.waybill.Main.confirmBackup(getScene()==null?null:getScene().getWindow(), action);
+    }
+
     private void showAuditLog() {
         if (!SessionContext.isAdmin()) return;
         activate(auditButton, "Audit Log", new AuditLogView());
@@ -160,9 +257,13 @@ public class DashboardView extends BorderPane {
 
     private void showAbout() {
         Alert dialog=new Alert(Alert.AlertType.INFORMATION);
-        dialog.setTitle("About AKS Waybill");
-        dialog.setHeaderText("AKS Waybill");
-        dialog.setContentText("Version 1.3.0\n\nAKS Global Logistics\n\nA local desktop application for transportation waybill data entry, reporting and management.\n\n© 2026 AKS Global Logistics");
+        dialog.setTitle("About W.A.S.P");
+        dialog.setHeaderText("W.A.S.P (Waybill Automation & Shipping Platform)");
+        dialog.setContentText("W.A.S.P (Waybill Automation & Shipping Platform) is a dedicated waybill management solution developed to simplify, standardize, and accelerate the waybill creation process within logistics operations. Designed with practicality and ease of use in mind, W.A.S.P enables users to generate professional waybills efficiently while reducing repetitive data entry, minimizing documentation errors, and improving overall productivity.\n\n" +
+                "The platform allows for the organized management of customer, sender, receiver, and carrier information, enabling faster preparation of shipping documents and ensuring consistency across all waybills. By automating routine processes and centralizing essential data, W.A.S.P helps users save time, maintain accuracy, and enhance operational efficiency in day-to-day shipment handling activities.\n\n" +
+                "W.A.S.P has been developed as an operational tool to support the documentation requirements of modern logistics services while providing a simple, reliable, and user-friendly experience for both administrative and operational staff.\n\n" +
+                "W.A.S.P is a proprietary application owned and operated by AKS Global Logistics. All rights relating to the software, branding, business processes, and operational use of the application are reserved by AKS Global Logistics.\n\n" +
+                "Developed by: Deepesh V. Thampi\nOwned by: AKS Global Logistics\n\nVersion 1.4.0");
         if(getScene()!=null) dialog.initOwner(getScene().getWindow());
         dialog.showAndWait();
     }
@@ -216,9 +317,10 @@ public class DashboardView extends BorderPane {
         c.getStyleClass().add("content-area");
 
         Label welcome = label("Good day, " + currentUser.displayName(), "page-heading");
-        Label intro = label(SessionContext.isAdmin()
+        Label intro = label("Waybill Automation & Shipping Platform", "page-subheading");
+        Label introDetail = label(SessionContext.isAdmin()
                 ? "Manage transportation waybills, companies, users and report settings from one workspace."
-                : "Create, manage and export your transportation waybills from one workspace.", "page-subheading");
+                : "Create, manage and export your transportation waybills from one workspace.", "card-description");
 
         DashboardStats stats = loadStats();
         HBox statsRow = new HBox(16,
@@ -247,7 +349,7 @@ public class DashboardView extends BorderPane {
         Label recentTitle = label("Recent Waybills", "section-heading");
         VBox recentCard = recentWaybills();
 
-        c.getChildren().addAll(welcome, intro, statsRow, quickTitle, actions);
+        c.getChildren().addAll(welcome, intro, introDetail, statsRow, quickTitle, actions);
         if (SessionContext.isAdmin()) {
             c.getChildren().addAll(label("Administration", "section-heading"), adminActions);
         }

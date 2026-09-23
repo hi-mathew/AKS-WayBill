@@ -44,7 +44,8 @@ public final class CompaniesView extends AppView {
             Button add = button("＋ Add Company", "primary-button"); add.setOnAction(e -> openCompanyDialog(null));
             Button edit = button("Edit", "secondary-button"); edit.setOnAction(e -> editSelected());
             Button toggle = button("Activate / Deactivate", "secondary-button"); toggle.setOnAction(e -> toggleSelected());
-            toolbar.getChildren().addAll(searchField, search, clear, add, edit, toggle);
+            Button delete = button("Delete", "secondary-button"); delete.setVisible(com.aks.waybill.security.SessionContext.isAdmin()); delete.setManaged(com.aks.waybill.security.SessionContext.isAdmin()); delete.setOnAction(e -> deleteSelected());
+            toolbar.getChildren().addAll(searchField, search, clear, add, edit, toggle, delete);
 
             table.setPlaceholder(new Label("No companies found.")); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPrefHeight(520);
             table.getColumns().setAll(column("Company Name", 0, 220), column("Contact Person", 1, 160), column("Phone", 2, 130), column("Email", 3, 190), column("Address", 4, 260), statusColumn());
@@ -70,6 +71,14 @@ public final class CompaniesView extends AppView {
         private int totalPages() { return (int) Math.max(1, (totalRows + pageSize - 1) / pageSize); }
         private void editSelected() { CompanyService.CompanyRecord selected = table.getSelectionModel().getSelectedItem(); if (selected == null) { showError("Select a company first."); return; } openCompanyDialog(selected); }
         private void toggleSelected() { CompanyService.CompanyRecord selected = table.getSelectionModel().getSelectedItem(); if (selected == null) { showError("Select a company first."); return; } try { CompanyService.setActive(type, selected.id(), !selected.active()); loadPage(currentPage); } catch (RuntimeException ex) { showError(ex.getMessage()); } }
+        private void deleteSelected() {
+            CompanyService.CompanyRecord selected=table.getSelectionModel().getSelectedItem();
+            if(selected==null){showError("Select a company first.");return;}
+            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete company \""+selected.companyName()+"\"? If historical waybills reference it, W.A.S.P will archive it instead so those waybills remain intact.",ButtonType.OK,ButtonType.CANCEL);
+            a.setTitle("Delete Company");
+            if(a.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+            try{showInfo(CompanyService.deleteOrDeactivate(type,selected.id()));loadPage(currentPage);}catch(Exception ex){showError(ex.getMessage());}
+        }
 
         private void openCompanyDialog(CompanyService.CompanyRecord existing) {
             Dialog<CompanyService.CompanyRecord> dialog = new Dialog<>(); dialog.setTitle(existing == null ? "Add Company" : "Edit Company"); dialog.setHeaderText(existing == null ? "Add a company to the " + type.displayName() + " master" : "Update " + type.displayName() + " master data"); dialog.initModality(Modality.APPLICATION_MODAL);
@@ -85,6 +94,7 @@ public final class CompaniesView extends AppView {
         }
         private void clearMessage() { message.setText(""); message.getStyleClass().remove("error-message"); }
         private void showError(String text) { message.getStyleClass().add("error-message"); message.setText(text == null ? "Unable to complete operation." : text); }
+        private void showInfo(String text) { message.getStyleClass().remove("error-message"); message.setText(text == null ? "Operation completed." : text); }
         private static Button button(String text, String css) { Button b = new Button(text); b.getStyleClass().add(css); return b; }
         private static TextField field(String prompt, String value, int max) { TextField f = new TextField(value); f.setPromptText(prompt); InputLimits.maxLength(f, max); f.getStyleClass().add("settings-field"); return f; }
         private static VBox labeled(String label, Control control) { VBox box = new VBox(5, new Label(label), control); control.setMaxWidth(Double.MAX_VALUE); return box; }

@@ -1,4 +1,4 @@
-# AKS Waybill - Windows Packaging
+# W.A.S.P - Windows Packaging
 
 ## Recommended distribution
 
@@ -25,7 +25,7 @@ Or double-click `packaging\package-windows.bat`.
 The installer will be generated under:
 
 ```text
-target\installer\AKS Waybill-1.3.0.exe
+target\installer\W.A.S.P-1.4.0.exe
 ```
 
 ## Persistent data location

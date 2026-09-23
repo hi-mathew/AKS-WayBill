@@ -20,7 +20,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /** Reusable New/Edit/View waybill form. */
@@ -34,7 +33,10 @@ public class WaybillFormView extends AppView {
     private final Runnable onCancel;
     private final Runnable onCreateNew;
     private final Consumer<Long> onViewSaved;
-    private boolean newWaybillSaved;
+    private boolean dirty;
+    private boolean loadingExisting;
+    private boolean savedNew;
+    private String loadedStatus = "DRAFT";
 
     private final Label numberLabel = new Label();
     private final DatePicker waybillDate = new DatePicker(LocalDate.now());
@@ -83,6 +85,8 @@ public class WaybillFormView extends AppView {
     private final Button newCarrierButton = new Button("+ New Carrier");
     private final Button newOriginButton = new Button("+ New Location");
     private final Button newDestinationButton = new Button("+ New Location");
+    private final Button finalizeButton = new Button("Mark as Final");
+    private final Button revertButton = new Button("Return to Draft");
 
     public WaybillFormView(Mode mode, long waybillId, Runnable onSaved, Runnable onCancel, Runnable onCreateNew) {
         this(mode, waybillId, onSaved, onCancel, onCreateNew, id -> {});
@@ -105,13 +109,19 @@ public class WaybillFormView extends AppView {
         configureDatePicker(consigneePodDate);
         configureSavedSelectors();
         build();
+        installDirtyTracking();
         applyMode();
 
         if (mode == Mode.NEW) {
             refreshPreview();
             waybillDate.valueProperty().addListener((obs, oldValue, newValue) -> refreshPreview());
         } else {
+            loadingExisting = true;
             loadExisting();
+            loadingExisting = false;
+            dirty = false;
+            applyMode();
+            updateLifecycleActions();
         }
     }
 
@@ -426,7 +436,7 @@ public class WaybillFormView extends AppView {
         if (mode == Mode.NEW) {
             Button clear = new Button("Clear");
             clear.getStyleClass().add("secondary-button");
-            clear.setOnAction(event -> clearForm());
+            clear.setOnAction(event -> confirmClearForm());
 
             Button saveAndView = new Button("Save & View Saved Waybills");
             saveAndView.getStyleClass().add("secondary-button");
@@ -447,19 +457,24 @@ public class WaybillFormView extends AppView {
             Button back = new Button("Back to Saved Waybills");
             back.getStyleClass().add("secondary-button");
             back.setOnAction(event -> onCancel.run());
+            finalizeButton.getStyleClass().add("primary-button");
+            finalizeButton.setOnAction(event -> confirmFinalize());
+            revertButton.getStyleClass().add("secondary-button");
+            revertButton.setOnAction(event -> confirmRevert());
             Button pdf = new Button("Generate PDF");
             pdf.getStyleClass().add("secondary-button");
             pdf.setOnAction(event -> WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), waybillId));
             Button word = new Button("Generate Word");
             word.getStyleClass().add("secondary-button");
             word.setOnAction(event -> WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), waybillId));
-            box.getChildren().addAll(message, spacer, pdf, word, back);
+            box.getChildren().addAll(finalizeButton, revertButton);
+            box.getChildren().addAll(pdf, word, back);
         }
         return box;
     }
 
     private void applyMode() {
-        boolean editable = mode != Mode.VIEW;
+        boolean editable = mode != Mode.VIEW && (mode != Mode.EDIT || SessionContext.isAdmin() || "DRAFT".equalsIgnoreCase(loadedStatus));
         setEditable(waybillDate, editable);
         setEditable(estimatedDelivery, editable);
 
@@ -482,6 +497,7 @@ public class WaybillFormView extends AppView {
         newOriginButton.setDisable(!editable);
         newDestinationButton.setDisable(!editable);
         updatePartyDetailsState();
+        if (mode == Mode.EDIT) saveButton.setDisable(!editable);
 
         if (mode == Mode.VIEW) itemsTable.setEditable(false);
     }
@@ -529,6 +545,7 @@ public class WaybillFormView extends AppView {
                 return;
             }
 
+            loadedStatus = details.status() == null ? "DRAFT" : details.status();
             numberLabel.setText(details.waybillNumber());
             waybillDate.setValue(details.waybillDate());
             estimatedDelivery.setValue(details.estimatedDeliveryDate());
@@ -569,6 +586,58 @@ public class WaybillFormView extends AppView {
         }
     }
 
+    public boolean hasUnsavedChanges() { return mode != Mode.VIEW && dirty && !savedNew; }
+
+    /** Saves the current form without opening the post-save dialog; used by exit/logout protection. */
+    public boolean saveForExit() {
+        if (!hasUnsavedChanges()) return true;
+        try {
+            if (mode == Mode.NEW) {
+                WaybillService.SavedWaybill saved = persistNew();
+                if (saved == null) return false;
+                savedNew = true; dirty = false;
+            } else if (mode == Mode.EDIT) {
+                persistUpdateForExit();
+            }
+            return true;
+        } catch (RuntimeException ex) {
+            showError(ex.getMessage() == null ? "Unable to save the unsaved changes." : ex.getMessage());
+            return false;
+        }
+    }
+
+    private void persistUpdateForExit() {
+        WaybillService.WaybillData data = collectAndValidate();
+        WaybillService.update(waybillId, data);
+        dirty = false;
+    }
+
+    private void installDirtyTracking() {
+        List<Control> controls = List.of(waybillDate, estimatedDelivery, shipperContact, shipperAddress, shipperPhone, shipperEmail,
+                consigneeContact, consigneeAddress, consigneePhone, consigneeEmail, savedCarrier, carrier, driver, vehicle, savedOrigin, origin,
+                savedDestination, destination, specialInstructions, hazardous, remarks, shipperDeclarationName, shipperDeclarationDate,
+                carrierReceiptDriverName, carrierReceiptDate, consigneePodReceiverName, consigneePodDate);
+        for (Control control : controls) {
+            if (control instanceof TextInputControl text) text.textProperty().addListener((o,a,b)->markDirty());
+            else if (control instanceof DatePicker date) date.valueProperty().addListener((o,a,b)->markDirty());
+            else if (control instanceof ComboBox<?> combo) combo.valueProperty().addListener((o,a,b)->markDirty());
+            else if (control instanceof CheckBox check) check.selectedProperty().addListener((o,a,b)->markDirty());
+        }
+        shipperSelector.companyNameProperty().addListener((o,a,b)->markDirty());
+        consigneeSelector.companyNameProperty().addListener((o,a,b)->markDirty());
+        itemsTable.getItems().addListener((javafx.collections.ListChangeListener<ItemRow>) change -> markDirty());
+    }
+
+    private void markDirty() { if (!loadingExisting && mode != Mode.VIEW && !savedNew) dirty = true; }
+
+    private void updateLifecycleActions() {
+        if (mode != Mode.VIEW) return;
+        finalizeButton.setVisible("DRAFT".equalsIgnoreCase(loadedStatus) && canCurrentUserFinalize());
+        finalizeButton.setManaged(finalizeButton.isVisible());
+        revertButton.setVisible("FINAL".equalsIgnoreCase(loadedStatus) && SessionContext.isAdmin());
+        revertButton.setManaged(revertButton.isVisible());
+    }
+
     public void handleShortcutSave() {
         if (mode == Mode.NEW) saveNew(false);
         else if (mode == Mode.EDIT) updateExisting();
@@ -582,69 +651,59 @@ public class WaybillFormView extends AppView {
         WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), waybillId);
     }
 
+    private boolean canCurrentUserFinalize() { return SessionContext.isAdmin() || ownerOfCurrentWaybill(); }
+
+    private boolean ownerOfCurrentWaybill() {
+        try { return WaybillService.findById(waybillId) != null && WaybillService.canEdit(waybillId); } catch (RuntimeException ex) { return false; }
+    }
+
+    private void confirmFinalize() {
+        Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Mark this waybill as Final? Normal users will no longer be able to edit it.",ButtonType.OK,ButtonType.CANCEL);
+        a.setTitle("Finalize Waybill"); a.setHeaderText("Finalize Waybill");
+        if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{WaybillService.finalizeWaybill(waybillId); loadedStatus="FINAL"; applyMode(); onCancel.run();}catch(Exception e){showError(e.getMessage());}}
+    }
+
+    private void confirmRevert() {
+        TextInputDialog d=new TextInputDialog(); d.setTitle("Return to Draft"); d.setHeaderText("Return Finalized Waybill to Draft"); d.setContentText("Reason:");
+        d.showAndWait().ifPresent(reason->{if(reason==null||reason.isBlank()){showError("A reason is required.");return;} try{WaybillService.revertToDraft(waybillId,reason);loadedStatus="DRAFT";applyMode();onCancel.run();}catch(Exception e){showError(e.getMessage());}});
+    }
+
     private void saveNew(boolean viewSavedWaybills) {
         clearMessage();
-        if (mode == Mode.NEW && newWaybillSaved) {
+        if (savedNew) {
             showError("This waybill has already been saved. Choose Create New to start another waybill.");
             return;
         }
         WaybillService.SavedWaybill saved = persistNew();
         if (saved == null) return;
-        newWaybillSaved = true;
-        if (viewSavedWaybills) {
-            onSaved.run();
-        } else {
-            showSaveSuccessDialog(saved);
-        }
+        savedNew = true;
+        dirty = false;
+        if (viewSavedWaybills) onSaved.run(); else showSaveSuccessDialog(saved);
     }
 
     private void showSaveSuccessDialog(WaybillService.SavedWaybill saved) {
+        Alert dialog = new Alert(Alert.AlertType.INFORMATION);
+        dialog.setTitle("Waybill Saved");
+        dialog.setHeaderText("Waybill saved successfully");
+        dialog.setContentText("Waybill " + saved.waybillNumber() + " saved successfully.");
+        if (getScene() != null && getScene().getWindow() != null) {
+            dialog.initOwner(getScene().getWindow());
+        }
+
+        ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
+        ButtonType pdf = new ButtonType("Generate PDF", ButtonBar.ButtonData.OTHER);
+        ButtonType word = new ButtonType("Generate Word", ButtonBar.ButtonData.OTHER);
+        ButtonType createNew = new ButtonType("Create New", ButtonBar.ButtonData.OTHER);
+        dialog.getButtonTypes().setAll(view, pdf, word, createNew, ButtonType.CANCEL);
+
         while (true) {
-            Alert dialog = new Alert(Alert.AlertType.INFORMATION);
-            dialog.setTitle("Waybill Saved");
-            dialog.setHeaderText("Waybill saved successfully");
-            dialog.setContentText("Waybill " + saved.waybillNumber() + " saved successfully.");
-            if (getScene() != null && getScene().getWindow() != null) {
-                dialog.initOwner(getScene().getWindow());
-            }
-
-            ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
-            ButtonType pdf = new ButtonType("Generate PDF", ButtonBar.ButtonData.OTHER);
-            ButtonType word = new ButtonType("Generate Word", ButtonBar.ButtonData.OTHER);
-            ButtonType createNew = new ButtonType("Create New", ButtonBar.ButtonData.OTHER);
-            dialog.getButtonTypes().setAll(view, pdf, word, createNew, ButtonType.CANCEL);
-
-            Optional<ButtonType> result = dialog.showAndWait();
-            if (result.isEmpty() || result.get() == ButtonType.CANCEL) {
-                // The current form contains an already-saved waybill. Do not leave it
-                // available as a NEW form, because saving it again would create a duplicate.
-                onSaved.run();
-                return;
-            }
-
-            if (result.get() == view) {
-                onViewSaved.accept(saved.id());
-                return;
-            }
-
-            if (result.get() == pdf) {
-                WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id());
-                // Keep the post-save dialog available after report generation so the
-                // user can explicitly choose Create New or leave the screen safely.
-                continue;
-            }
-
-            if (result.get() == word) {
-                WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id());
-                continue;
-            }
-
-            if (result.get() == createNew) {
-                clearForm();
-                newWaybillSaved = false;
-                onCreateNew.run();
-                return;
-            }
+            var result = dialog.showAndWait().orElse(ButtonType.CANCEL);
+            if (result == view) { onViewSaved.accept(saved.id()); return; }
+            if (result == pdf) { WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
+            if (result == word) { WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
+            if (result == createNew) { clearForm(); savedNew = false; dirty = false; onCreateNew.run(); return; }
+            onSaved.run();
+            return;
         }
     }
 
@@ -666,6 +725,7 @@ public class WaybillFormView extends AppView {
         saveButton.setDisable(true);
         try {
             WaybillService.update(waybillId, data);
+            dirty = false;
             showSuccess("Waybill " + numberLabel.getText() + " updated successfully.");
             onSaved.run();
         } catch (RuntimeException exception) {
@@ -725,7 +785,17 @@ public class WaybillFormView extends AppView {
                 SessionContext.requireUserId(), rows);
     }
 
+    private void confirmClearForm() {
+        Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Clear all entered information? Any unsaved changes will be lost.",ButtonType.OK,ButtonType.CANCEL);
+        a.setTitle("Clear Waybill Form"); a.setHeaderText("Clear Form");
+        if(getScene()!=null) a.initOwner(getScene().getWindow());
+        if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK) clearForm();
+    }
+
     private void clearForm() {
+        loadingExisting = true;
+        savedNew = false;
+        dirty = false;
         waybillDate.setValue(LocalDate.now());
         estimatedDelivery.setValue(null);
         shipperDeclarationName.clear();
@@ -745,6 +815,8 @@ public class WaybillFormView extends AppView {
         itemsTable.getItems().clear();
         updateItemsTableHeight();
         refreshPreview();
+        loadingExisting = false;
+        dirty = false;
     }
 
     private void refreshPreview() {

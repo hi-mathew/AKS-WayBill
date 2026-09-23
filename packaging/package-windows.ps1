@@ -3,14 +3,14 @@ $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = '1.3.0'
+$Version = '1.4.0'
 
 $TargetDir = Join-Path $ProjectRoot 'target'
 $InputDir = Join-Path $TargetDir 'package-input'
 $RuntimeDir = Join-Path $TargetDir 'runtime-image'
 $InstallerDir = Join-Path $TargetDir 'installer'
 
-$Icon = Join-Path $ProjectRoot 'packaging\aks-waybill.ico'
+$Icon = Join-Path $ProjectRoot 'packaging\wasp.ico'
 
 $JavaFxVersion = '21.0.6'
 $LocalRepo = 'E:\Projects\Local_Maven_Repository'
@@ -21,7 +21,7 @@ $JavaFxControls = Join-Path $LocalRepo "org\openjfx\javafx-controls\$JavaFxVersi
 
 Write-Host ''
 Write-Host '=============================================' -ForegroundColor Cyan
-Write-Host ' AKS Waybill - Windows Packaging' -ForegroundColor Cyan
+Write-Host ' W.A.S.P - Windows Packaging' -ForegroundColor Cyan
 Write-Host '=============================================' -ForegroundColor Cyan
 Write-Host ''
 
@@ -77,7 +77,7 @@ New-Item -ItemType Directory -Force -Path $InstallerDir | Out-Null
 # ------------------------------------------------------------
 
 Write-Host ''
-Write-Host 'Building AKS Waybill...' -ForegroundColor Cyan
+Write-Host 'Building W.A.S.P...' -ForegroundColor Cyan
 
 mvn clean package dependency:copy-dependencies `
     '-DincludeScope=runtime' `
@@ -175,10 +175,10 @@ Write-Host 'Creating Windows EXE installer...' -ForegroundColor Cyan
 
 jpackage `
     --type exe `
-    --name 'AKS Waybill' `
+    --name 'W.A.S.P' `
     --app-version $Version `
     --vendor 'AKS Global Logistics' `
-    --description 'AKS Global Logistics transportation waybill application' `
+    --description 'W.A.S.P - Waybill Automation & Shipping Platform' `
     --input $InputDir `
     --main-jar "aks-waybill-desktop-$Version.jar" `
     --main-class 'com.aks.waybill.Main' `

@@ -1,9 +1,11 @@
 package com.aks.waybill.report;
 
 import com.aks.waybill.service.ReportProfileService;
+import com.aks.waybill.service.TermsConditionService;
 import com.aks.waybill.service.WaybillService;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFFooter;
+import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -13,6 +15,15 @@ import org.docx4j.Docx4J;
 import org.docx4j.convert.out.FOSettings;
 import org.docx4j.fonts.IdentityPlusMapper;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
+import org.apache.pdfbox.util.Matrix;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -81,6 +92,9 @@ public final class WaybillReportService {
         try {
             populateTemplate(waybill, temporary);
             convertDocxToPdf(temporary, output);
+            if ("DRAFT".equalsIgnoreCase(waybill.status())) {
+                addDraftPdfWatermark(output);
+            }
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -105,8 +119,10 @@ public final class WaybillReportService {
             populateDeclarations(tables.get(4), waybill);
             populateTermsIntro(document, waybill);
             populateRemarks(document, waybill.remarks());
-            // Terms & Conditions are explicitly forced to start on the next page
-            // by populateTermsIntro(). The Remarks content remains on Page 1.
+            populateTermsAndConditions(tables.get(5));
+            if ("DRAFT".equalsIgnoreCase(waybill.status()) && document.getHeaderList().isEmpty()) {
+                document.createHeader(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT);
+            }
             populateFooter(document, profile);
 
             try (OutputStream out = Files.newOutputStream(output)) {
@@ -115,6 +131,10 @@ public final class WaybillReportService {
         }
 
         replaceTemplateLogo(output);
+
+        if ("DRAFT".equalsIgnoreCase(waybill.status())) {
+            addDraftWatermark(output);
+        }
     }
 
     private static void populateHeader(XWPFTable table, WaybillService.WaybillDetails waybill,
@@ -248,17 +268,15 @@ public final class WaybillReportService {
             String text = paragraphText(paragraph);
 
             if (text.startsWith("TRANSPORTATION WAYBILL TERMS & CONDITIONS")) {
-                // The supplied template has the correct Terms & Conditions content,
-                // but its page-break marker is a rendered-page marker rather than a
-                // reliable layout instruction after the document is modified. Make
-                // the heading explicitly start on a new page. This does not add an
-                // extra blank page: it only moves this heading to the next page.
-                if (paragraph.getCTP().getPPr() == null) {
-                    paragraph.getCTP().addNewPPr();
+                // T&C now follows the Remarks section naturally. Remove any page-break
+                // marker from the supplied template and use modest paragraph spacing.
+                for (XWPFRun run : paragraph.getRuns()) run.getCTR().getBrList().clear();
+                if (paragraph.getCTP().getPPr() != null && paragraph.getCTP().getPPr().getPageBreakBefore() != null) {
+                    paragraph.getCTP().getPPr().unsetPageBreakBefore();
                 }
-                if (paragraph.getCTP().getPPr().getPageBreakBefore() == null) {
-                    paragraph.getCTP().getPPr().addNewPageBreakBefore();
-                }
+                if (paragraph.getCTP().getPPr() == null) paragraph.getCTP().addNewPPr();
+                if (paragraph.getCTP().getPPr().getSpacing() == null) paragraph.getCTP().getPPr().addNewSpacing();
+                paragraph.getCTP().getPPr().getSpacing().setBefore(180);
             }
 
             if (text.startsWith("By tendering goods for transportation,")) {
@@ -295,6 +313,198 @@ public final class WaybillReportService {
                 paragraph.getCTP().getPPr().getSpacing().setLine(240);
                 paragraph.getCTP().getPPr().getSpacing().setLineRule(org.openxmlformats.schemas.wordprocessingml.x2006.main.STLineSpacingRule.AUTO);
                 return;
+            }
+        }
+    }
+
+    private static void populateTermsAndConditions(XWPFTable table) {
+        List<TermsConditionService.Clause> clauses = TermsConditionService.findActive();
+        if (table == null || table.getNumberOfRows() == 0 || table.getRow(0).getTableCells().size() < 2) return;
+
+        int split = (clauses.size() + 1) / 2;
+        for (int col = 0; col < 2; col++) {
+            XWPFTableCell cell = table.getRow(0).getCell(col);
+            // Rebuild the cell paragraphs from the configured clauses while preserving
+            // the visual language of the approved template: blue/bold clause headings
+            // followed by black clause content.
+            while (cell.getParagraphs().size() > 0) {
+                cell.removeParagraph(0);
+            }
+
+            int start = col == 0 ? 0 : split;
+            int end = col == 0 ? split : clauses.size();
+            if (start >= end) {
+                XWPFParagraph empty = cell.addParagraph();
+                empty.createRun().setText("");
+                continue;
+            }
+
+            for (int i = start; i < end; i++) {
+                TermsConditionService.Clause clause = clauses.get(i);
+
+                XWPFParagraph title = cell.addParagraph();
+                title.setSpacingBefore(80);
+                title.setSpacingAfter(20);
+                XWPFRun titleRun = title.createRun();
+                titleRun.setText(clause.clauseNumber() + ". " + safe(clause.title()));
+                titleRun.setBold(true);
+                titleRun.setFontSize(9);
+                titleRun.setColor("1F4E79");
+
+                XWPFParagraph content = cell.addParagraph();
+                content.setSpacingBefore(0);
+                content.setSpacingAfter(70);
+                XWPFRun contentRun = content.createRun();
+                contentRun.setText(safe(clause.text()));
+                contentRun.setFontSize(8);
+                contentRun.setColor("262626");
+            }
+        }
+    }
+
+    /**
+     * Adds a true Word/VML watermark to every header in the generated DOCX.
+     *
+     * The watermark is intentionally added at the DOCX package level instead of
+     * as ordinary XWPF header text. That makes it a floating object positioned
+     * behind the document content and repeated on every page which uses the
+     * header. The same DOCX is then passed to docx4j for PDF generation.
+     */
+    private static void addDraftWatermark(Path docx) throws IOException {
+        Path temp = Files.createTempFile(docx.toAbsolutePath().getParent(),
+                "aks-waybill-watermark-", ".docx");
+        boolean changed = false;
+
+        try (InputStream in = Files.newInputStream(docx);
+             ZipInputStream zipIn = new ZipInputStream(in);
+             OutputStream out = Files.newOutputStream(temp);
+             ZipOutputStream zipOut = new ZipOutputStream(out)) {
+
+            ZipEntry entry;
+            while ((entry = zipIn.getNextEntry()) != null) {
+                ZipEntry replacement = new ZipEntry(entry.getName());
+                replacement.setTime(entry.getTime());
+                zipOut.putNextEntry(replacement);
+
+                if (entry.getName().matches("word/header\\d+\\.xml")) {
+                    String xml = new String(zipIn.readAllBytes(), StandardCharsets.UTF_8);
+                    if (!xml.contains("PowerPlusWaterMarkObject")) {
+                        int closing = xml.lastIndexOf("</w:hdr>");
+                        if (closing >= 0) {
+                            xml = xml.substring(0, closing) + draftWatermarkXml() + xml.substring(closing);
+                            changed = true;
+                        }
+                    }
+                    zipOut.write(xml.getBytes(StandardCharsets.UTF_8));
+                } else {
+                    zipIn.transferTo(zipOut);
+                }
+
+                zipOut.closeEntry();
+                zipIn.closeEntry();
+            }
+        }
+
+        if (!changed) {
+            Files.deleteIfExists(temp);
+            throw new IOException("Unable to add the Draft watermark because the generated document has no usable header.");
+        }
+
+        Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static String draftWatermarkXml() {
+        return """
+                <w:p xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"
+                     xmlns:v=\"urn:schemas-microsoft-com:vml\"
+                     xmlns:o=\"urn:schemas-microsoft-com:office:office\">
+                  <w:r>
+                    <w:pict>
+                      <v:shapetype id=\"_x0000_t136\" coordsize=\"21600,21600\"
+                                   o:spt=\"136\" adj=\"10800\"
+                                   path=\"m@7,l@8,m@5,21600l@6,21600e\">
+                        <v:formulas>
+                          <v:f eqn=\"sum #0 0 10800\"/>
+                          <v:f eqn=\"prod #0 2 1\"/>
+                          <v:f eqn=\"sum 21600 0 @1\"/>
+                          <v:f eqn=\"sum 0 0 @2\"/>
+                          <v:f eqn=\"sum 21600 0 @3\"/>
+                          <v:f eqn=\"if @0 @4 0\"/>
+                          <v:f eqn=\"if @0 21600 @1\"/>
+                          <v:f eqn=\"if @0 0 @2\"/>
+                          <v:f eqn=\"if @0 @5 21600\"/>
+                          <v:f eqn=\"if @0 21600 @6\"/>
+                        </v:formulas>
+                        <v:path textpathok=\"t\" o:connecttype=\"custom\"
+                                o:connectlocs=\"@9,0;@10,10800;@8,21600;@7,10800\"
+                                textboxrect=\"@3,@4,@5,@6\"/>
+                        <v:textpath on=\"t\" fitshape=\"t\"/>
+                        <v:handles>
+                          <v:h position=\"#0,bottomRight\" xrange=\"6629,14971\"/>
+                        </v:handles>
+                      </v:shapetype>
+                      <v:shape id=\"PowerPlusWaterMarkObject\"
+                               o:spid=\"_x0000_s1025\"
+                               type=\"#_x0000_t136\"
+                               style=\"position:absolute;margin-left:0;margin-top:0;width:468pt;height:117pt;z-index:-251654144;mso-wrap-edited:f;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin;rotation:315\"
+                               o:allowincell=\"f\" fillcolor=\"#D9DDE3\" stroked=\"f\">
+                        <v:fill opacity=\"0.65\"/>
+                        <v:textpath style=\"font-family:Arial;font-size:60pt;font-weight:bold\" string=\"D R A F T\"/>
+                      </v:shape>
+                    </w:pict>
+                  </w:r>
+                </w:p>
+                """;
+    }
+
+    /**
+     * Applies the Draft watermark directly to the final PDF.
+     *
+     * PDF watermarking is deliberately done after DOCX conversion because the
+     * docx4j XSL-FO exporter does not render VML WordArt/text-path watermarks.
+     * The watermark is prepended to each page so the existing report content
+     * remains visually in front of it.
+     */
+    private static void addDraftPdfWatermark(Path pdf) throws IOException {
+        try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+            PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+            for (PDPage page : document.getPages()) {
+                PDRectangle box = page.getCropBox();
+                float width = box.getWidth();
+                float height = box.getHeight();
+                float fontSize = Math.min(width, height) * 0.17f;
+
+                float textWidth = font.getStringWidth("D R A F T") / 1000f * fontSize;
+                float textHeight = fontSize;
+                float centerX = width / 2f;
+                float centerY = height / 2f;
+                float x = centerX - textWidth / 2f;
+                float y = centerY - textHeight / 3f;
+
+                try (PDPageContentStream content = new PDPageContentStream(
+                        document, page, PDPageContentStream.AppendMode.PREPEND, true, true)) {
+                    PDExtendedGraphicsState graphicsState = new PDExtendedGraphicsState();
+                    content.saveGraphicsState();
+                    graphicsState.setNonStrokingAlphaConstant(0.09f);
+                    content.setGraphicsStateParameters(graphicsState);
+                    content.setNonStrokingColor(0.55f, 0.58f, 0.62f);
+                    content.beginText();
+                    content.setFont(font, fontSize);
+                    content.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(45), x, y));
+                    content.showText("D R A F T");
+                    content.endText();
+                    content.restoreGraphicsState();
+                }
+            }
+
+            Path temporary = Files.createTempFile(pdf.toAbsolutePath().getParent(),
+                    "aks-waybill-draft-pdf-", ".pdf");
+            try {
+                document.save(temporary.toFile());
+                Files.move(temporary, pdf, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temporary);
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.service.SavedDataService;
+import com.aks.waybill.security.SessionContext;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -50,7 +51,8 @@ public final class SavedDataView extends AppView {
             Button clear = new Button("Clear"); clear.getStyleClass().add("secondary-button"); clear.setOnAction(e -> { search.clear(); load(); });
             Button add = new Button(carrierMode ? "＋ Add Carrier" : "＋ Add Location"); add.getStyleClass().add("primary-button"); add.setOnAction(e -> openDialog(null));
             Button edit = new Button("Edit"); edit.getStyleClass().add("secondary-button"); edit.setOnAction(e -> editSelected());
-            toolbar.getChildren().addAll(search, find, clear, add, edit);
+            Button delete = new Button("Delete"); delete.getStyleClass().add("secondary-button"); delete.setVisible(SessionContext.isAdmin()); delete.setManaged(SessionContext.isAdmin()); delete.setOnAction(e -> deleteSelected());
+            toolbar.getChildren().addAll(search, find, clear, add, edit, delete);
 
             TableColumn<Object,String> name = new TableColumn<>(carrierMode ? "Carrier Name" : "Location Name");
             name.setPrefWidth(carrierMode ? 300 : 500);
@@ -90,6 +92,17 @@ public final class SavedDataView extends AppView {
             Object selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) { message.setText("Select a record first."); return; }
             openDialog(selected);
+        }
+
+        private void deleteSelected() {
+            Object selected=table.getSelectionModel().getSelectedItem();
+            if(selected==null){message.setText("Select a record first.");return;}
+            String name=carrierMode?((SavedDataService.CarrierRecord)selected).name():((SavedDataService.LocationRecord)selected).name();
+            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete saved " + (carrierMode?"carrier":"location") + " \""+name+"\"? This does not alter historical waybill values.",ButtonType.OK,ButtonType.CANCEL);
+            a.setTitle("Delete Saved Data");
+            if(a.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+            try { if(carrierMode) SavedDataService.deleteCarrier(((SavedDataService.CarrierRecord)selected).id()); else SavedDataService.deleteLocation(((SavedDataService.LocationRecord)selected).id()); load(); }
+            catch(RuntimeException ex){message.setText(ex.getMessage());}
         }
 
         private void openDialog(Object existing) {

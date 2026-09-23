@@ -1,6 +1,7 @@
 package com.aks.waybill.service;
 
 import com.aks.waybill.db.Database;
+import com.aks.waybill.logging.WaspLogger;
 import com.aks.waybill.security.SessionContext;
 
 import java.sql.Connection;
@@ -46,7 +47,7 @@ public final class WaybillService {
     }
 
     public record WaybillListRow(long id, String waybillNumber, LocalDate waybillDate,
-                                 String shipperName, String consigneeName, String carrierName) {
+                                 String shipperName, String consigneeName, String carrierName, String status) {
     }
 
     public record WaybillExportRow(String waybillNumber, LocalDate waybillDate, String shipperName, String consigneeName,
@@ -61,7 +62,7 @@ public final class WaybillService {
                                  boolean hazardousMaterials, String remarks, String shipperDeclarationName, LocalDate shipperDeclarationDate,
                                  String carrierReceiptDriverName, LocalDate carrierReceiptDate,
                                  String consigneePodReceiverName, LocalDate consigneePodDate,
-                                 List<WaybillItemData> items) {
+                                 List<WaybillItemData> items, String status) {
     }
 
     public record WaybillPage(List<WaybillListRow> rows, int page, int pageSize, long totalRows) {
@@ -100,7 +101,7 @@ public final class WaybillService {
 
         String base = " FROM waybill w LEFT JOIN shipper_company sc ON sc.id = w.shipper_company_id LEFT JOIN consignee_company cc ON cc.id = w.consignee_company_id " + where;
         String countSql = "SELECT COUNT(*)" + base;
-        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(sc.company_name, ''), COALESCE(cc.company_name, ''), COALESCE(w.carrier_name, '')"
+        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(sc.company_name, ''), COALESCE(cc.company_name, ''), COALESCE(w.carrier_name, ''), w.status"
                 + base + " ORDER BY w.waybill_date DESC, w.id DESC LIMIT ? OFFSET ?";
 
         try (Connection connection = Database.getConnection()) {
@@ -116,7 +117,7 @@ public final class WaybillService {
                 statement.setInt(i, safePage * safePageSize);
                 try (ResultSet rs = statement.executeQuery()) {
                     while (rs.next()) {
-                        rows.add(new WaybillListRow(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), rs.getString(4), rs.getString(5), rs.getString(6)));
+                        rows.add(new WaybillListRow(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)));
                     }
                 }
             }
@@ -136,7 +137,7 @@ public final class WaybillService {
                 + "w.carrier_name, w.driver_name, w.vehicle_trailer_no, w.origin_loading_point, w.destination_unloading_point, "
                 + "w.estimated_delivery_date, w.special_instructions, w.hazardous_materials, w.remarks, "
                 + "w.shipper_declaration_name, w.shipper_declaration_date, w.carrier_receipt_driver_name, w.carrier_receipt_date, "
-                + "w.consignee_pod_receiver_name, w.consignee_pod_date "
+                + "w.consignee_pod_receiver_name, w.consignee_pod_date, w.status "
                 + "FROM waybill w LEFT JOIN shipper_company sc ON sc.id=w.shipper_company_id LEFT JOIN consignee_company cc ON cc.id=w.consignee_company_id WHERE w.id=?"
                 + (SessionContext.isAdmin() ? "" : " AND w.created_by=?");
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -153,7 +154,7 @@ public final class WaybillService {
                         while (itemRs.next()) items.add(new WaybillItemData(itemRs.getString(1), itemRs.getString(2), nullableDouble(itemRs,3), nullableDouble(itemRs,4), nullableDouble(itemRs,5)));
                     }
                 }
-                return new WaybillDetails(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), shipper, consignee, rs.getString(14), rs.getString(15), rs.getString(16), rs.getString(17), rs.getString(18), parseDate(rs.getString(19)), rs.getString(20), rs.getInt(21) == 1, rs.getString(22), rs.getString(23), parseDate(rs.getString(24)), rs.getString(25), parseDate(rs.getString(26)), rs.getString(27), parseDate(rs.getString(28)), items);
+                return new WaybillDetails(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), shipper, consignee, rs.getString(14), rs.getString(15), rs.getString(16), rs.getString(17), rs.getString(18), parseDate(rs.getString(19)), rs.getString(20), rs.getInt(21) == 1, rs.getString(22), rs.getString(23), parseDate(rs.getString(24)), rs.getString(25), parseDate(rs.getString(26)), rs.getString(27), parseDate(rs.getString(28)), items, rs.getString(29));
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to load waybill", e);
@@ -267,8 +268,8 @@ public final class WaybillService {
                         + "origin_loading_point, destination_unloading_point, estimated_delivery_date, "
                         + "special_instructions, hazardous_materials, remarks, shipper_declaration_name, shipper_declaration_date, "
                         + "carrier_receipt_driver_name, carrier_receipt_date, consignee_pod_receiver_name, consignee_pod_date, "
-                        + "created_by, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        + "created_by, created_at, updated_at, status) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
                     int i = 1;
@@ -295,7 +296,8 @@ public final class WaybillService {
                     if (data.createdBy() == null) statement.setNull(i++, java.sql.Types.INTEGER);
                     else statement.setLong(i++, data.createdBy());
                     statement.setString(i++, DB_DATE_TIME.format(now));
-                    statement.setString(i, DB_DATE_TIME.format(now));
+                    statement.setString(i++, DB_DATE_TIME.format(now));
+                    statement.setString(i++, "DRAFT");
                     statement.executeUpdate();
 
                     try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -389,14 +391,18 @@ public final class WaybillService {
     }
 
     private static void assertCanAccessWaybill(Connection connection, long waybillId) throws SQLException {
-        if (SessionContext.isAdmin()) return;
-        String sql = "SELECT created_by FROM waybill WHERE id=?";
+        String sql = "SELECT created_by, status FROM waybill WHERE id=?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, waybillId);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) throw new IllegalArgumentException("The selected waybill no longer exists.");
                 long ownerId = rs.getLong(1);
-                if (rs.wasNull() || ownerId != SessionContext.requireUserId()) {
+                boolean ownerIdIsNull = rs.wasNull();
+                String status = rs.getString(2);
+                if (!SessionContext.isAdmin() && "FINAL".equalsIgnoreCase(status)) {
+                    throw new IllegalArgumentException("This waybill is finalized and can only be edited by an Administrator.");
+                }
+                if (!SessionContext.isAdmin() && (ownerIdIsNull || ownerId != SessionContext.requireUserId())) {
                     throw new IllegalArgumentException("You do not have permission to modify this waybill.");
                 }
             }
@@ -411,6 +417,155 @@ public final class WaybillService {
                 return rs.getString(1);
             }
         }
+    }
+
+    public static boolean canEdit(long waybillId) {
+        WaybillDetails d=findById(waybillId);
+        return d != null && (SessionContext.isAdmin() || ("DRAFT".equalsIgnoreCase(d.status()) && isOwner(waybillId)));
+    }
+
+    private static boolean isOwner(Connection connection, long waybillId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT created_by FROM waybill WHERE id=?")) {
+            statement.setLong(1, waybillId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) return false;
+                long ownerId = resultSet.getLong(1);
+                boolean ownerIdIsNull = resultSet.wasNull();
+                return !ownerIdIsNull && ownerId == SessionContext.requireUserId();
+            }
+        }
+    }
+
+    private static boolean isOwner(long waybillId) {
+        try (Connection connection = Database.getConnection()) {
+            return isOwner(connection, waybillId);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Unable to check waybill ownership", exception);
+        }
+    }
+
+    public static void finalizeWaybill(long waybillId) {
+        if (waybillId <= 0) throw new IllegalArgumentException("Valid waybill is required.");
+        long currentUserId = SessionContext.requireUserId();
+        WaspLogger.info("Finalization requested. waybillId=" + waybillId + ", userId=" + currentUserId);
+
+        try (Connection connection = Database.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement busy = connection.prepareStatement("PRAGMA busy_timeout=5000")) {
+                busy.execute();
+            }
+
+            try {
+                if (!SessionContext.isAdmin() && !isOwner(connection, waybillId)) {
+                    throw new IllegalArgumentException("You do not have permission to finalize this waybill.");
+                }
+
+                // Verify that the authenticated user still exists in this database.
+                try (PreparedStatement user = connection.prepareStatement("SELECT 1 FROM app_user WHERE id=?")) {
+                    user.setLong(1, currentUserId);
+                    try (ResultSet rs = user.executeQuery()) {
+                        if (!rs.next()) {
+                            throw new IllegalStateException("The logged-in user no longer exists in the application database.");
+                        }
+                    }
+                }
+
+                String now = DB_DATE_TIME.format(LocalDateTime.now());
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE waybill SET status='FINAL', finalized_at=?, finalized_by=?, final_to_draft_reason=NULL, updated_at=? WHERE id=? AND status='DRAFT'")) {
+                    statement.setString(1, now);
+                    statement.setLong(2, currentUserId);
+                    statement.setString(3, now);
+                    statement.setLong(4, waybillId);
+                    if (statement.executeUpdate() == 0) {
+                        throw new IllegalArgumentException("The waybill is already finalized or no longer exists.");
+                    }
+                }
+
+                // Write the audit entry using the SAME connection and transaction.
+                // This prevents SQLite connection/locking conflicts and makes the
+                // finalization + audit entry atomic.
+                insertAudit(connection, currentUserId, "FINALIZE", "WAYBILL", waybillId, loadWaybillNumber(connection, waybillId), "Waybill finalized");
+
+                connection.commit();
+                WaspLogger.info("Waybill finalized successfully. waybillId=" + waybillId + ", userId=" + currentUserId);
+            } catch (SQLException | RuntimeException exception) {
+                try { connection.rollback(); } catch (SQLException ignored) { }
+                WaspLogger.error("Finalization failed and transaction was rolled back. waybillId=" + waybillId + ", userId=" + currentUserId, exception);
+                if (exception instanceof SQLException sqlException) {
+                    String detail = sqlException.getMessage() == null ? sqlException.getClass().getSimpleName() : sqlException.getMessage();
+                    throw new IllegalStateException("Unable to finalize waybill: " + detail, sqlException);
+                }
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            WaspLogger.error("Unable to finalize waybill because the database operation failed. waybillId=" + waybillId + ", userId=" + currentUserId, exception);
+            String detail = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+            throw new IllegalStateException("Unable to finalize waybill: " + detail, exception);
+        }
+    }
+
+    public static void revertToDraft(long waybillId,String reason) {
+        if(!SessionContext.isAdmin()) throw new IllegalArgumentException("Only an Administrator can return a finalized waybill to Draft.");
+        if(reason==null||reason.isBlank()) throw new IllegalArgumentException("A reason is required when returning a finalized waybill to Draft.");
+        long currentUserId = SessionContext.requireUserId();
+        try(Connection connection=Database.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                String now=DB_DATE_TIME.format(LocalDateTime.now());
+                try(PreparedStatement statement=connection.prepareStatement("UPDATE waybill SET status='DRAFT', final_to_draft_reason=?, updated_at=? WHERE id=? AND status='FINAL'")) {
+                    statement.setString(1,reason.trim());
+                    statement.setString(2,now);
+                    statement.setLong(3,waybillId);
+                    if(statement.executeUpdate()==0) throw new IllegalArgumentException("The waybill is not finalized or no longer exists.");
+                }
+                insertAudit(connection,currentUserId,"FINAL_TO_DRAFT","WAYBILL",waybillId,loadWaybillNumber(connection, waybillId),"Reason: "+reason.trim());
+                connection.commit();
+            } catch(SQLException|RuntimeException exception) {
+                try { connection.rollback(); } catch(SQLException ignored) { }
+                if(exception instanceof SQLException sqlException) {
+                    String detail=sqlException.getMessage()==null?sqlException.getClass().getSimpleName():sqlException.getMessage();
+                    throw new IllegalStateException("Unable to return waybill to Draft: "+detail,sqlException);
+                }
+                throw exception;
+            }
+        } catch(SQLException exception) {
+            String detail=exception.getMessage()==null?exception.getClass().getSimpleName():exception.getMessage();
+            throw new IllegalStateException("Unable to return waybill to Draft: "+detail,exception);
+        }
+    }
+
+
+    private static void insertAudit(Connection connection, long userId, String action, String entityType, Long entityId, String entityLabel, String details) throws SQLException {
+        try(PreparedStatement statement=connection.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at) VALUES(?,?,?,?,?,?,?)")) {
+            statement.setLong(1,userId);
+            statement.setString(2,action);
+            statement.setString(3,entityType);
+            if(entityId==null) statement.setNull(4,java.sql.Types.INTEGER); else statement.setLong(4,entityId);
+            if(entityLabel==null||entityLabel.isBlank()) statement.setNull(5,java.sql.Types.VARCHAR); else statement.setString(5,entityLabel);
+            statement.setString(6,details);
+            statement.setString(7,LocalDateTime.now().toString());
+            statement.executeUpdate();
+        }
+    }
+
+    public static void delete(long waybillId) {
+        if(!SessionContext.isAdmin()) throw new IllegalArgumentException("Only an Administrator can delete waybills.");
+        try(Connection c=Database.getConnection()) {
+            String waybillNumber;
+            try (PreparedStatement lookup = c.prepareStatement("SELECT waybill_number FROM waybill WHERE id=?")) {
+                lookup.setLong(1, waybillId);
+                try (ResultSet rs = lookup.executeQuery()) {
+                    if (!rs.next()) throw new IllegalArgumentException("The selected waybill no longer exists.");
+                    waybillNumber = rs.getString(1);
+                }
+            }
+            try (PreparedStatement p=c.prepareStatement("DELETE FROM waybill WHERE id=?")) {
+                p.setLong(1,waybillId);
+                if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected waybill no longer exists.");
+            }
+            AuditLogService.logWithEntityLabel("DELETE","WAYBILL",waybillId,waybillNumber,"Waybill deleted by Administrator");
+        } catch(SQLException e){throw new IllegalStateException("Unable to delete waybill",e);}
     }
 
     private static void saveCarrierMaster(Connection connection, String carrierName, String driverName, String vehicleTrailerNo) throws SQLException {
@@ -529,14 +684,15 @@ public final class WaybillService {
     }
 
     private static void insertAudit(Connection connection, Long userId, long waybillId, String number, String action) throws SQLException {
-        String sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, entity_label, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             if (userId == null) statement.setNull(1, java.sql.Types.INTEGER); else statement.setLong(1, userId);
             statement.setString(2, action);
             statement.setString(3, "WAYBILL");
             statement.setLong(4, waybillId);
-            statement.setString(5, "Created waybill " + number);
-            statement.setString(6, DB_DATE_TIME.format(LocalDateTime.now()));
+            statement.setString(5, number);
+            statement.setString(6, "Created waybill " + number);
+            statement.setString(7, DB_DATE_TIME.format(LocalDateTime.now()));
             statement.executeUpdate();
         }
     }

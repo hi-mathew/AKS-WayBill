@@ -136,5 +136,25 @@ public final class SavedDataService {
     private static void validateLength(String value, int max, String field) {
         if (value != null && value.length() > max) throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
     }
+    public static String deleteCarrier(long id) {
+        requireAdmin();
+        try (Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement("DELETE FROM saved_carrier WHERE id=?")) {
+            p.setLong(1,id); if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected carrier no longer exists.");
+            AuditLogService.log("DELETE","SAVED_CARRIER",id,"Saved carrier master deleted by Administrator");
+            return "Carrier deleted successfully.";
+        } catch(SQLException e){throw new IllegalStateException("Unable to delete carrier",e);}
+    }
+
+    public static String deleteLocation(long id) {
+        requireAdmin();
+        try (Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement("DELETE FROM saved_location WHERE id=?")) {
+            p.setLong(1,id); if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected location no longer exists.");
+            AuditLogService.log("DELETE","SAVED_LOCATION",id,"Saved location master deleted by Administrator");
+            return "Location deleted successfully.";
+        } catch(SQLException e){throw new IllegalStateException("Unable to delete location",e);}
+    }
+
+    private static void requireAdmin(){if(!com.aks.waybill.security.SessionContext.isAdmin())throw new IllegalArgumentException("Only an Administrator can delete saved master records.");}
+
     private static String blankToNull(String value) { return value == null || value.trim().isBlank() ? null : value.trim(); }
 }

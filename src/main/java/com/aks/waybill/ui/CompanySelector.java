@@ -54,6 +54,7 @@ public final class CompanySelector extends VBox {
     public CompanyService.CompanyRecord getSelectedCompany() { return selectedCompany; }
     public Long getSelectedCompanyId() { return selectedCompany == null ? null : selectedCompany.id(); }
     public String getCompanyName() { return editor.getText() == null ? "" : editor.getText().trim(); }
+    public javafx.beans.property.StringProperty companyNameProperty() { return editor.textProperty(); }
     public boolean isExistingCompanySelected() { return selectedCompany != null; }
 
     public void refreshCompanies() {

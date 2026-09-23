@@ -3,6 +3,7 @@ package com.aks.waybill.ui;
 import com.aks.waybill.service.WaybillService;
 import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.service.ExcelExportService;
+import com.aks.waybill.security.SessionContext;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -71,11 +72,12 @@ public final class SavedWaybillsView extends AppView {
         TableColumn<WaybillService.WaybillListRow,String> shipper = column("Shipper / Consignor", r -> r.shipperName(), 170);
         TableColumn<WaybillService.WaybillListRow,String> consignee = column("Consignee / Receiver", r -> r.consigneeName(), 170);
         TableColumn<WaybillService.WaybillListRow,String> carrier = column("Carrier", r -> r.carrierName(), 150);
+        TableColumn<WaybillService.WaybillListRow,String> status = column("Status", r -> r.status(), 85);
 
         TableColumn<WaybillService.WaybillListRow, Void> actions = new TableColumn<>("Actions");
-        actions.setPrefWidth(205);
-        actions.setMinWidth(205);
-        actions.setMaxWidth(205);
+        actions.setPrefWidth(255);
+        actions.setMinWidth(255);
+        actions.setMaxWidth(255);
         actions.setCellFactory(column -> new TableCell<>() {
             private final Button viewButton = iconButton("/com/aks/waybill/images/view-icon.png", "View Waybill");
             private final Button editButton = iconButton("/com/aks/waybill/images/edit-icon.png", "Edit Waybill");
@@ -116,6 +118,7 @@ public final class SavedWaybillsView extends AppView {
                 viewButton.setOnAction(event -> openView(waybillId));
                 editButton.setOnAction(event -> openEdit(waybillId));
                 copyButton.setOnAction(event -> duplicateWaybill(waybillId));
+                editButton.setDisable("FINAL".equalsIgnoreCase(row.status()) && !SessionContext.isAdmin());
 
                 MenuItem pdf = new MenuItem("Generate PDF");
                 MenuItem word = new MenuItem("Generate Word");
@@ -123,13 +126,32 @@ public final class SavedWaybillsView extends AppView {
                         getScene() == null ? null : getScene().getWindow(), waybillId));
                 word.setOnAction(event -> WaybillReportActions.generateWord(
                         getScene() == null ? null : getScene().getWindow(), waybillId));
-                documentButton.getItems().setAll(pdf, word);
+                MenuItem lifecycle = new MenuItem("DRAFT".equalsIgnoreCase(row.status()) ? "Mark as Final" : "Return to Draft");
+                lifecycle.setOnAction(event -> {
+                    try {
+                        if ("DRAFT".equalsIgnoreCase(row.status())) {
+                            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Mark this waybill as Final? Normal users will no longer be able to edit it.",ButtonType.OK,ButtonType.CANCEL);
+                            if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){WaybillService.finalizeWaybill(waybillId);loadPage(currentPage);}
+                        } else if(SessionContext.isAdmin()) {
+                            TextInputDialog d=new TextInputDialog(); d.setTitle("Return to Draft"); d.setHeaderText("Return Finalized Waybill to Draft"); d.setContentText("Reason:");
+                            d.showAndWait().ifPresent(reason->{if(reason!=null&&!reason.isBlank()){try{WaybillService.revertToDraft(waybillId,reason);loadPage(currentPage);}catch(Exception ex){showError(ex.getMessage());}}});
+                        }
+                    } catch(Exception ex){showError(ex.getMessage());}
+                });
+                MenuItem delete = new MenuItem("Delete Waybill");
+                delete.setVisible(SessionContext.isAdmin());
+                delete.setOnAction(event -> {
+                    Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete waybill "+row.waybillNumber()+"? This action cannot be undone unless a backup is available.",ButtonType.OK,ButtonType.CANCEL);
+                    a.setTitle("Delete Waybill");
+                    if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{WaybillService.delete(waybillId);loadPage(currentPage);}catch(Exception ex){showError(ex.getMessage());}}
+                });
+                documentButton.getItems().setAll(pdf, word, new SeparatorMenuItem(), lifecycle, delete);
 
                 setGraphic(box);
             }
         });
 
-        table.getColumns().setAll(number, date, shipper, consignee, carrier, actions);
+        table.getColumns().setAll(number, date, shipper, consignee, carrier, status, actions);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPlaceholder(new Label("No saved waybills match the current search."));
         table.setFixedCellSize(42);
