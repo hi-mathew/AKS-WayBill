@@ -64,3 +64,202 @@
 .app-footer-title { -fx-text-fill: #58708f; -fx-font-size: 10px; -fx-font-weight: bold; }
 .status-draft { -fx-text-fill: #b26a00; -fx-font-weight: bold; }
 .status-final { -fx-text-fill: #1d6b45; -fx-font-weight: bold; }
+
+/* Dashboard refinements */
+.sidebar .nav-button{-fx-pref-height:40px;-fx-min-height:40px;}
+.app-footer{-fx-wrap-text:true;-fx-text-overrun:clip;-fx-max-width:220px;}
+.app-footer-title{-fx-padding:0 0 2px 0;}
+.stat-card{-fx-min-height:88px;-fx-pref-height:88px;}
+.action-card{-fx-min-height:94px;-fx-pref-height:94px;}
+.content-scroll{-fx-fit-to-width:true;}
+
+/* Sidebar layout: navigation may scroll when the window is short, while the
+   footer and Sign out action remain permanently visible at the bottom. */
+.sidebar-scroll,
+.sidebar-scroll .viewport,
+.sidebar-scroll .content {
+    -fx-background-color: transparent;
+}
+.sidebar-scroll {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+}
+.sidebar-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 0;
+}
+.sidebar-scroll .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: #587b94;
+    -fx-background-radius: 4px;
+}
+.sidebar .nav-button {
+    -fx-pref-height: 40px;
+    -fx-min-height: 40px;
+    -fx-max-height: 40px;
+}
+.sidebar > .scroll-pane {
+    -fx-min-height: 0;
+}
+
+
+/* Compact Dashboard: keep the overview and recent waybills visible together on normal/maximized screens. */
+.dashboard-recent-table .column-header {
+    -fx-pref-height: 34px;
+    -fx-min-height: 34px;
+    -fx-max-height: 34px;
+}
+.dashboard-recent-table .table-cell {
+    -fx-padding: 5px 8px;
+    -fx-font-size: 11px;
+}
+.dashboard-recent-table .secondary-button {
+    -fx-padding: 6px 11px;
+    -fx-font-size: 11px;
+}
+
+
+/* Final compact-dashboard balance: prevent text from visually crossing section boundaries. */
+.stat-value { -fx-font-size: 26px; }
+.stat-title { -fx-font-size: 12px; }
+.stat-hint { -fx-font-size: 10px; }
+.action-icon { -fx-font-size: 21px; }
+.action-title { -fx-font-size: 14px; }
+.action-description { -fx-font-size: 11px; }
+.section-heading { -fx-font-size: 16px; }
+
+/* Responsive compact Dashboard v19 */
+.dashboard-overview-flow,
+.dashboard-admin-flow {
+    -fx-background-color: transparent;
+}
+.stat-card {
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+    -fx-padding: 8px 12px 7px 12px;
+}
+.stat-value-line {
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #0b4b7d;
+}
+.stat-hint {
+    -fx-font-size: 10px;
+    -fx-text-fill: #8792a2;
+}
+.action-card {
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+    -fx-padding: 8px 12px 7px 12px;
+}
+.action-title-line {
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #1e2d3d;
+}
+.action-description {
+    -fx-font-size: 10px;
+    -fx-text-fill: #748092;
+}
+.section-heading {
+    -fx-font-size: 15px;
+}
+
+/* Dashboard v20: compact desktop workspace and fluid six-card overview. */
+.topbar {
+    -fx-min-height: 52px;
+    -fx-pref-height: 52px;
+    -fx-padding: 8px 22px 8px 22px;
+}
+.topbar-title { -fx-font-size: 19px; }
+.user-pill { -fx-padding: 7px 12px; }
+.window-control-button { -fx-min-height: 28px; -fx-padding: 1px 7px; }
+
+.content-area { -fx-padding: 8px 22px 12px 22px; }
+.page-heading { -fx-font-size: 25px; }
+.page-subheading { -fx-font-size: 13px; }
+
+.dashboard-overview-flow { -fx-hgap: 12px; -fx-vgap: 8px; }
+.dashboard-overview-flow .stat-card,
+.dashboard-overview-flow .action-card {
+    -fx-min-width: 165px;
+    -fx-pref-width: 198px;
+    -fx-max-width: 230px;
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+}
+.stat-value-line {
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+}
+.stat-hint { -fx-font-size: 10px; }
+.action-title-line { -fx-font-size: 13px; }
+.action-description { -fx-font-size: 10px; }
+.section-heading { -fx-font-size: 15px; }
+
+
+/* Dashboard v21: three-column rows with wider cards and fixed compact heights. */
+.dashboard-card-row {
+    -fx-background-color: transparent;
+}
+.dashboard-card-row .stat-card,
+.dashboard-card-row .action-card {
+    -fx-min-width: 0;
+    -fx-pref-width: 0;
+    -fx-max-width: infinity;
+}
+.dashboard-card-row .stat-card {
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+}
+.dashboard-card-row .action-card {
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+}
+.dashboard-card-row .action-description {
+    -fx-font-size: 10px;
+}
+.dashboard-card-row .stat-value-line,
+.dashboard-card-row .action-title-line {
+    -fx-font-size: 14px;
+}
+
+
+/* Dashboard v22: slightly more breathing room between the two text lines. */
+.dashboard-card-row .stat-card,
+.dashboard-card-row .action-card {
+    -fx-padding: 8px 12px 7px 12px;
+}
+
+
+/* Dashboard recent table: five rows are the maximum shown on the dashboard,
+   so do not display a scrollbar when those rows fit in the calculated height. */
+.dashboard-recent-no-scrollbar .scroll-bar:vertical {
+    -fx-opacity: 0;
+    -fx-pref-width: 0;
+    -fx-min-width: 0;
+    -fx-max-width: 0;
+    -fx-padding: 0;
+}
+.dashboard-recent-no-scrollbar .scroll-bar:vertical .increment-button,
+.dashboard-recent-no-scrollbar .scroll-bar:vertical .decrement-button,
+.dashboard-recent-no-scrollbar .scroll-bar:vertical .increment-arrow,
+.dashboard-recent-no-scrollbar .scroll-bar:vertical .decrement-arrow {
+    -fx-pref-height: 0;
+    -fx-min-height: 0;
+    -fx-max-height: 0;
+    -fx-padding: 0;
+}
+
+/* Sidebar hierarchy */
+.sidebar .sidebar-section {
+    -fx-padding: 9px 12px 5px 12px;
+}

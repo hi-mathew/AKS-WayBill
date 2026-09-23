@@ -6,6 +6,8 @@ import com.aks.waybill.service.CompanyService;
 import com.aks.waybill.service.WaybillService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Orientation;
+import javafx.geometry.VPos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -59,10 +61,11 @@ public class DashboardView extends BorderPane {
         installShortcuts();
     }
 
-    private VBox sidebar() {
-        VBox s = new VBox(8);
-        s.setPrefWidth(245);
-        s.setPadding(new Insets(24, 16, 20, 16));
+    private BorderPane sidebar() {
+        BorderPane s = new BorderPane();
+        s.setPrefWidth(255);
+        s.setMinWidth(235);
+        s.setMinHeight(0);
         s.getStyleClass().add("sidebar");
 
         var logoStream = getClass().getResourceAsStream("/com/aks/waybill/images/aks-logo.png");
@@ -70,22 +73,40 @@ public class DashboardView extends BorderPane {
         if (logoStream != null) {
             logo.setImage(new Image(logoStream));
         }
-        logo.setFitWidth(155);
+        logo.setFitWidth(145);
         logo.setPreserveRatio(true);
+
         StackPane lb = new StackPane(logo);
-        lb.setPadding(new Insets(4, 0, 24, 0));
+        lb.setPadding(new Insets(2, 0, 14, 0));
 
         Label workspace = label("WORKSPACE", "sidebar-section");
-        Label administration = label("ADMINISTRATION", "sidebar-section");
-        Button signOut = nav("⇥  Sign out", false);
-        Label footer1 = label("W.A.S.P", "app-footer-title");
-        Label footer2 = label("Simplifying Waybill Creation. Improving Operational Efficiency.", "app-footer");
-        footer2.setWrapText(true);
-        Label footer3 = label("© AKS Global Logistics. All Rights Reserved.", "app-footer");
-        Label footer4 = label("Developed by: Deepesh V. Thampi", "app-footer");
-        Label footer5 = label("Owned by: AKS Global Logistics", "app-footer");
-        VBox footer = new VBox(2, footer1, footer2, footer3, footer4, footer5);
-        footer.setPadding(new Insets(10, 4, 6, 4));
+        VBox top = new VBox(2, lb, workspace);
+        top.setPadding(new Insets(18, 14, 0, 14));
+        s.setTop(top);
+
+        // Keep the sidebar hierarchy meaningful for every role.  About is
+        // informational, not administrative, so it belongs in its own group.
+        VBox navigation = new VBox(4);
+        navigation.setFillWidth(true);
+        navigation.setPadding(new Insets(0, 14, 8, 14));
+
+        navigation.getChildren().addAll(
+                dashboardButton,
+                newWaybillButton,
+                savedWaybillsButton,
+                companiesButton);
+
+        if (SessionContext.isAdmin()) {
+            Label administration = label("ADMINISTRATION", "sidebar-section");
+            navigation.getChildren().addAll(
+                    administration,
+                    settingsButton,
+                    usersButton,
+                    auditButton);
+        }
+
+        Label information = label("INFORMATION", "sidebar-section");
+        navigation.getChildren().addAll(information, aboutButton);
 
         dashboardButton.setOnAction(e -> showDashboard());
         newWaybillButton.setOnAction(e -> showNewWaybill());
@@ -101,14 +122,44 @@ public class DashboardView extends BorderPane {
         usersButton.setManaged(SessionContext.isAdmin());
         settingsButton.setVisible(SessionContext.isAdmin());
         settingsButton.setManaged(SessionContext.isAdmin());
+
+        ScrollPane navigationScroll = new ScrollPane(navigation);
+        navigationScroll.setFitToWidth(true);
+        navigationScroll.setFitToHeight(false);
+        navigationScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        navigationScroll.setPannable(false);
+        navigationScroll.setFocusTraversable(false);
+        navigationScroll.setMinHeight(0);
+        navigationScroll.getStyleClass().add("sidebar-scroll");
+        s.setCenter(navigationScroll);
+
+        Button signOut = nav("⇥  Sign out", false);
         signOut.setOnAction(e -> requestLogout(logout));
 
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
+        Label footer1 = label("W.A.S.P", "app-footer-title");
+        Label footer2 = label("Simplifying Waybill Creation. Improving Operational Efficiency.", "app-footer");
+        footer2.setWrapText(true);
+        footer2.setTextOverrun(OverrunStyle.CLIP);
+        Label footer3 = label("© AKS Global Logistics. All Rights Reserved.", "app-footer");
+        footer3.setWrapText(true);
+        footer3.setTextOverrun(OverrunStyle.CLIP);
+        Label footer4 = label("Developed by: Deepesh V. Thampi", "app-footer");
+        footer4.setWrapText(true);
+        footer4.setTextOverrun(OverrunStyle.CLIP);
+        Label footer5 = label("Owned by: AKS Global Logistics", "app-footer");
+        footer5.setWrapText(true);
+        footer5.setTextOverrun(OverrunStyle.CLIP);
 
-        s.getChildren().addAll(lb, workspace, dashboardButton, newWaybillButton,
-                savedWaybillsButton, companiesButton, spacer, administration,
-                settingsButton, usersButton, auditButton, aboutButton, footer, signOut);
+        VBox footer = new VBox(2, footer1, footer2, footer3, footer4, footer5);
+        footer.setPadding(new Insets(6, 18, 4, 18));
+        footer.setMaxWidth(Double.MAX_VALUE);
+
+        VBox bottom = new VBox(2, footer, signOut);
+        bottom.setPadding(new Insets(0, 0, 10, 0));
+        bottom.setFillWidth(true);
+        s.setBottom(bottom);
+
         return s;
     }
 
@@ -312,9 +363,10 @@ public class DashboardView extends BorderPane {
     }
 
     private ScrollPane home() {
-        VBox c = new VBox(22);
-        c.setPadding(new Insets(30));
+        VBox c = new VBox(7);
+        c.setPadding(new Insets(8, 22, 12, 22));
         c.getStyleClass().add("content-area");
+        c.setFillWidth(true);
 
         Label welcome = label("Good day, " + currentUser.displayName(), "page-heading");
         Label intro = label("Waybill Automation & Shipping Platform", "page-subheading");
@@ -323,42 +375,122 @@ public class DashboardView extends BorderPane {
                 : "Create, manage and export your transportation waybills from one workspace.", "card-description");
 
         DashboardStats stats = loadStats();
-        HBox statsRow = new HBox(16,
-                stat(String.valueOf(stats.monthWaybills()), "Waybills this month", SessionContext.isAdmin() ? "All users" : "Created by you"),
-                stat(String.valueOf(stats.totalWaybills()), "Total saved waybills", SessionContext.isAdmin() ? "Across all users" : "Created by you"),
-                stat(String.valueOf(stats.companies()), "Saved companies", "Shipper + Consignee masters"));
-        statsRow.setFillHeight(true);
 
-        Label quickTitle = label("Quick Actions", "section-heading");
-        HBox actions = new HBox(14);
-        actions.setFillHeight(true);
-        actions.getChildren().addAll(
-                action("New Waybill", "Create a new transportation waybill", "＋", this::showNewWaybill),
-                action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", this::showSavedWaybills),
-                action("Saved Data", "Manage reusable companies, carriers and locations", "▦", this::showSavedData));
-        for (Node node : actions.getChildren()) HBox.setHgrow(node, Priority.ALWAYS);
+        Label overviewTitle = label("Overview & Quick Actions", "section-heading");
 
-        HBox adminActions = new HBox(14);
+        // Keep the six overview cards in two deliberate rows.  The first row
+        // contains the three count cards; the second row contains the three
+        // primary actions.  Each row always has three equal-width cards on the
+        // desktop workspace, so the cards can become wider without becoming taller.
+        GridPane countsRow = threeColumnRow();
+        Node monthCard = stat("Waybills this month", String.valueOf(stats.monthWaybills()),
+                SessionContext.isAdmin() ? "All users" : "Created by you");
+        Node totalCard = stat("Total saved waybills", String.valueOf(stats.totalWaybills()),
+                SessionContext.isAdmin() ? "Across all users" : "Created by you");
+        Node companiesCard = stat("Saved companies", String.valueOf(stats.companies()),
+                "Shipper + Consignee masters");
+        addThree(countsRow, monthCard, totalCard, companiesCard);
+
+        GridPane actionsRow = threeColumnRow();
+        Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", this::showNewWaybill);
+        Node savedCard = action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", this::showSavedWaybills);
+        Node dataCard = action("Saved Data", "Manage reusable companies, carriers and locations", "▦", this::showSavedData);
+        addThree(actionsRow, newCard, savedCard, dataCard);
+
+        Label administrationTitle = label("Administration", "section-heading");
+        GridPane adminActions = twoColumnRow();
         if (SessionContext.isAdmin()) {
-            adminActions.getChildren().addAll(
-                    action("Settings", "Manage report profile and application settings", "⚙", this::showSettings),
-                    action("User Management", "Manage users, roles and waybill codes", "♟", this::showUserManagement));
-            for (Node node : adminActions.getChildren()) HBox.setHgrow(node, Priority.ALWAYS);
+            Node settingsCard = action("Settings", "Manage report profile and application settings", "⚙", this::showSettings);
+            Node usersCard = action("User Management", "Manage users, roles and waybill codes", "♟", this::showUserManagement);
+            addTwoEqual(adminActions, settingsCard, usersCard);
         }
 
         Label recentTitle = label("Recent Waybills", "section-heading");
         VBox recentCard = recentWaybills();
 
-        c.getChildren().addAll(welcome, intro, introDetail, statsRow, quickTitle, actions);
+        c.getChildren().addAll(welcome, intro, introDetail, overviewTitle, countsRow, actionsRow);
         if (SessionContext.isAdmin()) {
-            c.getChildren().addAll(label("Administration", "section-heading"), adminActions);
+            c.getChildren().addAll(administrationTitle, adminActions);
         }
-        c.getChildren().addAll(recentTitle, recentCard);
+
+        // A small deliberate separation keeps Recent Waybills visually distinct
+        // while the compact rows above preserve enough vertical space for it to
+        // remain fully visible on the maximized desktop workspace.
+        Region recentSpacer = new Region();
+        recentSpacer.setMinHeight(5);
+        recentSpacer.setPrefHeight(5);
+        c.getChildren().addAll(recentSpacer, recentTitle, recentCard);
 
         ScrollPane p = new ScrollPane(c);
         p.setFitToWidth(true);
+        p.setFitToHeight(false);
+        p.setPannable(false);
+        p.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        p.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        p.setFocusTraversable(false);
         p.getStyleClass().add("content-scroll");
+        c.setMinWidth(0);
+
+        javafx.application.Platform.runLater(() -> p.setVvalue(0));
         return p;
+    }
+
+    private GridPane threeColumnRow() {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(0);
+        grid.setMaxWidth(Double.MAX_VALUE);
+        grid.getStyleClass().add("dashboard-card-row");
+        for (int i = 0; i < 3; i++) {
+            ColumnConstraints column = new ColumnConstraints();
+            column.setPercentWidth(33.333333);
+            column.setHgrow(Priority.ALWAYS);
+            column.setFillWidth(true);
+            grid.getColumnConstraints().add(column);
+        }
+        return grid;
+    }
+
+    private void addThree(GridPane grid, Node first, Node second, Node third) {
+        prepareGridCard(first);
+        prepareGridCard(second);
+        prepareGridCard(third);
+        grid.add(first, 0, 0);
+        grid.add(second, 1, 0);
+        grid.add(third, 2, 0);
+    }
+
+    private GridPane twoColumnRow() {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(0);
+        grid.setMaxWidth(Double.MAX_VALUE);
+        grid.getStyleClass().add("dashboard-card-row");
+        for (int i = 0; i < 2; i++) {
+            ColumnConstraints column = new ColumnConstraints();
+            column.setPercentWidth(50);
+            column.setHgrow(Priority.ALWAYS);
+            column.setFillWidth(true);
+            grid.getColumnConstraints().add(column);
+        }
+        return grid;
+    }
+
+    private void addTwoEqual(GridPane grid, Node first, Node second) {
+        prepareGridCard(first);
+        prepareGridCard(second);
+        grid.add(first, 0, 0);
+        grid.add(second, 1, 0);
+    }
+
+    private void prepareGridCard(Node node) {
+        if (node instanceof Region region) {
+            region.setMinWidth(0);
+            region.setPrefWidth(0);
+            region.setMaxWidth(Double.MAX_VALUE);
+            GridPane.setHgrow(region, Priority.ALWAYS);
+            GridPane.setFillWidth(region, true);
+        }
     }
 
     private record DashboardStats(long monthWaybills, long totalWaybills, long companies) {}
@@ -371,30 +503,36 @@ public class DashboardView extends BorderPane {
         return new DashboardStats(month.totalRows(), total.totalRows(), CompanyService.countAll());
     }
 
-    private VBox stat(String value, String title, String hint) {
-        VBox box = new VBox(7);
-        box.setMinHeight(112);
-        box.setPrefHeight(112);
-        box.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(box, Priority.ALWAYS);
-        box.setPadding(new Insets(18));
+    private VBox stat(String title, String value, String hint) {
+        VBox box = new VBox(4);
+        box.setMinWidth(165);
+        box.setPrefWidth(198);
+        box.setMaxWidth(230);
+        box.setMinHeight(70);
+        box.setPrefHeight(70);
+        box.setMaxHeight(70);
+        box.setPadding(new Insets(8, 12, 7, 12));
         box.getStyleClass().add("stat-card");
-        box.getChildren().addAll(label(value, "stat-value"), label(title, "stat-title"), label(hint, "stat-hint"));
+        box.getChildren().addAll(
+                label(value + "  " + title, "stat-value-line"),
+                label(hint, "stat-hint"));
         return box;
     }
 
     private VBox action(String title, String description, String icon, Runnable command) {
-        VBox box = new VBox(9);
-        box.setMinHeight(130);
-        box.setPrefHeight(130);
-        box.setMaxWidth(Double.MAX_VALUE);
-        box.setPadding(new Insets(18));
+        VBox box = new VBox(4);
+        box.setMinWidth(165);
+        box.setPrefWidth(198);
+        box.setMaxWidth(230);
+        box.setMinHeight(70);
+        box.setPrefHeight(70);
+        box.setMaxHeight(70);
+        box.setPadding(new Insets(8, 12, 7, 12));
         box.getStyleClass().add("action-card");
-        Label iconLabel = label(icon, "action-icon");
-        Label titleLabel = label(title, "action-title");
+        Label titleLabel = label(icon + "  " + title, "action-title-line");
         Label descriptionLabel = label(description, "action-description");
         descriptionLabel.setWrapText(true);
-        box.getChildren().addAll(iconLabel, titleLabel, descriptionLabel);
+        box.getChildren().addAll(titleLabel, descriptionLabel);
         box.setOnMouseClicked(e -> command.run());
         Tooltip.install(box, new Tooltip(title));
         return box;
@@ -412,8 +550,20 @@ public class DashboardView extends BorderPane {
         }
 
         TableView<WaybillService.WaybillListRow> table = new TableView<>();
-        table.setPrefHeight(Math.min(290, 52 + page.rows().size() * 42));
+        table.getStyleClass().add("dashboard-recent-table");
+        // Only five rows are shown on the dashboard. Give the table exactly
+        // enough height for those rows so it does not introduce a nested
+        // vertical scrollbar. The dashboard ScrollPane handles page scrolling.
+        table.setFixedCellSize(34);
+        // The dashboard deliberately displays at most five recent records.
+        // Size the table for its header plus exactly those rows and suppress
+        // the vertical scrollbar when there is no possible overflow.
+        double tableHeight = 34 + (page.rows().size() * 34) + 6;
+        table.setMinHeight(tableHeight);
+        table.setPrefHeight(tableHeight);
+        table.setMaxHeight(tableHeight);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.getStyleClass().add("dashboard-recent-no-scrollbar");
         table.setPlaceholder(label("No saved waybills.", "empty-state"));
 
         TableColumn<WaybillService.WaybillListRow, String> number = column("Waybill No.", WaybillService.WaybillListRow::waybillNumber, 210);

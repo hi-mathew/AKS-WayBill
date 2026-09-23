@@ -49,6 +49,11 @@ public class Main extends Application {
         var view = new LoginView(this::showDashboard);
         var scene = new Scene(view);
         applyStyles(scene);
+        // The login window is intentionally restored to a normal size.  The
+        // dashboard will maximize again after every successful login.  Keeping
+        // this state explicit avoids JavaFX retaining a stale maximized state
+        // across the logout -> login scene transition.
+        stage.setMaximized(false);
         stage.setScene(scene);
         fitStage(0.86, 0.84, 1120, 680);
         stage.centerOnScreen();
@@ -59,8 +64,15 @@ public class Main extends Application {
         var scene = new Scene(view);
         applyStyles(scene);
         stage.setScene(scene);
-        fitStage(0.90, 0.88, 1100, 650);
-        stage.centerOnScreen();
+        // W.A.S.P is a desktop workspace application.  Apply maximization on
+        // the next JavaFX pulse so it is reliable both on the first login and
+        // after returning from the logout -> login scene transition.
+        javafx.application.Platform.runLater(() -> {
+            if (stage.isShowing()) {
+                stage.setMaximized(true);
+                stage.toFront();
+            }
+        });
     }
 
     private void applyStyles(Scene scene) {
