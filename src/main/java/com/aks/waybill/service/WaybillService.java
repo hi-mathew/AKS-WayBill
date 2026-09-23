@@ -535,7 +535,6 @@ public final class WaybillService {
         }
     }
 
-
     private static void insertAudit(Connection connection, long userId, String action, String entityType, Long entityId, String entityLabel, String details) throws SQLException {
         try(PreparedStatement statement=connection.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at) VALUES(?,?,?,?,?,?,?)")) {
             statement.setLong(1,userId);
