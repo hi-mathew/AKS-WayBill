@@ -240,8 +240,8 @@ public class DashboardView extends BorderPane {
             a.setTitle("Unsaved Changes");
             a.setHeaderText("You have unsaved changes.");
             a.setContentText("Would you like to save before logging out?");
-            ButtonType save = new ButtonType("Save & Logout", ButtonBar.ButtonData.OK_DONE);
-            ButtonType discard = new ButtonType("Logout Without Saving", ButtonBar.ButtonData.OTHER);
+            ButtonType save = new ButtonType("Save and Log Out", ButtonBar.ButtonData.OK_DONE);
+            ButtonType discard = new ButtonType("Log Out Without Saving", ButtonBar.ButtonData.OTHER);
             ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             a.getButtonTypes().setAll(save, discard, cancel);
             if (getScene()!=null) a.initOwner(getScene().getWindow());
@@ -267,7 +267,7 @@ public class DashboardView extends BorderPane {
             a.setTitle("Unsaved Changes");
             a.setHeaderText("You have unsaved changes.");
             a.setContentText("Would you like to save before exiting?");
-            ButtonType save = new ButtonType("Save & Exit", ButtonBar.ButtonData.OK_DONE);
+            ButtonType save = new ButtonType("Save and Exit", ButtonBar.ButtonData.OK_DONE);
             ButtonType discard = new ButtonType("Exit Without Saving", ButtonBar.ButtonData.OTHER);
             ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             a.getButtonTypes().setAll(save, discard, cancel);
@@ -282,10 +282,17 @@ public class DashboardView extends BorderPane {
     }
 
     private boolean confirmSimpleAction(String title, String message) {
-        Alert a=new Alert(Alert.AlertType.CONFIRMATION,message,ButtonType.OK,ButtonType.CANCEL);
-        a.setTitle(title); a.setHeaderText(null);
+        ButtonType confirm = new ButtonType(title.equals("Log out") ? "Log Out" : "Exit", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert a=new Alert(Alert.AlertType.CONFIRMATION);
+        a.setTitle(title);
+        a.setHeaderText(null);
+        a.setContentText(message);
+        a.getButtonTypes().setAll(confirm, cancel);
+        a.getDialogPane().setPrefWidth(500);
+        a.getDialogPane().setMinWidth(500);
         if(getScene()!=null) a.initOwner(getScene().getWindow());
-        return a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK;
+        return a.showAndWait().orElse(cancel)==confirm;
     }
 
     private boolean hasUnsavedChanges() {

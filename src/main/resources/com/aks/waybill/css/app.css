@@ -263,3 +263,119 @@
 .sidebar .sidebar-section {
     -fx-padding: 9px 12px 5px 12px;
 }
+
+/* W.A.S.P dialog styling: keeps standard JavaFX dialogs consistent with the application shell. */
+.wasp-dialog-pane {
+    -fx-background-color: white;
+    -fx-background-radius: 12px;
+    -fx-border-color: #d9e1ea;
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-padding: 0;
+}
+.wasp-dialog-pane .header-panel {
+    -fx-background-color: #f5f8fb;
+    -fx-background-radius: 12px 12px 0 0;
+    -fx-border-color: #e2e8ef;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 16px 20px 14px 20px;
+}
+.wasp-dialog-pane .header-panel .label {
+    -fx-text-fill: #152235;
+    -fx-font-size: 17px;
+    -fx-font-weight: 700;
+}
+.wasp-dialog-pane .content.label {
+    -fx-text-fill: #566579;
+    -fx-font-size: 13px;
+    -fx-wrap-text: true;
+    -fx-padding: 18px 20px 12px 20px;
+}
+.wasp-dialog-pane .graphic-container {
+    -fx-padding: 0 0 0 20px;
+    -fx-alignment: center;
+}
+.wasp-dialog-pane .button-bar {
+    -fx-background-color: white;
+    -fx-padding: 8px 16px 14px 16px;
+}
+.wasp-dialog-pane .button-bar .container {
+    -fx-background-color: transparent;
+}
+.wasp-dialog-pane .button {
+    -fx-background-color: #eef2f6;
+    -fx-text-fill: #344054;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-background-radius: 7px;
+    -fx-border-color: transparent;
+    -fx-padding: 8px 16px;
+    -fx-cursor: hand;
+}
+.wasp-dialog-pane .button:hover {
+    -fx-background-color: #e1e7ed;
+}
+.wasp-dialog-pane .button:default {
+    -fx-background-color: #0b4b7d;
+    -fx-text-fill: white;
+}
+.wasp-dialog-pane .button:default:hover {
+    -fx-background-color: #083a61;
+}
+.wasp-dialog-pane .button:focused {
+    -fx-border-color: #7fa8c4;
+    -fx-border-width: 1px;
+}
+.wasp-dialog-icon {
+    -fx-min-width: 34px;
+    -fx-pref-width: 34px;
+    -fx-max-width: 34px;
+    -fx-min-height: 34px;
+    -fx-pref-height: 34px;
+    -fx-max-height: 34px;
+    -fx-alignment: center;
+    -fx-background-radius: 17px;
+    -fx-padding: 0;
+}
+
+.wasp-dialog-icon-glyph {
+    -fx-text-fill: inherit;
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+    -fx-padding: 0;
+    -fx-alignment: center;
+    -fx-content-display: text-only;
+    -fx-translate-y: 0px;
+}
+.wasp-dialog-question {
+    -fx-background-color: #e8f1f8;
+    -fx-text-fill: #0b4b7d;
+}
+.wasp-dialog-info {
+    -fx-background-color: #e8f1f8;
+    -fx-text-fill: #0b4b7d;
+}
+.wasp-dialog-warning {
+    -fx-background-color: #fff4db;
+    -fx-text-fill: #9a6700;
+}
+.wasp-dialog-error {
+    -fx-background-color: #fdecec;
+    -fx-text-fill: #b42318;
+}
+
+/* Dialog buttons: keep action labels fully readable; never replace them with ellipses. */
+.wasp-dialog-pane .button {
+    -fx-text-overrun: clip;
+    -fx-wrap-text: false;
+    -fx-min-height: 38px;
+}
+.wasp-dialog-pane .button-bar .button {
+    -fx-min-width: 92px;
+}
+
+
+.wasp-dialog-question .wasp-dialog-icon-glyph { -fx-text-fill: #0b4b7d; }
+.wasp-dialog-info .wasp-dialog-icon-glyph { -fx-text-fill: #0b4b7d; }
+.wasp-dialog-warning .wasp-dialog-icon-glyph { -fx-text-fill: #9a6700; }
+.wasp-dialog-error .wasp-dialog-icon-glyph { -fx-text-fill: #b42318; }

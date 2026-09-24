@@ -10,11 +10,13 @@ import javafx.application.Application;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
+import javafx.stage.Window;
 
 /** Application entry point and top-level window lifecycle controller. */
 public class Main extends Application {
@@ -25,6 +27,7 @@ public class Main extends Application {
         stage = primaryStage;
         WaspLogger.initialize();
         WaspLogger.info("Starting W.A.S.P 1.4.0");
+        installDialogStyling();
         try {
             Database.initialize();
             WaspLogger.info("Database initialization completed successfully.");
@@ -75,6 +78,119 @@ public class Main extends Application {
         });
     }
 
+
+    /** Apply W.A.S.P visual styling to every standard JavaFX dialog used by the application. */
+    private void installDialogStyling() {
+        Window.getWindows().addListener((javafx.collections.ListChangeListener<Window>) change -> {
+            while (change.next()) {
+                if (!change.wasAdded()) continue;
+                for (Window window : change.getAddedSubList()) {
+                    if (window instanceof javafx.stage.Stage dialogStage
+                            && dialogStage.getScene() != null
+                            && dialogStage.getScene().getRoot() instanceof javafx.scene.control.DialogPane pane) {
+                        styleDialogPane(pane);
+                    }
+                }
+            }
+        });
+    }
+
+    private void styleDialogPane(javafx.scene.control.DialogPane pane) {
+        var css = getClass().getResource("/com/aks/waybill/css/app.css");
+        if (css != null && !pane.getStylesheets().contains(css.toExternalForm())) {
+            pane.getStylesheets().add(css.toExternalForm());
+        }
+        if (!pane.getStyleClass().contains("wasp-dialog-pane")) {
+            pane.getStyleClass().add("wasp-dialog-pane");
+        }
+        // Replace the stock JavaFX alert graphic with a small W.A.S.P-styled badge.
+        // JavaFX does not always expose the built-in confirmation graphic with a
+        // predictable CSS class, so use the DialogPane's alert-type style class
+        // first and fall back to the graphic classes when necessary.
+        var existingGraphic = pane.getGraphic();
+        String symbol = "i";
+        String badgeStyle = "wasp-dialog-info";
+        var paneClasses = pane.getStyleClass();
+        if (pane.getScene() != null
+                && pane.getScene().getWindow() instanceof javafx.stage.Stage dialogStage
+                && "Backup Reminder".equals(dialogStage.getTitle())) {
+            // Backup Reminder uses a confirmation alert for its three choices,
+            // but its meaning is informational rather than a yes/no question.
+            symbol = "i";
+            badgeStyle = "wasp-dialog-info";
+        } else if (paneClasses.contains("confirmation")) {
+            symbol = "?";
+            badgeStyle = "wasp-dialog-question";
+        } else if (paneClasses.contains("error")) {
+            symbol = "!";
+            badgeStyle = "wasp-dialog-error";
+        } else if (paneClasses.contains("warning")) {
+            symbol = "!";
+            badgeStyle = "wasp-dialog-warning";
+        } else if (existingGraphic != null) {
+            var classes = existingGraphic.getStyleClass();
+            if (classes.stream().anyMatch(c -> c.contains("question"))) {
+                symbol = "?";
+                badgeStyle = "wasp-dialog-question";
+            } else if (classes.stream().anyMatch(c -> c.contains("error"))) {
+                symbol = "!";
+                badgeStyle = "wasp-dialog-error";
+            } else if (classes.stream().anyMatch(c -> c.contains("warning"))) {
+                symbol = "!";
+                badgeStyle = "wasp-dialog-warning";
+            }
+        }
+        // Keep confirmation dialogs as questions by default.  The shared backup
+        // reminder is a three-action informational prompt, so it explicitly
+        // overrides the icon after construction.
+        var badge = createDialogBadge(symbol, badgeStyle);
+        // JavaFX places a DialogPane graphic at the top of the content area.
+        // For confirmation dialogs, give the badge a small downward optical
+        // offset so it sits comfortably below the title/header boundary.
+        if ("?".equals(symbol)) {
+            badge.setTranslateY(10);
+        }
+        pane.setGraphic(badge);
+    }
+
+    /** Creates a consistently centered W.A.S.P dialog badge. */
+    private javafx.scene.layout.StackPane createDialogBadge(String symbol, String styleClass) {
+        var circle = new javafx.scene.layout.StackPane();
+        circle.getStyleClass().addAll("wasp-dialog-icon", styleClass);
+        circle.setMinSize(34, 34);
+        circle.setPrefSize(34, 34);
+        circle.setMaxSize(34, 34);
+        var glyph = new javafx.scene.control.Label(symbol);
+        glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+        // Let the label occupy the full badge so JavaFX centers the glyph
+        // within the actual 34x34 icon box instead of centering only its
+        // font line bounds (which makes the ? appear too close to the top).
+        glyph.setMinSize(34, 34);
+        glyph.setPrefSize(34, 34);
+        glyph.setMaxSize(34, 34);
+        glyph.setAlignment(javafx.geometry.Pos.CENTER);
+        javafx.scene.layout.StackPane.setAlignment(glyph, javafx.geometry.Pos.CENTER);
+        circle.getChildren().add(glyph);
+        return circle;
+    }
+
+    private static void setDialogGraphic(javafx.scene.control.DialogPane pane, String symbol, String styleClass) {
+        var circle = new javafx.scene.layout.StackPane();
+        circle.getStyleClass().addAll("wasp-dialog-icon", styleClass);
+        circle.setMinSize(34, 34);
+        circle.setPrefSize(34, 34);
+        circle.setMaxSize(34, 34);
+        var glyph = new javafx.scene.control.Label(symbol);
+        glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+        glyph.setMinSize(34, 34);
+        glyph.setPrefSize(34, 34);
+        glyph.setMaxSize(34, 34);
+        glyph.setAlignment(javafx.geometry.Pos.CENTER);
+        javafx.scene.layout.StackPane.setAlignment(glyph, javafx.geometry.Pos.CENTER);
+        circle.getChildren().add(glyph);
+        pane.setGraphic(circle);
+    }
+
     private void applyStyles(Scene scene) {
         var css = getClass().getResource("/com/aks/waybill/css/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
@@ -121,6 +237,15 @@ public class Main extends Application {
         ButtonType continueWithout = new ButtonType("Continue Without Backup", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         backup.getButtonTypes().setAll(backupNow, continueWithout, cancel);
+        backup.getDialogPane().setPrefWidth(700);
+        backup.getDialogPane().setMinWidth(700);
+        // This is an informational reminder with choices, not a yes/no question.
+        // Use the information badge instead of the generic confirmation '?'.
+        setDialogGraphic(backup.getDialogPane(), "i", "wasp-dialog-info");
+        Button continueButton = (Button) backup.getDialogPane().lookupButton(continueWithout);
+        continueButton.setMinWidth(240);
+        continueButton.setPrefWidth(240);
+        continueButton.setMaxWidth(260);
         if (owner != null) backup.initOwner(owner);
         var result = backup.showAndWait().orElse(cancel);
         if (result == cancel) return false;
