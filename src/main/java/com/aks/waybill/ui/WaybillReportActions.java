@@ -4,6 +4,8 @@ import com.aks.waybill.report.WaybillReportService;
 import com.aks.waybill.service.WaybillService;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
+import javafx.scene.control.Label;
+import javafx.scene.layout.StackPane;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -42,7 +44,7 @@ public final class WaybillReportActions {
             Path output = file.toPath();
             if (pdf) WaybillReportService.generatePdf(details, output);
             else WaybillReportService.generateWord(details, output);
-            alert(javafx.scene.control.Alert.AlertType.INFORMATION, "Document Generated", "The " + (pdf ? "PDF" : "Word document") + " was generated successfully.\n\n" + output, owner);
+            alert(javafx.scene.control.Alert.AlertType.INFORMATION, "Document Generated", "The " + (pdf ? "PDF" : "Word document") + " was generated successfully.\n\nFile name: " + output.getFileName() + "\nSaved to: " + output.getParent(), owner);
         } catch (Exception e) {
             alert(javafx.scene.control.Alert.AlertType.ERROR, "Document Generation Failed", e.getMessage() == null ? "Unable to generate the document." : e.getMessage(), owner);
         }
@@ -55,7 +57,27 @@ public final class WaybillReportActions {
 
     private static void alert(javafx.scene.control.Alert.AlertType type, String title, String message, Window owner) {
         javafx.scene.control.Alert alert = new javafx.scene.control.Alert(type);
-        alert.setTitle(title); alert.setHeaderText(null); alert.setContentText(message);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.getDialogPane().setMinWidth(560);
+        alert.getDialogPane().setPrefWidth(560);
+        if (type == javafx.scene.control.Alert.AlertType.INFORMATION) {
+            StackPane circle = new StackPane();
+            circle.getStyleClass().addAll("wasp-dialog-icon", "wasp-dialog-info");
+            circle.setMinSize(34, 34);
+            circle.setPrefSize(34, 34);
+            circle.setMaxSize(34, 34);
+            circle.setTranslateY(8);
+            Label glyph = new Label("i");
+            glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+            glyph.setMinSize(34, 34);
+            glyph.setPrefSize(34, 34);
+            glyph.setMaxSize(34, 34);
+            glyph.setAlignment(javafx.geometry.Pos.CENTER);
+            circle.getChildren().add(glyph);
+            alert.getDialogPane().setGraphic(circle);
+        }
         if (owner != null) alert.initOwner(owner);
         alert.showAndWait();
     }

@@ -13,6 +13,8 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.text.Text;
+import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
@@ -103,6 +105,17 @@ public class Main extends Application {
         if (!pane.getStyleClass().contains("wasp-dialog-pane")) {
             pane.getStyleClass().add("wasp-dialog-pane");
         }
+        // Give every dialog button enough width for its complete label.
+        // The default JavaFX DialogPane may shrink long labels such as
+        // "Exit Without Saving" when the dialog content itself is short.
+        // Size from the actual label so no action text is clipped or replaced
+        // visually by an ellipsis.
+        // Dialog button types are often added after the DialogPane window is
+        // created. Resize both now and whenever the button list changes so the
+        // labels are never measured before the actual buttons exist.
+        pane.getButtonTypes().addListener((javafx.collections.ListChangeListener<ButtonType>) change ->
+                javafx.application.Platform.runLater(() -> sizeDialogButtons(pane)));
+        javafx.application.Platform.runLater(() -> sizeDialogButtons(pane));
         // Replace the stock JavaFX alert graphic with a small W.A.S.P-styled badge.
         // JavaFX does not always expose the built-in confirmation graphic with a
         // predictable CSS class, so use the DialogPane's alert-type style class
@@ -144,13 +157,191 @@ public class Main extends Application {
         // reminder is a three-action informational prompt, so it explicitly
         // overrides the icon after construction.
         var badge = createDialogBadge(symbol, badgeStyle);
-        // JavaFX places a DialogPane graphic at the top of the content area.
-        // For confirmation dialogs, give the badge a small downward optical
-        // offset so it sits comfortably below the title/header boundary.
+        // JavaFX places DialogPane graphics very close to the title/header
+        // boundary. Give the badge a small downward optical offset so the
+        // entire circle sits comfortably inside the dialog content area.
+        // Confirmation questions need a slightly larger offset because the
+        // question-mark glyph is visually heavier near the top of its circle.
         if ("?".equals(symbol)) {
             badge.setTranslateY(10);
+        } else {
+            badge.setTranslateY(8);
         }
         pane.setGraphic(badge);
+        // JavaFX can position Dialog instances slightly off-center when a custom
+        // graphic/header changes the computed dialog size. Re-center every W.A.S.P
+        // dialog after it is actually shown, relative to its owning application window.
+        // The stage variable used above is a pattern variable scoped only to that
+        // conditional expression, so obtain the dialog window explicitly here.
+        if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage dialogStage) {
+            dialogStage.addEventHandler(WindowEvent.WINDOW_SHOWN, event -> centerDialog(dialogStage));
+            if (dialogStage.isShowing()) {
+                javafx.application.Platform.runLater(() -> centerDialog(dialogStage));
+            }
+        }
+    }
+
+
+    /**
+     * Applies one sizing policy to every W.A.S.P dialog. The size is calculated
+     * from the actual button text instead of being hard-coded per dialog. This
+     * prevents long labels from being clipped and prevents hover/focus states
+     * from changing the button geometry.
+     */
+    private static void sizeDialogButtons(javafx.scene.control.DialogPane pane) {
+        pane.applyCss();
+
+        var buttons = pane.lookupAll(".button").stream()
+                .filter(Button.class::isInstance)
+                .map(Button.class::cast)
+                .toList();
+
+        double totalButtonWidth = 0;
+        int buttonCount = 0;
+        for (Button button : buttons) {
+            String text = button.getText() == null ? "" : button.getText().trim();
+            if (text.isBlank()) continue;
+
+            Font font = button.getFont();
+            Text measure = new Text(text);
+            measure.setFont(font);
+            // Text width + generous horizontal room for the W.A.S.P button padding.
+            // A fixed width is then applied so hover/focus pseudo-classes cannot
+            // change the button geometry.
+            double width = Math.max(112, Math.ceil(measure.getLayoutBounds().getWidth() + 48));
+            setStableDialogButtonSize(button, width);
+            totalButtonWidth += width;
+            buttonCount++;
+        }
+
+        double gaps = Math.max(0, buttonCount - 1) * 12;
+        double requiredButtonWidth = totalButtonWidth + gaps;
+
+        // JavaFX's DialogPane/ButtonBar has its own internal layout constraints.
+        // Give it deliberate breathing room instead of relying on the pane's
+        // calculated minimum, which can leave the last button clipped at the
+        // right edge (especially for short two-button confirmation dialogs).
+        double safetyMargin = switch (buttonCount) {
+            case 0, 1 -> 120;
+            case 2 -> 150;
+            case 3 -> 170;
+            default -> 190;
+        };
+        double requiredDialogWidth = requiredButtonWidth + safetyMargin;
+
+        double availableScreenWidth = Math.max(900,
+                Screen.getPrimary().getVisualBounds().getWidth() - 80);
+        double dialogWidth = Math.min(availableScreenWidth,
+                Math.max(560, requiredDialogWidth));
+
+        pane.setMinWidth(dialogWidth);
+        pane.setPrefWidth(dialogWidth);
+        pane.setMaxWidth(availableScreenWidth);
+
+        // The ButtonBar skin can retain its own preferred width. Keep the bar and
+        // its internal container at the same width as the dialog so the final
+        // button can never be laid out beyond the DialogPane's right edge.
+        pane.lookup(".button-bar");
+        var buttonBar = pane.lookup(".button-bar");
+        if (buttonBar instanceof javafx.scene.layout.Region bar) {
+            bar.setMinWidth(dialogWidth);
+            bar.setPrefWidth(dialogWidth);
+            bar.setMaxWidth(dialogWidth);
+        }
+        var buttonContainer = pane.lookup(".button-bar .container");
+        if (buttonContainer instanceof javafx.scene.layout.Region container) {
+            double containerWidth = Math.max(0, dialogWidth - 32);
+            container.setMinWidth(containerWidth);
+            container.setPrefWidth(containerWidth);
+            container.setMaxWidth(containerWidth);
+        }
+
+        javafx.application.Platform.runLater(() -> {
+            pane.applyCss();
+
+            var currentButtons = pane.lookupAll(".button").stream()
+                    .filter(Button.class::isInstance)
+                    .map(Button.class::cast)
+                    .toList();
+            double total = 0;
+            int count = 0;
+            for (Button button : currentButtons) {
+                String text = button.getText() == null ? "" : button.getText().trim();
+                if (text.isBlank()) continue;
+                Text measure = new Text(text);
+                measure.setFont(button.getFont());
+                double width = Math.max(112, Math.ceil(measure.getLayoutBounds().getWidth() + 48));
+                setStableDialogButtonSize(button, width);
+                total += width;
+                count++;
+            }
+
+            double required = total + Math.max(0, count - 1) * 12;
+            double margin = switch (count) {
+                case 0, 1 -> 120;
+                case 2 -> 150;
+                case 3 -> 170;
+                default -> 190;
+            };
+            double width = Math.min(availableScreenWidth, Math.max(560, required + margin));
+            pane.setMinWidth(width);
+            pane.setPrefWidth(width);
+            pane.setMaxWidth(availableScreenWidth);
+
+            var bar = pane.lookup(".button-bar");
+            if (bar instanceof javafx.scene.layout.Region region) {
+                region.setMinWidth(width);
+                region.setPrefWidth(width);
+                region.setMaxWidth(width);
+            }
+            var container = pane.lookup(".button-bar .container");
+            if (container instanceof javafx.scene.layout.Region region) {
+                double containerWidth = Math.max(0, width - 32);
+                region.setMinWidth(containerWidth);
+                region.setPrefWidth(containerWidth);
+                region.setMaxWidth(containerWidth);
+            }
+
+            // DialogPane width is not always propagated to the decorated Stage
+            // immediately. Enforce the calculated minimum at the window level too.
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage stage) {
+                stage.setMinWidth(width);
+                if (stage.getWidth() < width) stage.setWidth(width);
+                centerDialog(stage);
+            }
+        });
+    }
+
+    private static void setStableDialogButtonSize(Button button, double width) {
+        button.setMinWidth(width);
+        button.setPrefWidth(width);
+        button.setMaxWidth(width);
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(40);
+        // Inline sizing wins over hover/focus CSS rules. Do not set background or
+        // border here; the application stylesheet remains responsible for visual
+        // states while these dimensions remain invariant.
+        button.setStyle(
+                "-fx-min-width: " + width + "px;" +
+                "-fx-pref-width: " + width + "px;" +
+                "-fx-max-width: " + width + "px;" +
+                "-fx-min-height: 40px;" +
+                "-fx-pref-height: 40px;" +
+                "-fx-max-height: 40px;"
+        );
+    }
+
+    private static void centerDialog(Stage dialogStage) {
+        Window owner = dialogStage.getOwner();
+        if (owner != null && owner.isShowing()) {
+            dialogStage.setX(owner.getX() + (owner.getWidth() - dialogStage.getWidth()) / 2.0);
+            dialogStage.setY(owner.getY() + (owner.getHeight() - dialogStage.getHeight()) / 2.0);
+        } else {
+            Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
+            dialogStage.setX(bounds.getMinX() + (bounds.getWidth() - dialogStage.getWidth()) / 2.0);
+            dialogStage.setY(bounds.getMinY() + (bounds.getHeight() - dialogStage.getHeight()) / 2.0);
+        }
     }
 
     /** Creates a consistently centered W.A.S.P dialog badge. */
@@ -188,6 +379,9 @@ public class Main extends Application {
         glyph.setAlignment(javafx.geometry.Pos.CENTER);
         javafx.scene.layout.StackPane.setAlignment(glyph, javafx.geometry.Pos.CENTER);
         circle.getChildren().add(glyph);
+        // Keep explicitly-created informational graphics clear of the dialog
+        // title/header boundary as well.
+        circle.setTranslateY(8);
         pane.setGraphic(circle);
     }
 
@@ -237,15 +431,9 @@ public class Main extends Application {
         ButtonType continueWithout = new ButtonType("Continue Without Backup", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         backup.getButtonTypes().setAll(backupNow, continueWithout, cancel);
-        backup.getDialogPane().setPrefWidth(700);
-        backup.getDialogPane().setMinWidth(700);
         // This is an informational reminder with choices, not a yes/no question.
         // Use the information badge instead of the generic confirmation '?'.
         setDialogGraphic(backup.getDialogPane(), "i", "wasp-dialog-info");
-        Button continueButton = (Button) backup.getDialogPane().lookupButton(continueWithout);
-        continueButton.setMinWidth(240);
-        continueButton.setPrefWidth(240);
-        continueButton.setMaxWidth(260);
         if (owner != null) backup.initOwner(owner);
         var result = backup.showAndWait().orElse(cancel);
         if (result == cancel) return false;

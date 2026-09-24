@@ -142,33 +142,20 @@ public final class CompanyService {
         } catch (SQLException e) { throw new IllegalStateException("Unable to update company status", e); }
     }
 
-    /** Deletes an unused master record. If historical waybills reference it, it is archived instead. */
+    /** Deletes the master record itself. Historical waybills contain their own snapshot of party data. */
     public static String deleteOrDeactivate(CompanyType type, long id) {
-        if (!com.aks.waybill.security.SessionContext.isAdmin()) throw new IllegalArgumentException("Only an Administrator can delete or deactivate company masters.");
+        if (!com.aks.waybill.security.SessionContext.isAdmin()) {
+            throw new IllegalArgumentException("Only an Administrator can delete or deactivate company masters.");
+        }
         String table = table(type);
-        try (Connection c = Database.getConnection()) {
-            String fk = type == CompanyType.SHIPPER ? "shipper_company_id" : "consignee_company_id";
-            try (PreparedStatement count = c.prepareStatement("SELECT COUNT(*) FROM waybill WHERE " + fk + "=?")) {
-                count.setLong(1, id);
-                try (ResultSet r = count.executeQuery()) {
-                    long references = r.next() ? r.getLong(1) : 0;
-                    if (references > 0) {
-                        try (PreparedStatement u = c.prepareStatement("UPDATE " + table + " SET active=0, updated_at=? WHERE id=?")) {
-                            u.setString(1, DB_DATE_TIME.format(LocalDateTime.now())); u.setLong(2, id);
-                            if (u.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
-                        }
-                        com.aks.waybill.service.AuditLogService.log("DEACTIVATE", "COMPANY", id, "Company archived because it is referenced by " + references + " waybill(s)");
-                        return "The company is referenced by " + references + " waybill(s), so it was deactivated instead of deleted. Historical waybills remain unchanged.";
-                    }
-                }
-            }
-            try (PreparedStatement d = c.prepareStatement("DELETE FROM " + table + " WHERE id=?")) {
-                d.setLong(1, id);
-                if (d.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
-            }
-            com.aks.waybill.service.AuditLogService.log("DELETE", "COMPANY", id, "Unused company master deleted by Administrator");
-            return "The company was deleted successfully.";
-        } catch (SQLException e) { throw new IllegalStateException("Unable to delete company", e); }
+        try (Connection c = Database.getConnection(); PreparedStatement d = c.prepareStatement("DELETE FROM " + table + " WHERE id=?")) {
+            d.setLong(1, id);
+            if (d.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
+            com.aks.waybill.service.AuditLogService.log("DELETE", "COMPANY", id, "Company master deleted by Administrator; historical waybills retain their stored snapshot.");
+            return "The company was deleted successfully. Historical waybills remain unchanged.";
+        } catch (SQLException e) {
+            throw new IllegalStateException("Unable to delete company", e);
+        }
     }
 
     private static String table(CompanyType type) {

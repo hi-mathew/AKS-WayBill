@@ -74,7 +74,7 @@ public final class CompaniesView extends AppView {
         private void deleteSelected() {
             CompanyService.CompanyRecord selected=table.getSelectionModel().getSelectedItem();
             if(selected==null){showError("Select a company first.");return;}
-            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete company \""+selected.companyName()+"\"? If historical waybills reference it, W.A.S.P will archive it instead so those waybills remain intact.",ButtonType.OK,ButtonType.CANCEL);
+            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete company \""+selected.companyName()+"\"? Historical waybills store their own company details, so deleting the master will not change existing waybills.",ButtonType.OK,ButtonType.CANCEL);
             a.setTitle("Delete Company");
             if(a.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
             try{showInfo(CompanyService.deleteOrDeactivate(type,selected.id()));loadPage(currentPage);}catch(Exception ex){showError(ex.getMessage());}

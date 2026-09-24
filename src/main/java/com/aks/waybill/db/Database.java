@@ -34,6 +34,20 @@ public final class Database {
                 ensureColumn(c, "saved_carrier", "vehicle_trailer_no", "TEXT");
                 s.execute("CREATE TABLE IF NOT EXISTS saved_location (id INTEGER PRIMARY KEY AUTOINCREMENT, location_name TEXT NOT NULL UNIQUE COLLATE NOCASE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 s.execute("CREATE TABLE IF NOT EXISTS waybill (id INTEGER PRIMARY KEY AUTOINCREMENT, waybill_number TEXT NOT NULL UNIQUE, waybill_date TEXT NOT NULL, shipper_company_id INTEGER, consignee_company_id INTEGER, carrier_name TEXT, driver_name TEXT, vehicle_trailer_no TEXT, origin_loading_point TEXT, destination_unloading_point TEXT, estimated_delivery_date TEXT, special_instructions TEXT, hazardous_materials INTEGER NOT NULL DEFAULT 0, remarks TEXT, shipper_declaration_name TEXT, shipper_declaration_date TEXT, carrier_receipt_driver_name TEXT, carrier_receipt_date TEXT, consignee_pod_receiver_name TEXT, consignee_pod_date TEXT, status TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT','FINAL')), finalized_at TEXT, finalized_by INTEGER, final_to_draft_reason TEXT, created_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(shipper_company_id) REFERENCES shipper_company(id), FOREIGN KEY(consignee_company_id) REFERENCES consignee_company(id), FOREIGN KEY(created_by) REFERENCES app_user(id), FOREIGN KEY(finalized_by) REFERENCES app_user(id))");
+                // Waybill stores a snapshot of party master data. The legacy company-id columns are retained
+                // only for backward compatibility; new saves leave them null so master records can be deleted
+                // without affecting historical waybills.
+                ensureColumn(c, "waybill", "shipper_company_name", "TEXT");
+                ensureColumn(c, "waybill", "shipper_contact_person", "TEXT");
+                ensureColumn(c, "waybill", "shipper_address", "TEXT");
+                ensureColumn(c, "waybill", "shipper_phone_number", "TEXT");
+                ensureColumn(c, "waybill", "shipper_email_address", "TEXT");
+                ensureColumn(c, "waybill", "consignee_company_name", "TEXT");
+                ensureColumn(c, "waybill", "consignee_contact_person", "TEXT");
+                ensureColumn(c, "waybill", "consignee_address", "TEXT");
+                ensureColumn(c, "waybill", "consignee_phone_number", "TEXT");
+                ensureColumn(c, "waybill", "consignee_email_address", "TEXT");
+                migrateWaybillCompanySnapshots(c);
                 ensureColumn(c, "waybill", "shipper_declaration_name", "TEXT");
                 ensureColumn(c, "waybill", "shipper_declaration_date", "TEXT");
                 ensureColumn(c, "waybill", "carrier_receipt_driver_name", "TEXT");
@@ -93,6 +107,25 @@ public final class Database {
             s.execute("DROP TABLE company");
         } finally {
             c.createStatement().execute("PRAGMA foreign_keys = ON");
+        }
+    }
+
+    private static void migrateWaybillCompanySnapshots(Connection c) throws SQLException {
+        if (!tableExists(c, "waybill")) return;
+        // Preserve historical values from the old FK-based model before severing the legacy references.
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE waybill SET " +
+                    "shipper_company_name = COALESCE(NULLIF(shipper_company_name,''), (SELECT company_name FROM shipper_company WHERE id=waybill.shipper_company_id)), " +
+                    "shipper_contact_person = COALESCE(NULLIF(shipper_contact_person,''), (SELECT contact_person FROM shipper_company WHERE id=waybill.shipper_company_id)), " +
+                    "shipper_address = COALESCE(NULLIF(shipper_address,''), (SELECT address FROM shipper_company WHERE id=waybill.shipper_company_id)), " +
+                    "shipper_phone_number = COALESCE(NULLIF(shipper_phone_number,''), (SELECT phone_number FROM shipper_company WHERE id=waybill.shipper_company_id)), " +
+                    "shipper_email_address = COALESCE(NULLIF(shipper_email_address,''), (SELECT email_address FROM shipper_company WHERE id=waybill.shipper_company_id)), " +
+                    "consignee_company_name = COALESCE(NULLIF(consignee_company_name,''), (SELECT company_name FROM consignee_company WHERE id=waybill.consignee_company_id)), " +
+                    "consignee_contact_person = COALESCE(NULLIF(consignee_contact_person,''), (SELECT contact_person FROM consignee_company WHERE id=waybill.consignee_company_id)), " +
+                    "consignee_address = COALESCE(NULLIF(consignee_address,''), (SELECT address FROM consignee_company WHERE id=waybill.consignee_company_id)), " +
+                    "consignee_phone_number = COALESCE(NULLIF(consignee_phone_number,''), (SELECT phone_number FROM consignee_company WHERE id=waybill.consignee_company_id)), " +
+                    "consignee_email_address = COALESCE(NULLIF(consignee_email_address,''), (SELECT email_address FROM consignee_company WHERE id=waybill.consignee_company_id))");
+            s.executeUpdate("UPDATE waybill SET shipper_company_id=NULL, consignee_company_id=NULL WHERE shipper_company_id IS NOT NULL OR consignee_company_id IS NOT NULL");
         }
     }
 

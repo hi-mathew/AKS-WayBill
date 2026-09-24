@@ -301,6 +301,8 @@
 }
 .wasp-dialog-pane .button-bar .container {
     -fx-background-color: transparent;
+    -fx-alignment: center;
+    -fx-spacing: 12px;
 }
 .wasp-dialog-pane .button {
     -fx-background-color: #eef2f6;
@@ -309,6 +311,7 @@
     -fx-font-weight: 700;
     -fx-background-radius: 7px;
     -fx-border-color: transparent;
+    -fx-border-width: 1px;
     -fx-padding: 8px 16px;
     -fx-cursor: hand;
 }
@@ -364,14 +367,14 @@
     -fx-text-fill: #b42318;
 }
 
-/* Dialog buttons: keep action labels fully readable; never replace them with ellipses. */
+/* Dialog buttons: keep action labels fully readable and geometrically stable.
+   Widths are supplied by Main.sizeDialogButtons() using inline sizing. */
 .wasp-dialog-pane .button {
     -fx-text-overrun: clip;
     -fx-wrap-text: false;
     -fx-min-height: 38px;
-}
-.wasp-dialog-pane .button-bar .button {
-    -fx-min-width: 92px;
+    -fx-pref-height: 38px;
+    -fx-max-height: 38px;
 }
 
 
@@ -379,3 +382,34 @@
 .wasp-dialog-info .wasp-dialog-icon-glyph { -fx-text-fill: #0b4b7d; }
 .wasp-dialog-warning .wasp-dialog-icon-glyph { -fx-text-fill: #9a6700; }
 .wasp-dialog-error .wasp-dialog-icon-glyph { -fx-text-fill: #b42318; }
+
+/* New Waybill v30 refinement: tighter, cleaner data-entry rhythm. */
+.party-panel{-fx-padding:14px;-fx-background-color:#f8fafc;-fx-background-radius:8px;-fx-border-color:#e5eaf0;-fx-border-radius:8px}
+.new-waybill-section{-fx-spacing:10px}
+
+/* v37: dialog action labels must remain fully readable. */
+.wasp-dialog-pane .button-bar .button {
+    -fx-text-overrun: clip;
+    -fx-wrap-text: false;
+}
+
+/* Master-data text-field autocomplete: the ComboBox above remains a non-editable
+   selector, while these suggestions belong to the editable value field below it. */
+.company-suggestion-list {
+    -fx-background-color: white;
+    -fx-border-color: #cfd9e4;
+    -fx-border-width: 1px;
+    -fx-background-insets: 0;
+    -fx-padding: 3px;
+}
+.company-suggestion-list .list-cell {
+    -fx-background-color: white;
+    -fx-text-fill: #152235;
+    -fx-font-size: 13px;
+    -fx-padding: 8px 10px;
+}
+.company-suggestion-list .list-cell:hover,
+.company-suggestion-list .list-cell:filled:selected {
+    -fx-background-color: #e8f1f8;
+    -fx-text-fill: #0b4b7d;
+}

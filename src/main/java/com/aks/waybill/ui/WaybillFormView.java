@@ -14,6 +14,7 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
+import javafx.stage.Popup;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -36,12 +37,16 @@ public class WaybillFormView extends AppView {
     private boolean dirty;
     private boolean loadingExisting;
     private boolean savedNew;
+    /** Prevent master-data population from being interpreted as manual typing. */
+    private boolean applyingMasterSelection;
     private String loadedStatus = "DRAFT";
 
     private final Label numberLabel = new Label();
     private final DatePicker waybillDate = new DatePicker(LocalDate.now());
     private final DatePicker estimatedDelivery = new DatePicker();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final String SELECT_CARRIER = "— Select saved carrier —";
+    private static final String SELECT_LOCATION = "— Select saved location —";
 
     private final CompanySelector shipperSelector = new CompanySelector(CompanyService.CompanyType.SHIPPER, this::populateShipper, this::refreshCompanySelectors);
     private final TextField shipperContact = field("Contact person", InputLimits.CONTACT_PERSON);
@@ -56,13 +61,22 @@ public class WaybillFormView extends AppView {
     private final TextField consigneeEmail = field("Email address", InputLimits.EMAIL);
 
     private final ComboBox<String> savedCarrier = savedSelector("— Select saved carrier —");
+    private final List<String> carrierMasterValues = new ArrayList<>();
     private final TextField carrier = field("Carrier name", InputLimits.CARRIER);
     private final TextField driver = field("Driver name", InputLimits.DRIVER);
     private final TextField vehicle = field("Vehicle / Trailer No.", InputLimits.VEHICLE);
     private final ComboBox<String> savedOrigin = savedSelector("— Select or type below —");
-    private final TextField origin = field("Type or edit", InputLimits.LOCATION);
+    private final List<String> locationMasterValues = new ArrayList<>();
+    private final TextField origin = field("Type or edit location", InputLimits.LOCATION);
     private final ComboBox<String> savedDestination = savedSelector("— Select or type below —");
-    private final TextField destination = field("Type or edit", InputLimits.LOCATION);
+    private final TextField destination = field("Type or edit location", InputLimits.LOCATION);
+
+    private final Popup carrierSuggestionPopup = new Popup();
+    private final Popup originSuggestionPopup = new Popup();
+    private final Popup destinationSuggestionPopup = new Popup();
+    private final ListView<String> carrierSuggestions = suggestionList();
+    private final ListView<String> originSuggestions = suggestionList();
+    private final ListView<String> destinationSuggestions = suggestionList();
 
     private final TextArea specialInstructions = area("Special instructions / handling", 3);
     private final CheckBox hazardous = new CheckBox("Yes — hazardous materials");
@@ -107,6 +121,7 @@ public class WaybillFormView extends AppView {
         configureDatePicker(shipperDeclarationDate);
         configureDatePicker(carrierReceiptDate);
         configureDatePicker(consigneePodDate);
+        configureSuggestionPopups();
         configureSavedSelectors();
         build();
         installDirtyTracking();
@@ -179,10 +194,10 @@ public class WaybillFormView extends AppView {
 
     private VBox partiesCard() {
         VBox outer = card();
-        outer.getChildren().add(heading("1. SHIPPER / CONSIGNOR (ORIGIN) & 2. CONSIGNEE / RECEIVER (DESTINATION)"));
+        outer.getChildren().add(heading("1 & 2. SHIPPER / CONSIGNOR AND CONSIGNEE / RECEIVER"));
 
         GridPane grid = new GridPane();
-        grid.setHgap(22);
+        grid.setHgap(18);
         grid.setVgap(0);
         ColumnConstraints left = new ColumnConstraints();
         left.setPercentWidth(50);
@@ -199,7 +214,7 @@ public class WaybillFormView extends AppView {
     }
 
     private VBox partyPanel(String title, CompanySelector selector, TextField contact, TextArea address, TextField phone, TextField email) {
-        VBox panel = new VBox(10);
+        VBox panel = new VBox(7);
         panel.getStyleClass().add("party-panel");
         panel.getChildren().add(heading(title));
         panel.getChildren().addAll(
@@ -219,15 +234,15 @@ public class WaybillFormView extends AppView {
 
         configureMasterDataButtons();
 
-        VBox carrierLabelRow = fieldLabelWithButton("Select Saved Carrier (optional)", newCarrierButton);
-        VBox carrierBox = new VBox(6, carrierLabelRow, savedCarrier, carrier);
+        VBox carrierLabelRow = fieldLabelWithButton("Saved Carrier (optional)", newCarrierButton);
+        VBox carrierBox = new VBox(5, carrierLabelRow, savedCarrier, carrier);
         VBox originLabelRow = fieldLabelWithButton("Origin / Loading Point", newOriginButton);
-        VBox originBox = new VBox(6, originLabelRow, savedOrigin, origin);
-        VBox driverBox = new VBox(6, label("Driver Name", "field-label"), driver);
+        VBox originBox = new VBox(5, originLabelRow, savedOrigin, origin);
+        VBox driverBox = new VBox(5, label("Driver Name", "field-label"), driver);
         VBox destinationLabelRow = fieldLabelWithButton("Destination / Unloading Point", newDestinationButton);
-        VBox destinationBox = new VBox(6, destinationLabelRow, savedDestination, destination);
-        VBox vehicleBox = new VBox(6, label("Vehicle / Trailer No.", "field-label"), vehicle);
-        VBox deliveryBox = new VBox(6, label("Estimated Delivery Date", "field-label"), estimatedDelivery);
+        VBox destinationBox = new VBox(5, destinationLabelRow, savedDestination, destination);
+        VBox vehicleBox = new VBox(5, label("Vehicle / Trailer No.", "field-label"), vehicle);
+        VBox deliveryBox = new VBox(5, label("Estimated Delivery Date", "field-label"), estimatedDelivery);
 
         grid.add(carrierBox, 0, 0);
         grid.add(originBox, 1, 0);
@@ -504,10 +519,8 @@ public class WaybillFormView extends AppView {
 
     private void updatePartyDetailsState() {
         boolean formEditable = mode != Mode.VIEW;
-        setPartyDetailsEditable(shipperSelector.getSelectedCompany() == null && formEditable,
-                shipperContact, shipperAddress, shipperPhone, shipperEmail);
-        setPartyDetailsEditable(consigneeSelector.getSelectedCompany() == null && formEditable,
-                consigneeContact, consigneeAddress, consigneePhone, consigneeEmail);
+        setPartyDetailsEditable(formEditable, shipperContact, shipperAddress, shipperPhone, shipperEmail);
+        setPartyDetailsEditable(formEditable, consigneeContact, consigneeAddress, consigneePhone, consigneeEmail);
     }
 
     private static void setPartyDetailsEditable(boolean editable, TextField contact, TextArea address, TextField phone, TextField email) {
@@ -552,6 +565,8 @@ public class WaybillFormView extends AppView {
 
             shipperSelector.selectCompanyByName(details.shipper() == null ? "" : details.shipper().companyName());
             consigneeSelector.selectCompanyByName(details.consignee() == null ? "" : details.consignee().companyName());
+            populateCompany(details.shipper(), shipperContact, shipperAddress, shipperPhone, shipperEmail);
+            populateCompany(details.consignee(), consigneeContact, consigneeAddress, consigneePhone, consigneeEmail);
 
             selectSavedCarrier(details.carrierName(), false);
             driver.setText(safe(details.driverName()));
@@ -690,14 +705,25 @@ public class WaybillFormView extends AppView {
             dialog.initOwner(getScene().getWindow());
         }
 
+        // Shared W.A.S.P dialog styling calculates a stable width from the actual
+        // action labels, so this dialog does not need hard-coded dimensions.
+        setInformationGraphic(dialog);
+
         ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
         ButtonType pdf = new ButtonType("Generate PDF", ButtonBar.ButtonData.OTHER);
         ButtonType word = new ButtonType("Generate Word", ButtonBar.ButtonData.OTHER);
-        ButtonType createNew = new ButtonType("Create New", ButtonBar.ButtonData.OTHER);
-        dialog.getButtonTypes().setAll(view, pdf, word, createNew, ButtonType.CANCEL);
+        ButtonType createNew = new ButtonType("Create New Waybill", ButtonBar.ButtonData.OTHER);
+        ButtonType close = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getButtonTypes().setAll(view, pdf, word, createNew, close);
+
+        Button viewButton = (Button) dialog.getDialogPane().lookupButton(view);
+        Button pdfButton = (Button) dialog.getDialogPane().lookupButton(pdf);
+        Button wordButton = (Button) dialog.getDialogPane().lookupButton(word);
+        Button createButton = (Button) dialog.getDialogPane().lookupButton(createNew);
+        Button closeButton = (Button) dialog.getDialogPane().lookupButton(close);
 
         while (true) {
-            var result = dialog.showAndWait().orElse(ButtonType.CANCEL);
+            var result = dialog.showAndWait().orElse(close);
             if (result == view) { onViewSaved.accept(saved.id()); return; }
             if (result == pdf) { WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
             if (result == word) { WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
@@ -804,9 +830,9 @@ public class WaybillFormView extends AppView {
         carrierReceiptDate.setValue(null);
         consigneePodReceiverName.clear();
         consigneePodDate.setValue(null);
-        savedCarrier.getSelectionModel().clearSelection();
-        savedOrigin.getSelectionModel().clearSelection();
-        savedDestination.getSelectionModel().clearSelection();
+        savedCarrier.getSelectionModel().select(SELECT_CARRIER);
+        savedOrigin.getSelectionModel().select(SELECT_LOCATION);
+        savedDestination.getSelectionModel().select(SELECT_LOCATION);
         shipperSelector.clearSelection();
         consigneeSelector.clearSelection();
         for (TextField field : new TextField[]{shipperContact, shipperPhone, shipperEmail, consigneeContact, consigneePhone, consigneeEmail, carrier, driver, vehicle, origin, destination}) field.clear();
@@ -834,10 +860,6 @@ public class WaybillFormView extends AppView {
     }
 
     private static WaybillService.CompanyData company(CompanySelector selector, TextField contact, TextArea address, TextField phone, TextField email) {
-        CompanyService.CompanyRecord selected = selector.getSelectedCompany();
-        if (selected != null) {
-            return new WaybillService.CompanyData(selected.companyName(), selected.contactPerson(), selected.address(), selected.phoneNumber(), selected.emailAddress());
-        }
         return new WaybillService.CompanyData(selector.getCompanyName(), contact.getText(), address.getText(), phone.getText(), email.getText());
     }
 
@@ -846,45 +868,279 @@ public class WaybillFormView extends AppView {
         consigneeSelector.refreshCompanies();
     }
 
+    /**
+     * Initialise the three text-field autocomplete popups. The ListViews are
+     * intentionally hosted in Popup controls rather than inside the form so
+     * the suggestions can extend beyond the form card without affecting layout.
+     */
+    private void configureSuggestionPopups() {
+        configureSuggestionPopup(carrierSuggestionPopup, carrierSuggestions);
+        configureSuggestionPopup(originSuggestionPopup, originSuggestions);
+        configureSuggestionPopup(destinationSuggestionPopup, destinationSuggestions);
+    }
+
+    private static void configureSuggestionPopup(Popup popup, ListView<String> suggestions) {
+        popup.setAutoHide(true);
+        popup.setHideOnEscape(true);
+        popup.setAutoFix(true);
+        popup.setConsumeAutoHidingEvents(false);
+        popup.getContent().clear();
+        popup.getContent().add(suggestions);
+    }
+
     private void configureSavedSelectors() {
         loadSavedCarriers();
         loadSavedLocations();
-        savedCarrier.setOnAction(e -> {
-            String value = savedCarrier.getSelectionModel().getSelectedItem();
-            if (value != null && !value.equals(savedCarrier.getPromptText())) {
-                SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, true);
-                if (record != null) {
-                    carrier.setText(safe(record.name()));
-                    driver.setText(safe(record.driverName()));
-                    vehicle.setText(safe(record.vehicleTrailerNo()));
+
+        // Master-data ComboBoxes are selection controls only. They intentionally
+        // remain non-editable; searching/typing belongs to the text field below
+        // each selector, just like the Company selector.
+        savedCarrier.setEditable(false);
+        savedOrigin.setEditable(false);
+        savedDestination.setEditable(false);
+
+        savedCarrier.setOnAction(event -> applyCarrierSelection(savedCarrier.getSelectionModel().getSelectedItem()));
+        savedOrigin.setOnAction(event -> applyLocationSelection(savedOrigin, origin));
+        savedDestination.setOnAction(event -> applyLocationSelection(savedDestination, destination));
+
+        configureTextAutocomplete(carrier, carrierMasterValues, savedCarrier, SELECT_CARRIER,
+                carrierSuggestionPopup, carrierSuggestions, value -> applyCarrierSelection(value));
+        configureTextAutocomplete(origin, locationMasterValues, savedOrigin, SELECT_LOCATION,
+                originSuggestionPopup, originSuggestions, value -> origin.setText(value));
+        configureTextAutocomplete(destination, locationMasterValues, savedDestination, SELECT_LOCATION,
+                destinationSuggestionPopup, destinationSuggestions, value -> destination.setText(value));
+    }
+
+    private void applyCarrierSelection(String value) {
+        // A text-field edit intentionally resets the ComboBox to the clear option.
+        // JavaFX may fire the ComboBox action event for that programmatic change;
+        // do not let that event clear the text the user has just typed.
+        if (applyingMasterSelection) return;
+        applyingMasterSelection = true;
+        try {
+            if (SELECT_CARRIER.equals(value) || value == null || value.isBlank()) {
+                carrier.clear();
+                driver.clear();
+                vehicle.clear();
+                return;
+            }
+            SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, true);
+            if (record != null) {
+                carrier.setText(safe(record.name()));
+                driver.setText(safe(record.driverName()));
+                vehicle.setText(safe(record.vehicleTrailerNo()));
+            } else {
+                carrier.setText(value);
+                driver.clear();
+                vehicle.clear();
+            }
+        } finally {
+            applyingMasterSelection = false;
+        }
+    }
+
+    private void applyLocationSelection(ComboBox<String> selector, TextField editor) {
+        // Ignore the action generated when autocomplete deliberately moves the
+        // selector back to the clear option. The edited text must be preserved.
+        if (applyingMasterSelection) return;
+        applyingMasterSelection = true;
+        try {
+            String value = selector.getSelectionModel().getSelectedItem();
+            if (SELECT_LOCATION.equals(value) || value == null || value.isBlank()) editor.clear();
+            else editor.setText(value);
+        } finally {
+            applyingMasterSelection = false;
+        }
+    }
+
+    /**
+     * Adds CompanySelector-style autocomplete to the actual text-entry field.
+     * The master-data ComboBox remains non-editable and is used only to select a
+     * saved record. Typing a modified value therefore never requires editing the
+     * ComboBox itself.
+     */
+    private void configureTextAutocomplete(TextField editor, List<String> masterValues,
+                                           ComboBox<String> savedSelector, String clearOption,
+                                           Popup popup, ListView<String> suggestions, Consumer<String> onSelected) {
+        editor.textProperty().addListener((obs, oldValue, newValue) -> {
+            if (loadingExisting || applyingMasterSelection) return;
+            String typed = newValue == null ? "" : newValue.trim();
+
+            // Once the user changes the master value, the waybill should no longer
+            // be tied to that saved record. Preserve exactly what the user typed.
+            if (!typed.isEmpty() && !clearOption.equals(typed)) {
+                // Selecting the clear option must not invoke its normal action
+                // handler here, because that handler intentionally clears the
+                // editor. Preserve the exact text the user is typing while
+                // simply breaking the master-record association.
+                applyingMasterSelection = true;
+                try {
+                    savedSelector.getSelectionModel().select(clearOption);
+                } finally {
+                    applyingMasterSelection = false;
+                }
+                if (editor == carrier) {
+                    driver.clear();
+                    vehicle.clear();
                 }
             }
+
+            List<String> matches = masterValues.stream()
+                    .filter(v -> v != null && !v.isBlank())
+                    .filter(v -> typed.isBlank() || v.toLowerCase().contains(typed.toLowerCase()))
+                    .toList();
+            suggestions.getItems().setAll(matches);
+            suggestions.getSelectionModel().clearSelection();
+            if (typed.isBlank() || matches.isEmpty() || !editor.isFocused()) {
+                popup.hide();
+                return;
+            }
+            showSuggestions(editor, popup, suggestions);
         });
-        savedOrigin.setOnAction(e -> {
-            String value = savedOrigin.getSelectionModel().getSelectedItem();
-            if (value != null && !value.equals(savedOrigin.getPromptText())) origin.setText(value);
+
+        editor.setOnKeyPressed(event -> {
+            switch (event.getCode()) {
+                case DOWN -> {
+                    if (!popup.isShowing()) {
+                        String typed = editor.getText() == null ? "" : editor.getText().trim();
+                        List<String> matches = masterValues.stream()
+                                .filter(v -> v != null && !v.isBlank())
+                                .filter(v -> typed.isBlank() || v.toLowerCase().contains(typed.toLowerCase()))
+                                .toList();
+                        suggestions.getItems().setAll(matches);
+                        showSuggestions(editor, popup, suggestions);
+                    }
+                    if (!suggestions.getItems().isEmpty()) {
+                        int next = suggestions.getSelectionModel().getSelectedIndex() + 1;
+                        if (next >= suggestions.getItems().size()) next = 0;
+                        suggestions.getSelectionModel().select(next);
+                        suggestions.scrollTo(next);
+                    }
+                    event.consume();
+                }
+                case UP -> {
+                    if (!popup.isShowing()) {
+                        String typed = editor.getText() == null ? "" : editor.getText().trim();
+                        List<String> matches = masterValues.stream()
+                                .filter(v -> v != null && !v.isBlank())
+                                .filter(v -> typed.isBlank() || v.toLowerCase().contains(typed.toLowerCase()))
+                                .toList();
+                        suggestions.getItems().setAll(matches);
+                        showSuggestions(editor, popup, suggestions);
+                    }
+                    if (!suggestions.getItems().isEmpty()) {
+                        int current = suggestions.getSelectionModel().getSelectedIndex();
+                        int previous = current <= 0 ? suggestions.getItems().size() - 1 : current - 1;
+                        suggestions.getSelectionModel().select(previous);
+                        suggestions.scrollTo(previous);
+                    }
+                    event.consume();
+                }
+                case ENTER -> {
+                    String selected = suggestions.getSelectionModel().getSelectedItem();
+                    String typed = editor.getText() == null ? "" : editor.getText().trim();
+                    String exact = masterValues.stream().filter(v -> v.equalsIgnoreCase(typed)).findFirst().orElse(null);
+                    String value = selected != null ? selected : exact;
+                    if (value != null && !value.isBlank()) {
+                        // Suppress the ComboBox action only while changing its selection
+                        // programmatically. The actual master-selection callback must run
+                        // after the guard is released; otherwise applyCarrierSelection()
+                        // sees applyingMasterSelection=true and returns before populating
+                        // the dependent fields (driver, vehicle, etc.).
+                        applyingMasterSelection = true;
+                        try {
+                            savedSelector.getSelectionModel().select(value);
+                        } finally {
+                            applyingMasterSelection = false;
+                        }
+                        onSelected.accept(value);
+                    }
+                    popup.hide();
+                    event.consume();
+                }
+                case ESCAPE -> {
+                    popup.hide();
+                    event.consume();
+                }
+                default -> {}
+            }
         });
-        savedDestination.setOnAction(e -> {
-            String value = savedDestination.getSelectionModel().getSelectedItem();
-            if (value != null && !value.equals(savedDestination.getPromptText())) destination.setText(value);
+
+        editor.focusedProperty().addListener((obs, wasFocused, focused) -> {
+            if (!focused) popup.hide();
         });
+
+        suggestions.setOnMouseClicked(event -> {
+            if (event.getClickCount() != 1) return;
+            String value = suggestions.getSelectionModel().getSelectedItem();
+            if (value == null) return;
+            // Change the non-editable master selector under the guard, then
+            // perform the real selection callback after the guard is released.
+            // This mirrors the CompanySelector behaviour and ensures Carrier
+            // selection also populates driver/vehicle details.
+            applyingMasterSelection = true;
+            try {
+                savedSelector.getSelectionModel().select(value);
+            } finally {
+                applyingMasterSelection = false;
+            }
+            onSelected.accept(value);
+            popup.hide();
+            editor.requestFocus();
+        });
+    }
+
+    private static ListView<String> suggestionList() {
+        ListView<String> list = new ListView<>();
+        list.setPrefHeight(180);
+        list.setMaxHeight(180);
+        list.setFocusTraversable(false);
+        list.getStyleClass().add("company-suggestion-list");
+        return list;
+    }
+
+    private static void showSuggestions(TextField editor, Popup popup, ListView<String> suggestions) {
+        if (suggestions.getItems().isEmpty() || !editor.isFocused() || editor.getScene() == null
+                || editor.getScene().getWindow() == null) return;
+        double width = Math.max(editor.getWidth(), 300);
+        suggestions.setPrefWidth(width);
+        suggestions.setMinWidth(width);
+        suggestions.setMaxWidth(width);
+        var bounds = editor.localToScreen(editor.getBoundsInLocal());
+        if (bounds == null) return;
+        if (!popup.isShowing()) popup.show(editor, bounds.getMinX(), bounds.getMaxY());
     }
 
     private void loadSavedCarriers() {
-        List<String> values = SavedDataService.findCarriers(null, true).stream().map(SavedDataService.CarrierRecord::name).toList();
-        savedCarrier.getItems().setAll(values);
+        carrierMasterValues.clear();
+        carrierMasterValues.addAll(SavedDataService.findCarriers(null, true).stream()
+                .map(SavedDataService.CarrierRecord::name).filter(v -> v != null && !v.isBlank()).toList());
+        savedCarrier.getItems().setAll(java.util.stream.Stream.concat(
+                java.util.stream.Stream.of(SELECT_CARRIER), carrierMasterValues.stream()).toList());
+        savedCarrier.getSelectionModel().select(SELECT_CARRIER);
     }
 
     private void loadSavedLocations() {
-        List<String> values = SavedDataService.findLocations(null, true).stream().map(SavedDataService.LocationRecord::name).toList();
+        locationMasterValues.clear();
+        locationMasterValues.addAll(SavedDataService.findLocations(null, true).stream()
+                .map(SavedDataService.LocationRecord::name).filter(v -> v != null && !v.isBlank()).toList());
+        List<String> values = java.util.stream.Stream.concat(
+                java.util.stream.Stream.of(SELECT_LOCATION), locationMasterValues.stream()).toList();
         savedOrigin.getItems().setAll(values);
         savedDestination.getItems().setAll(values);
+        savedOrigin.getSelectionModel().select(SELECT_LOCATION);
+        savedDestination.getSelectionModel().select(SELECT_LOCATION);
     }
 
     private static ComboBox<String> savedSelector(String prompt) {
         ComboBox<String> box = new ComboBox<>();
         box.setPromptText(prompt);
         box.setMaxWidth(Double.MAX_VALUE);
+        box.getItems().add(prompt);
+        box.getSelectionModel().select(prompt);
+        // The master-data selector is deliberately selection-only. The editable
+        // value is entered/searched in the text field directly below it.
+        box.setEditable(false);
         box.getStyleClass().add("settings-field");
         return box;
     }
@@ -895,10 +1151,8 @@ public class WaybillFormView extends AppView {
 
     private void selectSavedCarrier(String value, boolean populateDetails) {
         if (value == null || value.isBlank()) {
-            savedCarrier.getSelectionModel().clearSelection();
-            carrier.clear();
-            driver.clear();
-            vehicle.clear();
+            savedCarrier.getSelectionModel().select(SELECT_CARRIER);
+            applyCarrierSelection(SELECT_CARRIER);
             return;
         }
         if (!savedCarrier.getItems().contains(value)) savedCarrier.getItems().add(value);
@@ -916,7 +1170,11 @@ public class WaybillFormView extends AppView {
     }
 
     private static void selectSavedValue(ComboBox<String> box, String value) {
-        if (value == null || value.isBlank()) { box.getSelectionModel().clearSelection(); return; }
+        String clearOption = box == null ? "" : box.getPromptText();
+        if (value == null || value.isBlank()) {
+            if (!clearOption.isBlank()) box.getSelectionModel().select(clearOption);
+            return;
+        }
         if (!box.getItems().contains(value)) box.getItems().add(value);
         box.getSelectionModel().select(value);
     }
@@ -945,6 +1203,46 @@ public class WaybillFormView extends AppView {
         email.setText(safe(data.emailAddress()));
     }
 
+    /** Populates party fields from the historical snapshot stored on the waybill. */
+    private static void populateCompany(WaybillService.CompanyData data, TextField contact, TextArea address, TextField phone, TextField email) {
+        if (data == null) {
+            contact.clear();
+            address.clear();
+            phone.clear();
+            email.clear();
+            return;
+        }
+        contact.setText(safe(data.contactPerson()));
+        address.setText(safe(data.address()));
+        phone.setText(safe(data.phoneNumber()));
+        email.setText(safe(data.emailAddress()));
+    }
+
+    private static void setInformationGraphic(Alert alert) {
+        StackPane circle = new StackPane();
+        circle.getStyleClass().addAll("wasp-dialog-icon", "wasp-dialog-info");
+        circle.setMinSize(34, 34);
+        circle.setPrefSize(34, 34);
+        circle.setMaxSize(34, 34);
+        circle.setTranslateY(8);
+
+        Label glyph = new Label("i");
+        glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+        glyph.setMinSize(34, 34);
+        glyph.setPrefSize(34, 34);
+        glyph.setMaxSize(34, 34);
+        glyph.setAlignment(Pos.CENTER);
+        StackPane.setAlignment(glyph, Pos.CENTER);
+        circle.getChildren().add(glyph);
+        alert.getDialogPane().setGraphic(circle);
+    }
+
+    private static void setDialogButtonWidth(Button button, double width) {
+        button.setMinWidth(width);
+        button.setPrefWidth(width);
+        button.setMaxWidth(width);
+    }
+
     private static String numberText(Double value) { return value == null ? "" : String.valueOf(value); }
     private static Double number(String value) {
         if (value == null || value.isBlank()) return null;
@@ -958,13 +1256,13 @@ public class WaybillFormView extends AppView {
     private void showError(String text) { message.getStyleClass().remove("success-message"); message.getStyleClass().add("error-message"); message.setText(text); }
     private void showSuccess(String text) { message.getStyleClass().remove("error-message"); message.getStyleClass().add("success-message"); message.setText(text); }
 
-    private static VBox card() { VBox box = new VBox(14); box.getStyleClass().add("settings-card"); box.setPadding(new Insets(20)); return box; }
+    private static VBox card() { VBox box = new VBox(12); box.getStyleClass().add("settings-card"); box.setPadding(new Insets(16)); return box; }
     private static Label heading(String text) { Label label = new Label(text); label.getStyleClass().add("section-heading"); label.setWrapText(true); return label; }
     private static Label label(String text, String css) { Label label = new Label(text); label.getStyleClass().add(css); return label; }
     private static TextField field(String prompt, int maxLength) { TextField field = new TextField(); field.setPromptText(prompt); InputLimits.maxLength(field, maxLength); field.getStyleClass().add("settings-field"); return field; }
     private static TextArea area(String prompt, int rows) { TextArea area = new TextArea(); area.setPromptText(prompt); area.setPrefRowCount(rows); area.setWrapText(true); area.getStyleClass().add("settings-field"); return area; }
-    private static VBox labeledControl(String labelText, Region control) { VBox box = new VBox(5, label(labelText, "field-label"), control); control.setMaxWidth(Double.MAX_VALUE); return box; }
-    private static GridPane grid2() { GridPane grid = new GridPane(); grid.setHgap(18); grid.setVgap(14); ColumnConstraints left = new ColumnConstraints(); left.setPercentWidth(50); left.setHgrow(Priority.ALWAYS); ColumnConstraints right = new ColumnConstraints(); right.setPercentWidth(50); right.setHgrow(Priority.ALWAYS); grid.getColumnConstraints().addAll(left, right); return grid; }
+    private static VBox labeledControl(String labelText, Region control) { VBox box = new VBox(4, label(labelText, "field-label"), control); control.setMaxWidth(Double.MAX_VALUE); return box; }
+    private static GridPane grid2() { GridPane grid = new GridPane(); grid.setHgap(18); grid.setVgap(10); ColumnConstraints left = new ColumnConstraints(); left.setPercentWidth(50); left.setHgrow(Priority.ALWAYS); ColumnConstraints right = new ColumnConstraints(); right.setPercentWidth(50); right.setHgrow(Priority.ALWAYS); grid.getColumnConstraints().addAll(left, right); return grid; }
     private static void addField(GridPane grid, int col, int row, String labelText, Region control) { VBox box = labeledControl(labelText, control); GridPane.setHgrow(box, Priority.ALWAYS); grid.add(box, col, row); }
 
     private static TableColumn<ItemRow, String> editableColumn(String title, int index, double width, boolean numeric, int maxLength) {

@@ -289,8 +289,8 @@ public class DashboardView extends BorderPane {
         a.setHeaderText(null);
         a.setContentText(message);
         a.getButtonTypes().setAll(confirm, cancel);
-        a.getDialogPane().setPrefWidth(500);
-        a.getDialogPane().setMinWidth(500);
+        // Dialog dimensions are calculated centrally by Main so every W.A.S.P
+        // alert has the same sizing rules and stable buttons.
         if(getScene()!=null) a.initOwner(getScene().getWindow());
         return a.showAndWait().orElse(cancel)==confirm;
     }
@@ -327,37 +327,68 @@ public class DashboardView extends BorderPane {
     }
 
     private void showDashboard() {
-        activate(dashboardButton, "Dashboard", home());
+        navigateWithUnsavedChanges(() -> activate(dashboardButton, "Dashboard", home()));
     }
 
     private void showNewWaybill() {
-        activate(newWaybillButton, "New Waybill", new NewWaybillView(this::showSavedWaybills, this::showNewWaybill, this::showViewWaybill));
+        navigateWithUnsavedChanges(() -> activate(newWaybillButton, "New Waybill",
+                new NewWaybillView(this::showSavedWaybills, this::showNewWaybill, this::showViewWaybill)));
     }
 
     private void showSavedWaybills() {
-        activate(savedWaybillsButton, "Saved Waybills", new SavedWaybillsView(this::showSavedWaybills, this::showViewWaybill, this::showEditWaybill));
+        navigateWithUnsavedChanges(() -> activate(savedWaybillsButton, "Saved Waybills",
+                new SavedWaybillsView(this::showSavedWaybills, this::showViewWaybill, this::showEditWaybill)));
     }
 
     private void showViewWaybill(long waybillId) {
-        activate(savedWaybillsButton, "View Waybill", new ViewWaybillView(waybillId, this::showSavedWaybills));
+        navigateWithUnsavedChanges(() -> activate(savedWaybillsButton, "View Waybill",
+                new ViewWaybillView(waybillId, this::showSavedWaybills)));
     }
 
     private void showEditWaybill(long waybillId) {
-        activate(savedWaybillsButton, "Edit Waybill", new EditWaybillView(waybillId, this::showSavedWaybills, this::showSavedWaybills));
+        navigateWithUnsavedChanges(() -> activate(savedWaybillsButton, "Edit Waybill",
+                new EditWaybillView(waybillId, this::showSavedWaybills, this::showSavedWaybills)));
     }
 
     private void showSavedData() {
-        activate(companiesButton, "Saved Data", new SavedDataView());
+        navigateWithUnsavedChanges(() -> activate(companiesButton, "Saved Data", new SavedDataView()));
     }
 
     private void showSettings() {
         if (!SessionContext.isAdmin()) return;
-        activate(settingsButton, "Settings", new SettingsView());
+        navigateWithUnsavedChanges(() -> activate(settingsButton, "Settings", new SettingsView()));
     }
 
     private void showUserManagement() {
         if (!SessionContext.isAdmin()) return;
-        activate(usersButton, "User Management", new UserManagementView());
+        navigateWithUnsavedChanges(() -> activate(usersButton, "User Management", new UserManagementView()));
+    }
+
+    /**
+     * Protects every in-application navigation away from a dirty New/Edit
+     * Waybill form. This is intentionally separate from logout/exit, because
+     * navigation should not trigger the backup reminder.
+     */
+    private void navigateWithUnsavedChanges(Runnable navigation) {
+        if (!hasUnsavedChanges()) {
+            navigation.run();
+            return;
+        }
+
+        Alert dialog = new Alert(Alert.AlertType.CONFIRMATION);
+        dialog.setTitle("Unsaved Changes");
+        dialog.setHeaderText("You have unsaved changes.");
+        dialog.setContentText("Would you like to save before leaving this waybill?");
+        ButtonType save = new ButtonType("Save and Continue", ButtonBar.ButtonData.OK_DONE);
+        ButtonType discard = new ButtonType("Leave Without Saving", ButtonBar.ButtonData.OTHER);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getButtonTypes().setAll(save, discard, cancel);
+        if (getScene() != null) dialog.initOwner(getScene().getWindow());
+
+        ButtonType result = dialog.showAndWait().orElse(cancel);
+        if (result == cancel) return;
+        if (result == save && !saveCurrentForm()) return;
+        navigation.run();
     }
 
     private void activate(Button selected, String title, Node view) {

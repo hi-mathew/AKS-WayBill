@@ -92,16 +92,16 @@ public final class WaybillService {
         List<Object> params = new ArrayList<>();
         if (ownerId != null) { where.append(" AND w.created_by = ? "); params.add(ownerId); }
         if (!term.isBlank()) {
-            where.append(" AND (w.waybill_number LIKE ? COLLATE NOCASE OR COALESCE(sc.company_name, '') LIKE ? COLLATE NOCASE OR COALESCE(cc.company_name, '') LIKE ? COLLATE NOCASE OR COALESCE(w.carrier_name, '') LIKE ? COLLATE NOCASE) ");
+            where.append(" AND (w.waybill_number LIKE ? COLLATE NOCASE OR COALESCE(w.shipper_company_name, '') LIKE ? COLLATE NOCASE OR COALESCE(w.consignee_company_name, '') LIKE ? COLLATE NOCASE OR COALESCE(w.carrier_name, '') LIKE ? COLLATE NOCASE) ");
             String like = "%" + term + "%";
             Collections.addAll(params, like, like, like, like);
         }
         if (fromDate != null) { where.append(" AND w.waybill_date >= ? "); params.add(DB_DATE.format(fromDate)); }
         if (toDate != null) { where.append(" AND w.waybill_date <= ? "); params.add(DB_DATE.format(toDate)); }
 
-        String base = " FROM waybill w LEFT JOIN shipper_company sc ON sc.id = w.shipper_company_id LEFT JOIN consignee_company cc ON cc.id = w.consignee_company_id " + where;
+        String base = " FROM waybill w " + where;
         String countSql = "SELECT COUNT(*)" + base;
-        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(sc.company_name, ''), COALESCE(cc.company_name, ''), COALESCE(w.carrier_name, ''), w.status"
+        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(w.shipper_company_name, ''), COALESCE(w.consignee_company_name, ''), COALESCE(w.carrier_name, ''), w.status"
                 + base + " ORDER BY w.waybill_date DESC, w.id DESC LIMIT ? OFFSET ?";
 
         try (Connection connection = Database.getConnection()) {
@@ -132,13 +132,13 @@ public final class WaybillService {
 
     public static WaybillDetails findById(long id) {
         String sql = "SELECT w.id, w.waybill_number, w.waybill_date, "
-                + "sc.company_name, sc.contact_person, sc.address, sc.phone_number, sc.email_address, "
-                + "cc.company_name, cc.contact_person, cc.address, cc.phone_number, cc.email_address, "
+                + "w.shipper_company_name, w.shipper_contact_person, w.shipper_address, w.shipper_phone_number, w.shipper_email_address, "
+                + "w.consignee_company_name, w.consignee_contact_person, w.consignee_address, w.consignee_phone_number, w.consignee_email_address, "
                 + "w.carrier_name, w.driver_name, w.vehicle_trailer_no, w.origin_loading_point, w.destination_unloading_point, "
                 + "w.estimated_delivery_date, w.special_instructions, w.hazardous_materials, w.remarks, "
                 + "w.shipper_declaration_name, w.shipper_declaration_date, w.carrier_receipt_driver_name, w.carrier_receipt_date, "
                 + "w.consignee_pod_receiver_name, w.consignee_pod_date, w.status "
-                + "FROM waybill w LEFT JOIN shipper_company sc ON sc.id=w.shipper_company_id LEFT JOIN consignee_company cc ON cc.id=w.consignee_company_id WHERE w.id=?"
+                + "FROM waybill w WHERE w.id=?"
                 + (SessionContext.isAdmin() ? "" : " AND w.created_by=?");
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, id);
@@ -181,7 +181,7 @@ public final class WaybillService {
         if(!term.isBlank()){where.append(" AND (w.waybill_number LIKE ? COLLATE NOCASE OR COALESCE(sc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(cc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(w.carrier_name,'') LIKE ? COLLATE NOCASE) ");String like="%"+term+"%";Collections.addAll(params,like,like,like,like);}
         if(fromDate!=null){where.append(" AND w.waybill_date>=? ");params.add(DB_DATE.format(fromDate));}
         if(toDate!=null){where.append(" AND w.waybill_date<=? ");params.add(DB_DATE.format(toDate));}
-        String sql="SELECT w.waybill_number,w.waybill_date,COALESCE(sc.company_name,''),COALESCE(cc.company_name,''),COALESCE(w.carrier_name,''),COALESCE(w.driver_name,''),COALESCE(w.vehicle_trailer_no,''),COALESCE(w.origin_loading_point,''),COALESCE(w.destination_unloading_point,''),w.estimated_delivery_date,COALESCE(u.username,''),w.created_at FROM waybill w LEFT JOIN shipper_company sc ON sc.id=w.shipper_company_id LEFT JOIN consignee_company cc ON cc.id=w.consignee_company_id LEFT JOIN app_user u ON u.id=w.created_by"+where+" ORDER BY w.waybill_date DESC,w.id DESC";
+        String sql="SELECT w.waybill_number,w.waybill_date,COALESCE(w.shipper_company_name,''),COALESCE(w.consignee_company_name,''),COALESCE(w.carrier_name,''),COALESCE(w.driver_name,''),COALESCE(w.vehicle_trailer_no,''),COALESCE(w.origin_loading_point,''),COALESCE(w.destination_unloading_point,''),w.estimated_delivery_date,COALESCE(u.username,''),w.created_at FROM waybill w LEFT JOIN app_user u ON u.id=w.created_by"+where+" ORDER BY w.waybill_date DESC,w.id DESC";
         List<WaybillExportRow> rows=new ArrayList<>();
         try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(sql)){bind(p,params);try(ResultSet r=p.executeQuery()){while(r.next())rows.add(new WaybillExportRow(r.getString(1),LocalDate.parse(r.getString(2),DB_DATE),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getString(7),r.getString(8),r.getString(9),parseDate(r.getString(10)),r.getString(11),r.getString(12)));}return rows;}catch(SQLException e){throw new IllegalStateException("Unable to load waybills for Excel export",e);}
     }
@@ -256,27 +256,33 @@ public final class WaybillService {
                 String waybillNumber = WaybillNumberService.allocateNext(connection, data.waybillDate(), data.createdBy());
                 LocalDateTime now = LocalDateTime.now();
 
-                long shipperCompanyId = findOrCreateCompany(connection, data.shipper(), "shipper_company");
-                long consigneeCompanyId = findOrCreateCompany(connection, data.consignee(), "consignee_company");
                 saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
                 saveLocationMaster(connection, data.originLoadingPoint());
                 saveLocationMaster(connection, data.destinationUnloadingPoint());
 
                 long waybillId;
                 String sql = "INSERT INTO waybill "
-                        + "(waybill_number, waybill_date, shipper_company_id, consignee_company_id, carrier_name, driver_name, vehicle_trailer_no, "
+                        + "(waybill_number, waybill_date, shipper_company_id, consignee_company_id, shipper_company_name, shipper_contact_person, shipper_address, shipper_phone_number, shipper_email_address, consignee_company_name, consignee_contact_person, consignee_address, consignee_phone_number, consignee_email_address, carrier_name, driver_name, vehicle_trailer_no, "
                         + "origin_loading_point, destination_unloading_point, estimated_delivery_date, "
                         + "special_instructions, hazardous_materials, remarks, shipper_declaration_name, shipper_declaration_date, "
                         + "carrier_receipt_driver_name, carrier_receipt_date, consignee_pod_receiver_name, consignee_pod_date, "
                         + "created_by, created_at, updated_at, status) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        + "VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
                     int i = 1;
                     statement.setString(i++, waybillNumber);
                     statement.setString(i++, DB_DATE.format(data.waybillDate()));
-                    statement.setLong(i++, shipperCompanyId);
-                    statement.setLong(i++, consigneeCompanyId);
+                    statement.setString(i++, blankToNull(data.shipper().companyName()));
+                    statement.setString(i++, blankToNull(data.shipper().contactPerson()));
+                    statement.setString(i++, blankToNull(data.shipper().address()));
+                    statement.setString(i++, blankToNull(data.shipper().phoneNumber()));
+                    statement.setString(i++, blankToNull(data.shipper().emailAddress()));
+                    statement.setString(i++, blankToNull(data.consignee().companyName()));
+                    statement.setString(i++, blankToNull(data.consignee().contactPerson()));
+                    statement.setString(i++, blankToNull(data.consignee().address()));
+                    statement.setString(i++, blankToNull(data.consignee().phoneNumber()));
+                    statement.setString(i++, blankToNull(data.consignee().emailAddress()));
                     statement.setString(i++, blankToNull(data.carrierName()));
                     statement.setString(i++, blankToNull(data.driverName()));
                     statement.setString(i++, blankToNull(data.vehicleTrailerNo()));
@@ -332,14 +338,12 @@ public final class WaybillService {
             connection.setAutoCommit(false);
             try {
                 assertCanAccessWaybill(connection, waybillId);
-                long shipperCompanyId = findOrCreateCompany(connection, data.shipper(), "shipper_company");
-                long consigneeCompanyId = findOrCreateCompany(connection, data.consignee(), "consignee_company");
                 saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
                 saveLocationMaster(connection, data.originLoadingPoint());
                 saveLocationMaster(connection, data.destinationUnloadingPoint());
                 LocalDateTime now = LocalDateTime.now();
 
-                String sql = "UPDATE waybill SET waybill_date=?, shipper_company_id=?, consignee_company_id=?, carrier_name=?, driver_name=?, vehicle_trailer_no=?, "
+                String sql = "UPDATE waybill SET waybill_date=?, shipper_company_id=NULL, consignee_company_id=NULL, shipper_company_name=?, shipper_contact_person=?, shipper_address=?, shipper_phone_number=?, shipper_email_address=?, consignee_company_name=?, consignee_contact_person=?, consignee_address=?, consignee_phone_number=?, consignee_email_address=?, carrier_name=?, driver_name=?, vehicle_trailer_no=?, "
                         + "origin_loading_point=?, destination_unloading_point=?, estimated_delivery_date=?, special_instructions=?, hazardous_materials=?, remarks=?, "
                         + "shipper_declaration_name=?, shipper_declaration_date=?, carrier_receipt_driver_name=?, carrier_receipt_date=?, "
                         + "consignee_pod_receiver_name=?, consignee_pod_date=?, updated_at=? WHERE id=?";
@@ -347,8 +351,16 @@ public final class WaybillService {
                 try (PreparedStatement statement = connection.prepareStatement(sql)) {
                     int i = 1;
                     statement.setString(i++, DB_DATE.format(data.waybillDate()));
-                    statement.setLong(i++, shipperCompanyId);
-                    statement.setLong(i++, consigneeCompanyId);
+                    statement.setString(i++, blankToNull(data.shipper().companyName()));
+                    statement.setString(i++, blankToNull(data.shipper().contactPerson()));
+                    statement.setString(i++, blankToNull(data.shipper().address()));
+                    statement.setString(i++, blankToNull(data.shipper().phoneNumber()));
+                    statement.setString(i++, blankToNull(data.shipper().emailAddress()));
+                    statement.setString(i++, blankToNull(data.consignee().companyName()));
+                    statement.setString(i++, blankToNull(data.consignee().contactPerson()));
+                    statement.setString(i++, blankToNull(data.consignee().address()));
+                    statement.setString(i++, blankToNull(data.consignee().phoneNumber()));
+                    statement.setString(i++, blankToNull(data.consignee().emailAddress()));
                     statement.setString(i++, blankToNull(data.carrierName()));
                     statement.setString(i++, blankToNull(data.driverName()));
                     statement.setString(i++, blankToNull(data.vehicleTrailerNo()));
