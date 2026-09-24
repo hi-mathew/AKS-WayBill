@@ -243,7 +243,7 @@ public class DashboardView extends BorderPane {
             ButtonType save = new ButtonType("Save and Log Out", ButtonBar.ButtonData.OK_DONE);
             ButtonType discard = new ButtonType("Log Out Without Saving", ButtonBar.ButtonData.OTHER);
             ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            a.getButtonTypes().setAll(save, discard, cancel);
+            a.getButtonTypes().setAll(discard, save, cancel);
             if (getScene()!=null) a.initOwner(getScene().getWindow());
             ButtonType result=a.showAndWait().orElse(cancel);
             if(result==cancel) { lifecycleActionInProgress = false; return; }
@@ -270,7 +270,7 @@ public class DashboardView extends BorderPane {
             ButtonType save = new ButtonType("Save and Exit", ButtonBar.ButtonData.OK_DONE);
             ButtonType discard = new ButtonType("Exit Without Saving", ButtonBar.ButtonData.OTHER);
             ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            a.getButtonTypes().setAll(save, discard, cancel);
+            a.getButtonTypes().setAll(discard, save, cancel);
             if (getScene()!=null) a.initOwner(getScene().getWindow());
             ButtonType result=a.showAndWait().orElse(cancel);
             if(result==cancel) { lifecycleActionInProgress = false; return; }
@@ -382,7 +382,7 @@ public class DashboardView extends BorderPane {
         ButtonType save = new ButtonType("Save and Continue", ButtonBar.ButtonData.OK_DONE);
         ButtonType discard = new ButtonType("Leave Without Saving", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getButtonTypes().setAll(save, discard, cancel);
+        dialog.getButtonTypes().setAll(discard, save, cancel);
         if (getScene() != null) dialog.initOwner(getScene().getWindow());
 
         ButtonType result = dialog.showAndWait().orElse(cancel);

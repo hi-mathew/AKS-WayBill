@@ -109,6 +109,9 @@ public class WaybillFormView extends AppView {
     public WaybillFormView(Mode mode, long waybillId, Runnable onSaved, Runnable onCancel,
                            Runnable onCreateNew, Consumer<Long> onViewSaved) {
         super(titleFor(mode), subtitleFor(mode));
+        getStyleClass().add("waybill-form-view");
+        setPadding(new Insets(16, 30, 24, 30));
+        setSpacing(10);
         this.mode = mode;
         this.waybillId = waybillId;
         this.onSaved = onSaved == null ? () -> {} : onSaved;
@@ -157,8 +160,8 @@ public class WaybillFormView extends AppView {
     }
 
     private void build() {
-        VBox page = new VBox(18);
-        page.setPadding(new Insets(4, 0, 30, 0));
+        VBox page = new VBox(14);
+        page.setPadding(new Insets(2, 0, 24, 0));
         page.getChildren().addAll(
                 headerCard(),
                 partiesCard(),
@@ -168,6 +171,12 @@ public class WaybillFormView extends AppView {
                 declarationsCard(),
                 buttons()
         );
+
+        // Keep the primary New Waybill actions visible while the long form scrolls.
+        if (mode == Mode.NEW) {
+            getChildren().add(topActionBar());
+        }
+
         ScrollPane scroll = new ScrollPane(page);
         scroll.setFitToWidth(true);
         scroll.getStyleClass().add("content-scroll");
@@ -177,12 +186,18 @@ public class WaybillFormView extends AppView {
 
     private VBox headerCard() {
         VBox card = card();
-        HBox header = new HBox(20);
+        card.setPadding(new Insets(12, 16, 12, 16));
+
+        HBox header = new HBox(18);
         header.setAlignment(Pos.CENTER_LEFT);
 
-        VBox number = new VBox(5, label("WAYBILL NO.", "field-label"), numberLabel);
-        VBox date = new VBox(6, label("Date", "field-label"), waybillDate);
-        date.setPrefWidth(220);
+        VBox number = new VBox(4, label("WAYBILL NO.", "field-label"), numberLabel);
+        number.setMaxWidth(460);
+        VBox.setVgrow(number, Priority.NEVER);
+
+        VBox date = new VBox(4, label("Date", "field-label"), waybillDate);
+        date.setPrefWidth(210);
+        date.setMaxWidth(210);
         waybillDate.setMaxWidth(Double.MAX_VALUE);
 
         Region spacer = new Region();
@@ -441,26 +456,49 @@ public class WaybillFormView extends AppView {
         return panel;
     }
 
-    private HBox buttons() {
-        HBox box = new HBox(10);
+    private HBox topActionBar() {
+        HBox box = new HBox(16);
         box.setAlignment(Pos.CENTER_RIGHT);
+        box.getStyleClass().add("waybill-top-actions");
+        box.getChildren().addAll(
+                newActionButton("Clear", false, 100),
+                newActionButton("Save & View Saved Waybills", false, 224),
+                newActionButton("Save", true, 110)
+        );
+        return box;
+    }
+
+    private Button newActionButton(String text, boolean primary, double width) {
+        Button button = new Button(text);
+        button.getStyleClass().add(primary ? "primary-button" : "secondary-button");
+        button.setMinWidth(width);
+        button.setPrefWidth(width);
+        button.setMaxWidth(width);
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(40);
+        if ("Clear".equals(text)) {
+            button.setOnAction(event -> confirmClearForm());
+        } else if ("Save & View Saved Waybills".equals(text)) {
+            button.setOnAction(event -> saveNew(true));
+        } else {
+            button.setOnAction(event -> saveNew(false));
+        }
+        return button;
+    }
+
+    private HBox buttons() {
+        HBox box = new HBox(16);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        box.getStyleClass().add("waybill-bottom-actions");
         message.getStyleClass().add("form-message");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         if (mode == Mode.NEW) {
-            Button clear = new Button("Clear");
-            clear.getStyleClass().add("secondary-button");
-            clear.setOnAction(event -> confirmClearForm());
-
-            Button saveAndView = new Button("Save & View Saved Waybills");
-            saveAndView.getStyleClass().add("secondary-button");
-            saveAndView.setOnAction(event -> saveNew(true));
-
-            Button saveAndCreate = new Button("Save");
-            saveAndCreate.getStyleClass().add("primary-button");
-            saveAndCreate.setOnAction(event -> saveNew(false));
-
+            Button clear = newActionButton("Clear", false, 100);
+            Button saveAndView = newActionButton("Save & View Saved Waybills", false, 224);
+            Button saveAndCreate = newActionButton("Save", true, 110);
             box.getChildren().addAll(message, spacer, clear, saveAndView, saveAndCreate);
         } else if (mode == Mode.EDIT) {
             cancelButton.getStyleClass().add("secondary-button");

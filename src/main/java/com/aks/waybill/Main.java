@@ -13,6 +13,10 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Priority;
+import javafx.scene.Node;
 import javafx.scene.text.Text;
 import javafx.scene.text.Font;
 import javafx.stage.Screen;
@@ -116,6 +120,12 @@ public class Main extends Application {
         pane.getButtonTypes().addListener((javafx.collections.ListChangeListener<ButtonType>) change ->
                 javafx.application.Platform.runLater(() -> sizeDialogButtons(pane)));
         javafx.application.Platform.runLater(() -> sizeDialogButtons(pane));
+        // TextInputDialog creates and lays out its editor as part of the dialog
+        // skin. Reapply the sizing policy after the window is actually shown so
+        // the editor cannot be stretched by the final skin/layout pass.
+        if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage dialogStage) {
+            dialogStage.addEventHandler(WindowEvent.WINDOW_SHOWN, event -> sizeDialogButtons(pane));
+        }
         // Replace the stock JavaFX alert graphic with a small W.A.S.P-styled badge.
         // JavaFX does not always expose the built-in confirmation graphic with a
         // predictable CSS class, so use the DialogPane's alert-type style class
@@ -196,120 +206,138 @@ public class Main extends Application {
                 .map(Button.class::cast)
                 .toList();
 
-        double totalButtonWidth = 0;
+        double commonButtonWidth = 112;
         int buttonCount = 0;
         for (Button button : buttons) {
             String text = button.getText() == null ? "" : button.getText().trim();
             if (text.isBlank()) continue;
-
-            Font font = button.getFont();
             Text measure = new Text(text);
-            measure.setFont(font);
-            // Text width + generous horizontal room for the W.A.S.P button padding.
-            // A fixed width is then applied so hover/focus pseudo-classes cannot
-            // change the button geometry.
-            double width = Math.max(112, Math.ceil(measure.getLayoutBounds().getWidth() + 48));
-            setStableDialogButtonSize(button, width);
-            totalButtonWidth += width;
+            measure.setFont(button.getFont());
+            commonButtonWidth = Math.max(commonButtonWidth,
+                    Math.ceil(measure.getLayoutBounds().getWidth() + 48));
             buttonCount++;
         }
 
-        double gaps = Math.max(0, buttonCount - 1) * 12;
-        double requiredButtonWidth = totalButtonWidth + gaps;
+        /*
+         * Do not fight ButtonBarSkin with arbitrary child/container widths.
+         * ButtonBar already provides the correct uniform sizing mechanism; the
+         * previous implementation left the OS-specific ButtonBar ordering and
+         * its spacer logic active, which is what produced the large gap between
+         * the first and second buttons in some three-button dialogs.
+         */
+        var buttonBarNode = pane.lookup(".button-bar");
+        if (buttonBarNode instanceof ButtonBar buttonBar) {
+            buttonBar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
+            buttonBar.setButtonMinWidth(commonButtonWidth);
+            for (Node node : buttonBar.getButtons()) {
+                if (node instanceof Button button) {
+                    ButtonBar.setButtonUniformSize(button, true);
+                    setStableDialogButtonSize(button, commonButtonWidth);
+                }
+            }
+        } else {
+            for (Button button : buttons) {
+                setStableDialogButtonSize(button, commonButtonWidth);
+            }
+        }
 
-        // JavaFX's DialogPane/ButtonBar has its own internal layout constraints.
-        // Give it deliberate breathing room instead of relying on the pane's
-        // calculated minimum, which can leave the last button clipped at the
-        // right edge (especially for short two-button confirmation dialogs).
+        double requiredButtonWidth = commonButtonWidth * buttonCount
+                + Math.max(0, buttonCount - 1) * 12;
         double safetyMargin = switch (buttonCount) {
             case 0, 1 -> 120;
             case 2 -> 150;
             case 3 -> 170;
             default -> 190;
         };
-        double requiredDialogWidth = requiredButtonWidth + safetyMargin;
 
         double availableScreenWidth = Math.max(900,
                 Screen.getPrimary().getVisualBounds().getWidth() - 80);
         double dialogWidth = Math.min(availableScreenWidth,
-                Math.max(560, requiredDialogWidth));
+                Math.max(560, requiredButtonWidth + safetyMargin));
 
         pane.setMinWidth(dialogWidth);
         pane.setPrefWidth(dialogWidth);
         pane.setMaxWidth(availableScreenWidth);
 
-        // The ButtonBar skin can retain its own preferred width. Keep the bar and
-        // its internal container at the same width as the dialog so the final
-        // button can never be laid out beyond the DialogPane's right edge.
-        pane.lookup(".button-bar");
-        var buttonBar = pane.lookup(".button-bar");
-        if (buttonBar instanceof javafx.scene.layout.Region bar) {
-            bar.setMinWidth(dialogWidth);
-            bar.setPrefWidth(dialogWidth);
-            bar.setMaxWidth(dialogWidth);
+        // Explicitly keep the ButtonBar compact and predictable. ButtonBarSkin
+        // will now position the buttons in list order with its normal spacing;
+        // there is no OS-specific spacer between action groups.
+        if (buttonBarNode instanceof ButtonBar buttonBar) {
+            buttonBar.setMinWidth(dialogWidth);
+            buttonBar.setPrefWidth(dialogWidth);
+            buttonBar.setMaxWidth(dialogWidth);
+            buttonBar.applyCss();
         }
-        var buttonContainer = pane.lookup(".button-bar .container");
-        if (buttonContainer instanceof javafx.scene.layout.Region container) {
-            double containerWidth = Math.max(0, dialogWidth - 32);
-            container.setMinWidth(containerWidth);
-            container.setPrefWidth(containerWidth);
-            container.setMaxWidth(containerWidth);
+
+        // TextInputDialog uses a GridPane containing the prompt and editor.
+        // Limit the editor width so it does not run into the dialog's right
+        // edge and leave a consistent visual margin.
+        var textFields = pane.lookupAll(".text-field").stream()
+                .filter(TextField.class::isInstance)
+                .map(TextField.class::cast)
+                .toList();
+        for (TextField field : textFields) {
+            constrainDialogTextField(field);
         }
+
+        // Values captured by the runLater lambda must be final/effectively final.
+        final double finalButtonWidth = commonButtonWidth;
 
         javafx.application.Platform.runLater(() -> {
             pane.applyCss();
+            var currentButtonBar = pane.lookup(".button-bar");
+            if (currentButtonBar instanceof ButtonBar bar) {
+                bar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
+                bar.setButtonMinWidth(finalButtonWidth);
+                for (Node node : bar.getButtons()) {
+                    if (node instanceof Button button) {
+                        ButtonBar.setButtonUniformSize(button, true);
+                        setStableDialogButtonSize(button, finalButtonWidth);
+                    }
+                }
+            }
 
-            var currentButtons = pane.lookupAll(".button").stream()
-                    .filter(Button.class::isInstance)
-                    .map(Button.class::cast)
+            var currentFields = pane.lookupAll(".text-field").stream()
+                    .filter(TextField.class::isInstance)
+                    .map(TextField.class::cast)
                     .toList();
-            double total = 0;
-            int count = 0;
-            for (Button button : currentButtons) {
-                String text = button.getText() == null ? "" : button.getText().trim();
-                if (text.isBlank()) continue;
-                Text measure = new Text(text);
-                measure.setFont(button.getFont());
-                double width = Math.max(112, Math.ceil(measure.getLayoutBounds().getWidth() + 48));
-                setStableDialogButtonSize(button, width);
-                total += width;
-                count++;
+            for (TextField field : currentFields) {
+                constrainDialogTextField(field);
             }
 
-            double required = total + Math.max(0, count - 1) * 12;
-            double margin = switch (count) {
-                case 0, 1 -> 120;
-                case 2 -> 150;
-                case 3 -> 170;
-                default -> 190;
-            };
-            double width = Math.min(availableScreenWidth, Math.max(560, required + margin));
-            pane.setMinWidth(width);
-            pane.setPrefWidth(width);
-            pane.setMaxWidth(availableScreenWidth);
-
-            var bar = pane.lookup(".button-bar");
-            if (bar instanceof javafx.scene.layout.Region region) {
-                region.setMinWidth(width);
-                region.setPrefWidth(width);
-                region.setMaxWidth(width);
-            }
-            var container = pane.lookup(".button-bar .container");
-            if (container instanceof javafx.scene.layout.Region region) {
-                double containerWidth = Math.max(0, width - 32);
-                region.setMinWidth(containerWidth);
-                region.setPrefWidth(containerWidth);
-                region.setMaxWidth(containerWidth);
-            }
-
-            // DialogPane width is not always propagated to the decorated Stage
-            // immediately. Enforce the calculated minimum at the window level too.
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage stage) {
-                stage.setMinWidth(width);
-                if (stage.getWidth() < width) stage.setWidth(width);
-                centerDialog(stage);
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage dialogStage) {
+                dialogStage.setMinWidth(dialogWidth);
+                if (dialogStage.getWidth() < dialogWidth) dialogStage.setWidth(dialogWidth);
+                centerDialog(dialogStage);
             }
         });
+    }
+
+    /**
+     * Keeps TextInputDialog editors at a controlled width. TextInputDialog's
+     * internal GridPane uses horizontal growth, which can otherwise stretch the
+     * editor all the way to the dialog edge. The inline CSS and GridPane growth
+     * settings are applied together so the limit remains effective after the
+     * dialog skin performs its layout. The 400px logical width also leaves a
+     * comfortable physical margin on standard Windows DPI scaling.
+     */
+    private static void constrainDialogTextField(TextField field) {
+        field.setMinWidth(300);
+        field.setPrefWidth(400);
+        field.setMaxWidth(400);
+        field.setMinHeight(38);
+        field.setPrefHeight(38);
+        field.setMaxHeight(38);
+        field.setStyle(
+                "-fx-min-width: 300px;" +
+                "-fx-pref-width: 400px;" +
+                "-fx-max-width: 400px;" +
+                "-fx-min-height: 38px;" +
+                "-fx-pref-height: 38px;" +
+                "-fx-max-height: 38px;"
+        );
+        GridPane.setHgrow(field, Priority.NEVER);
+        GridPane.setFillWidth(field, false);
     }
 
     private static void setStableDialogButtonSize(Button button, double width) {
@@ -430,7 +458,7 @@ public class Main extends Application {
         ButtonType backupNow = new ButtonType("Backup Now", ButtonBar.ButtonData.OK_DONE);
         ButtonType continueWithout = new ButtonType("Continue Without Backup", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-        backup.getButtonTypes().setAll(backupNow, continueWithout, cancel);
+        backup.getButtonTypes().setAll(continueWithout, backupNow, cancel);
         // This is an informational reminder with choices, not a yes/no question.
         // Use the information badge instead of the generic confirmation '?'.
         setDialogGraphic(backup.getDialogPane(), "i", "wasp-dialog-info");

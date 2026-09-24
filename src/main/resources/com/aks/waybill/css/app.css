@@ -413,3 +413,13 @@
     -fx-background-color: #e8f1f8;
     -fx-text-fill: #0b4b7d;
 }
+
+/* New Waybill compact layout */
+.waybill-form-view{-fx-padding:16px 30px 24px 30px;-fx-spacing:10px;}
+.waybill-form-view .page-heading{-fx-font-size:25px;}
+.waybill-form-view .page-subheading{-fx-font-size:13px;}
+.waybill-top-actions{-fx-padding:0 0 4px 0;}
+.waybill-bottom-actions{-fx-padding:4px 0 0 0;}
+.waybill-form-view .waybill-number{-fx-padding:8px 12px;-fx-font-size:20px;}
+.waybill-form-view .primary-button,.waybill-form-view .secondary-button{-fx-border-width:0;-fx-border-insets:0;}
+.waybill-form-view .primary-button:focused,.waybill-form-view .secondary-button:focused{-fx-border-width:0;-fx-background-insets:0;}
