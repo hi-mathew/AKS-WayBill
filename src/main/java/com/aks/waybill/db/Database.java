@@ -62,6 +62,13 @@ public final class Database {
                 s.execute("CREATE TABLE IF NOT EXISTS waybill_item (id INTEGER PRIMARY KEY AUTOINCREMENT, waybill_id INTEGER NOT NULL, item_number INTEGER NOT NULL, description TEXT, package_type TEXT, quantity REAL, weight_kg REAL, volume_m3 REAL, FOREIGN KEY(waybill_id) REFERENCES waybill(id) ON DELETE CASCADE)");
                 s.execute("CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, action TEXT NOT NULL, entity_type TEXT, entity_id INTEGER, details TEXT, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES app_user(id))");
                 ensureColumn(c, "audit_log", "entity_label", "TEXT");
+                // Audit logs are append-only and can grow substantially over the life of the application.
+                // Keep the common joins and filtered lookups indexed. The audit screen orders by the
+                // INTEGER PRIMARY KEY (id), so no separate index is required for newest-first paging.
+                s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id)");
+                s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)");
+                s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)");
+                s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)");
                 s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 seedTermsConditions(c);
             }
