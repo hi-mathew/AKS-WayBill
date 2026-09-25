@@ -456,21 +456,22 @@ public class DashboardView extends BorderPane {
 
         DashboardStats stats = loadStats();
 
-        Label overviewTitle = label("Overview & Quick Actions", "section-heading");
+        Label overviewTitle = label("Overview", "section-heading");
 
-        // Keep the six overview cards in two deliberate rows.  The first row
-        // contains the three count cards; the second row contains the three
-        // primary actions.  Each row always has three equal-width cards on the
-        // desktop workspace, so the cards can become wider without becoming taller.
+        // Keep the dashboard balanced as two three-column rows. The first row
+        // is informational and the second row is action-oriented. Draft and
+        // Final counts are combined into one status card so all overview cards
+        // remain aligned in a clean three-column layout.
         GridPane countsRow = threeColumnRow();
-        Node monthCard = stat("Waybills this month", String.valueOf(stats.monthWaybills()),
-                SessionContext.isAdmin() ? "All users" : "Created by you");
-        Node totalCard = stat("Total saved waybills", String.valueOf(stats.totalWaybills()),
-                SessionContext.isAdmin() ? "Across all users" : "Created by you");
-        Node companiesCard = stat("Saved companies", String.valueOf(stats.companies()),
-                "Shipper + Consignee masters");
-        addThree(countsRow, monthCard, totalCard, companiesCard);
+        String userScope = SessionContext.isAdmin() ? "All users" : "Created by you";
+        Node monthCard = stat("Waybills This Month", String.valueOf(stats.monthWaybills()),
+                userScope, "stat-month");
+        Node statusCard = waybillStatusStat(stats.draftWaybills(), stats.finalWaybills(), userScope);
+        Node companiesCard = stat("Saved Companies", String.valueOf(stats.companies()),
+                "Shipper + Consignee masters", "stat-companies");
+        addThree(countsRow, monthCard, statusCard, companiesCard);
 
+        Label quickActionsTitle = label("Quick Actions", "section-heading");
         GridPane actionsRow = threeColumnRow();
         Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", this::showNewWaybill);
         Node savedCard = action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", this::showSavedWaybills);
@@ -488,7 +489,7 @@ public class DashboardView extends BorderPane {
         Label recentTitle = label("Recent Waybills", "section-heading");
         VBox recentCard = recentWaybills();
 
-        c.getChildren().addAll(welcome, intro, introDetail, overviewTitle, countsRow, actionsRow);
+        c.getChildren().addAll(welcome, intro, introDetail, overviewTitle, countsRow, quickActionsTitle, actionsRow);
         if (SessionContext.isAdmin()) {
             c.getChildren().addAll(administrationTitle, adminActions);
         }
@@ -540,6 +541,33 @@ public class DashboardView extends BorderPane {
         grid.add(third, 2, 0);
     }
 
+    private GridPane fourColumnRow() {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(0);
+        grid.setMaxWidth(Double.MAX_VALUE);
+        grid.getStyleClass().add("dashboard-card-row");
+        for (int i = 0; i < 4; i++) {
+            ColumnConstraints column = new ColumnConstraints();
+            column.setPercentWidth(25);
+            column.setHgrow(Priority.ALWAYS);
+            column.setFillWidth(true);
+            grid.getColumnConstraints().add(column);
+        }
+        return grid;
+    }
+
+    private void addFour(GridPane grid, Node first, Node second, Node third, Node fourth) {
+        prepareGridCard(first);
+        prepareGridCard(second);
+        prepareGridCard(third);
+        prepareGridCard(fourth);
+        grid.add(first, 0, 0);
+        grid.add(second, 1, 0);
+        grid.add(third, 2, 0);
+        grid.add(fourth, 3, 0);
+    }
+
     private GridPane twoColumnRow() {
         GridPane grid = new GridPane();
         grid.setHgap(12);
@@ -573,17 +601,18 @@ public class DashboardView extends BorderPane {
         }
     }
 
-    private record DashboardStats(long monthWaybills, long totalWaybills, long companies) {}
+    private record DashboardStats(long monthWaybills, long draftWaybills, long finalWaybills, long companies) {}
 
     private DashboardStats loadStats() {
         LocalDate today = LocalDate.now();
         LocalDate firstOfMonth = today.withDayOfMonth(1);
         WaybillService.WaybillPage month = WaybillService.findPageForCurrentUser(null, firstOfMonth, today, 0, 1);
-        WaybillService.WaybillPage total = WaybillService.findPageForCurrentUser(null, null, null, 0, 1);
-        return new DashboardStats(month.totalRows(), total.totalRows(), CompanyService.countAll());
+        WaybillService.WaybillPage draft = WaybillService.findPageForCurrentUser(null, null, null, "DRAFT", 0, 1);
+        WaybillService.WaybillPage finalized = WaybillService.findPageForCurrentUser(null, null, null, "FINAL", 0, 1);
+        return new DashboardStats(month.totalRows(), draft.totalRows(), finalized.totalRows(), CompanyService.countAll());
     }
 
-    private VBox stat(String title, String value, String hint) {
+    private VBox stat(String title, String value, String hint, String variantStyle) {
         VBox box = new VBox(4);
         box.setMinWidth(165);
         box.setPrefWidth(198);
@@ -592,10 +621,43 @@ public class DashboardView extends BorderPane {
         box.setPrefHeight(70);
         box.setMaxHeight(70);
         box.setPadding(new Insets(8, 12, 7, 12));
-        box.getStyleClass().add("stat-card");
+        box.getStyleClass().addAll("stat-card", variantStyle);
         box.getChildren().addAll(
                 label(value + "  " + title, "stat-value-line"),
                 label(hint, "stat-hint"));
+        return box;
+    }
+
+    private VBox waybillStatusStat(long draftCount, long finalCount, String scope) {
+        VBox box = new VBox(4);
+        box.setMinWidth(165);
+        box.setPrefWidth(198);
+        box.setMaxWidth(230);
+        box.setMinHeight(70);
+        box.setPrefHeight(70);
+        box.setMaxHeight(70);
+        box.setPadding(new Insets(7, 12, 6, 12));
+        box.getStyleClass().addAll("stat-card", "stat-status");
+
+        Label title = label("Draft / Final Waybills", "stat-title-line");
+        Label scopeLabel = label(scope, "stat-scope");
+        Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+        HBox titleRow = new HBox(8, title, titleSpacer, scopeLabel);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox values = new HBox(18);
+        values.setAlignment(Pos.CENTER_LEFT);
+
+        VBox draft = new VBox(0,
+                label(String.valueOf(draftCount), "stat-status-value stat-draft-value"),
+                label("Draft", "stat-status-label"));
+        VBox finalBox = new VBox(0,
+                label(String.valueOf(finalCount), "stat-status-value stat-final-value"),
+                label("Final", "stat-status-label"));
+        values.getChildren().addAll(draft, finalBox);
+
+        box.getChildren().addAll(titleRow, values);
         return box;
     }
 

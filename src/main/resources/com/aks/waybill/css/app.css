@@ -517,3 +517,85 @@
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
+
+/* Dashboard v62: distinguish statistics from quick actions with a restrained W.A.S.P. palette. */
+.dashboard-card-row .stat-card.stat-month {
+    -fx-background-color: #eef6fb;
+    -fx-border-color: #cfe1ee;
+}
+.dashboard-card-row .stat-card.stat-draft {
+    -fx-background-color: #f8f5ed;
+    -fx-border-color: #e7ddc7;
+}
+.dashboard-card-row .stat-card.stat-final {
+    -fx-background-color: #eef7f1;
+    -fx-border-color: #cfe4d5;
+}
+.dashboard-card-row .stat-card.stat-companies {
+    -fx-background-color: #f4f1f8;
+    -fx-border-color: #ddd4e8;
+}
+.dashboard-card-row .stat-card.stat-month .stat-value-line { -fx-text-fill: #0b4b7d; }
+.dashboard-card-row .stat-card.stat-draft .stat-value-line { -fx-text-fill: #775d1d; }
+.dashboard-card-row .stat-card.stat-final .stat-value-line { -fx-text-fill: #23643b; }
+.dashboard-card-row .stat-card.stat-companies .stat-value-line { -fx-text-fill: #5d477a; }
+
+.dashboard-card-row .action-card {
+    -fx-background-color: #eef5fa;
+    -fx-border-color: #c9ddea;
+}
+.dashboard-card-row .action-card:hover {
+    -fx-background-color: #e6f1f8;
+    -fx-border-color: #9dbbd0;
+}
+.dashboard-card-row .action-card .action-title-line {
+    -fx-text-fill: #0b4b7d;
+}
+.dashboard-card-row .action-card .action-description {
+    -fx-text-fill: #5f7183;
+}
+
+/* Dashboard v63: balanced three-column overview with neutral statistics and blue actions. */
+.dashboard-card-row .stat-card.stat-month {
+    -fx-background-color: #f5f6f8;
+    -fx-border-color: #dfe3e8;
+}
+.dashboard-card-row .stat-card.stat-status {
+    -fx-background-color: #faf8f3;
+    -fx-border-color: #e6dfd1;
+}
+.dashboard-card-row .stat-card.stat-companies {
+    -fx-background-color: #f5f2f8;
+    -fx-border-color: #ded6e8;
+}
+.dashboard-card-row .stat-card.stat-month .stat-value-line {
+    -fx-text-fill: #344054;
+}
+.dashboard-card-row .stat-card.stat-companies .stat-value-line {
+    -fx-text-fill: #5d477a;
+}
+.dashboard-card-row .stat-title-line {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #344054;
+}
+.dashboard-card-row .stat-scope {
+    -fx-font-size: 9px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #7a8492;
+}
+.dashboard-card-row .stat-status-value {
+    -fx-font-size: 20px;
+    -fx-font-weight: 700;
+}
+.dashboard-card-row .stat-draft-value {
+    -fx-text-fill: #a05f00;
+}
+.dashboard-card-row .stat-final-value {
+    -fx-text-fill: #1d6b45;
+}
+.dashboard-card-row .stat-status-label {
+    -fx-font-size: 9px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #6c7787;
+}
