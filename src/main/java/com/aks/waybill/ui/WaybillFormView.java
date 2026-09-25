@@ -102,6 +102,8 @@ public class WaybillFormView extends AppView {
     private final Button newDestinationButton = new Button("+ New Location");
     private final Button finalizeButton = new Button("Mark as Final");
     private final Button revertButton = new Button("Return to Draft");
+    private final Button topFinalizeButton = new Button("Mark as Final");
+    private final Button topRevertButton = new Button("Return to Draft");
 
     public WaybillFormView(Mode mode, long waybillId, Runnable onSaved, Runnable onCancel, Runnable onCreateNew) {
         this(mode, waybillId, onSaved, onCancel, onCreateNew, id -> {});
@@ -181,6 +183,10 @@ public class WaybillFormView extends AppView {
         // Keep the primary New Waybill actions visible while the long form scrolls.
         if (mode == Mode.NEW) {
             getChildren().add(topActionBar());
+        } else if (mode == Mode.EDIT) {
+            getChildren().add(editTopActionBar());
+        } else if (mode == Mode.VIEW) {
+            getChildren().add(viewTopActionBar());
         }
 
         ScrollPane scroll = new ScrollPane(page);
@@ -474,6 +480,104 @@ public class WaybillFormView extends AppView {
         return box;
     }
 
+    /**
+     * Mirrors the bottom action bar for read-only View Waybill screens so that
+     * the most common actions are available without scrolling to the end.
+     */
+    /**
+     * Mirrors the bottom Edit Waybill action bar at the top of the long form.
+     * Edit intentionally exposes only Cancel and Save Changes; report generation
+     * and status transitions belong to the View Waybill workflow.
+     */
+    private HBox editTopActionBar() {
+        HBox box = new HBox(16);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        box.getStyleClass().add("waybill-top-actions");
+
+        Button topCancel = new Button("Cancel");
+        topCancel.getStyleClass().add("secondary-button");
+        topCancel.setMinWidth(88);
+        topCancel.setPrefWidth(88);
+        topCancel.setMaxWidth(88);
+        topCancel.setMinHeight(36);
+        topCancel.setPrefHeight(36);
+        topCancel.setMaxHeight(36);
+        topCancel.setOnAction(event -> onCancel.run());
+
+        Button topSave = new Button("Save Changes");
+        topSave.getStyleClass().add("primary-button");
+        topSave.setMinWidth(138);
+        topSave.setPrefWidth(138);
+        topSave.setMaxWidth(138);
+        topSave.setMinHeight(36);
+        topSave.setPrefHeight(36);
+        topSave.setMaxHeight(36);
+        topSave.setOnAction(event -> updateExisting());
+
+        box.getChildren().addAll(topCancel, topSave);
+        return box;
+    }
+
+    private HBox viewTopActionBar() {
+        HBox box = new HBox(16);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        box.getStyleClass().add("waybill-top-actions");
+
+        configureViewLifecycleButton(topFinalizeButton, true);
+        configureViewLifecycleButton(topRevertButton, false);
+
+        Button pdf = viewReportButton("Generate PDF");
+        Button word = viewReportButton("Generate Word");
+        Button back = viewBackButton();
+
+        box.getChildren().addAll(topFinalizeButton, topRevertButton, pdf, word, back);
+        return box;
+    }
+
+    private void configureViewLifecycleButton(Button button, boolean finalize) {
+        button.getStyleClass().add(finalize ? "primary-button" : "secondary-button");
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(40);
+        if (finalize) {
+            button.setOnAction(event -> confirmFinalize());
+        } else {
+            button.setOnAction(event -> confirmRevert());
+        }
+    }
+
+    private Button viewReportButton(String text) {
+        Button button = new Button(text);
+        button.getStyleClass().add("secondary-button");
+        button.setMinWidth(140);
+        button.setPrefWidth(140);
+        button.setMaxWidth(140);
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(40);
+        if ("Generate PDF".equals(text)) {
+            button.setOnAction(event -> WaybillReportActions.generatePdf(
+                    getScene() == null ? null : getScene().getWindow(), waybillId));
+        } else {
+            button.setOnAction(event -> WaybillReportActions.generateWord(
+                    getScene() == null ? null : getScene().getWindow(), waybillId));
+        }
+        return button;
+    }
+
+    private Button viewBackButton() {
+        Button button = new Button("Back to Saved Waybills");
+        button.getStyleClass().add("secondary-button");
+        button.setMinWidth(180);
+        button.setPrefWidth(180);
+        button.setMaxWidth(180);
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(40);
+        button.setOnAction(event -> onCancel.run());
+        return button;
+    }
+
     private Button newActionButton(String text, boolean primary, double width) {
         Button button = new Button(text);
         button.getStyleClass().add(primary ? "primary-button" : "secondary-button");
@@ -513,21 +617,14 @@ public class WaybillFormView extends AppView {
             saveButton.setOnAction(event -> updateExisting());
             box.getChildren().addAll(message, spacer, cancelButton, saveButton);
         } else {
-            Button back = new Button("Back to Saved Waybills");
-            back.getStyleClass().add("secondary-button");
-            back.setOnAction(event -> onCancel.run());
             finalizeButton.getStyleClass().add("primary-button");
             finalizeButton.setOnAction(event -> confirmFinalize());
             revertButton.getStyleClass().add("secondary-button");
             revertButton.setOnAction(event -> confirmRevert());
-            Button pdf = new Button("Generate PDF");
-            pdf.getStyleClass().add("secondary-button");
-            pdf.setOnAction(event -> WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), waybillId));
-            Button word = new Button("Generate Word");
-            word.getStyleClass().add("secondary-button");
-            word.setOnAction(event -> WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), waybillId));
-            box.getChildren().addAll(finalizeButton, revertButton);
-            box.getChildren().addAll(pdf, word, back);
+            Button pdf = viewReportButton("Generate PDF");
+            Button word = viewReportButton("Generate Word");
+            Button back = viewBackButton();
+            box.getChildren().addAll(finalizeButton, revertButton, pdf, word, back);
         }
         return box;
     }
@@ -691,10 +788,17 @@ public class WaybillFormView extends AppView {
 
     private void updateLifecycleActions() {
         if (mode != Mode.VIEW) return;
-        finalizeButton.setVisible("DRAFT".equalsIgnoreCase(loadedStatus) && canCurrentUserFinalize());
-        finalizeButton.setManaged(finalizeButton.isVisible());
-        revertButton.setVisible("FINAL".equalsIgnoreCase(loadedStatus) && SessionContext.isAdmin());
-        revertButton.setManaged(revertButton.isVisible());
+        boolean showFinalize = "DRAFT".equalsIgnoreCase(loadedStatus) && canCurrentUserFinalize();
+        boolean showRevert = "FINAL".equalsIgnoreCase(loadedStatus) && SessionContext.isAdmin();
+
+        finalizeButton.setVisible(showFinalize);
+        finalizeButton.setManaged(showFinalize);
+        revertButton.setVisible(showRevert);
+        revertButton.setManaged(showRevert);
+        topFinalizeButton.setVisible(showFinalize);
+        topFinalizeButton.setManaged(showFinalize);
+        topRevertButton.setVisible(showRevert);
+        topRevertButton.setManaged(showRevert);
     }
 
     public void handleShortcutSave() {
