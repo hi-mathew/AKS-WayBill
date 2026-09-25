@@ -77,8 +77,29 @@ public final class SavedDataService {
         } catch (SQLException e) { throw new IllegalStateException("Unable to save carrier", e); }
     }
 
-    public static CarrierRecord createCarrier(String name) { return saveOrUpdateCarrier(name, null, null); }
-    public static CarrierRecord createCarrier(String name, String driverName, String vehicleTrailerNo) { return saveOrUpdateCarrier(name, driverName, vehicleTrailerNo); }
+    public static CarrierRecord createCarrier(String name) { return createCarrier(name, null, null, true); }
+    public static CarrierRecord createCarrier(String name, String driverName, String vehicleTrailerNo) {
+        return createCarrier(name, driverName, vehicleTrailerNo, true);
+    }
+    public static CarrierRecord createCarrier(String name, String driverName, String vehicleTrailerNo, boolean active) {
+        String value = required(name, "Carrier name");
+        validateLength(value, 300, "Carrier name");
+        validateLength(driverName, 200, "Driver name");
+        validateLength(vehicleTrailerNo, 200, "Vehicle / Trailer No.");
+        try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(
+                "INSERT INTO saved_carrier(carrier_name,driver_name,vehicle_trailer_no,active,created_at,updated_at) VALUES(?,?,?,?,datetime('now'),datetime('now'))",
+                Statement.RETURN_GENERATED_KEYS)) {
+            p.setString(1, value);
+            p.setString(2, blankToNull(driverName));
+            p.setString(3, blankToNull(vehicleTrailerNo));
+            p.setInt(4, active ? 1 : 0);
+            p.executeUpdate();
+            try (ResultSet r = p.getGeneratedKeys()) {
+                r.next();
+                return new CarrierRecord(r.getLong(1), value, blankToNull(driverName), blankToNull(vehicleTrailerNo), active);
+            }
+        } catch (SQLException e) { throw new IllegalStateException("Unable to save carrier", e); }
+    }
 
     public static CarrierRecord updateCarrier(long id, String name, String driverName, String vehicleTrailerNo, boolean active) {
         String value = required(name, "Carrier name");
@@ -99,14 +120,18 @@ public final class SavedDataService {
         return updateCarrier(id, name, current == null ? null : current.driverName(), current == null ? null : current.vehicleTrailerNo(), active);
     }
 
-    public static LocationRecord createLocation(String name) {
+    public static LocationRecord createLocation(String name) { return createLocation(name, true); }
+
+    public static LocationRecord createLocation(String name, boolean active) {
         String value = required(name, "Location name");
         validateLength(value, 400, "Location name");
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(
-                "INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,1,datetime('now'),datetime('now'))",
+                "INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,?,datetime('now'),datetime('now'))",
                 Statement.RETURN_GENERATED_KEYS)) {
-            p.setString(1, value); p.executeUpdate();
-            try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new LocationRecord(r.getLong(1), value, true); }
+            p.setString(1, value);
+            p.setInt(2, active ? 1 : 0);
+            p.executeUpdate();
+            try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new LocationRecord(r.getLong(1), value, active); }
         } catch (SQLException e) { throw new IllegalStateException("Unable to save location", e); }
     }
 

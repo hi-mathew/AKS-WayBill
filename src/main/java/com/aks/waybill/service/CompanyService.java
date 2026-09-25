@@ -99,15 +99,27 @@ public final class CompanyService {
 
     public static CompanyRecord create(CompanyType type, String companyName, String contactPerson, String address,
                                        String phoneNumber, String emailAddress) {
+        return create(type, companyName, contactPerson, address, phoneNumber, emailAddress, true);
+    }
+
+    public static CompanyRecord create(CompanyType type, String companyName, String contactPerson, String address,
+                                       String phoneNumber, String emailAddress, boolean active) {
         validate(companyName);
         String now = DB_DATE_TIME.format(LocalDateTime.now());
         String table = table(type);
         try (Connection connection = Database.getConnection()) {
             if (findByName(connection, type, companyName.trim(), false) != null)
                 throw new IllegalArgumentException("A company with this name already exists in the " + type.displayName() + " master.");
-            String sql = "INSERT INTO " + table + " (company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)";
+            String sql = "INSERT INTO " + table + " (company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
             try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
-                bindCompany(statement, companyName, contactPerson, address, phoneNumber, emailAddress, now);
+                statement.setString(1, companyName.trim());
+                statement.setString(2, blankToNull(contactPerson));
+                statement.setString(3, blankToNull(address));
+                statement.setString(4, blankToNull(phoneNumber));
+                statement.setString(5, blankToNull(emailAddress));
+                statement.setInt(6, active ? 1 : 0);
+                statement.setString(7, now);
+                statement.setString(8, now);
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     if (!keys.next()) throw new SQLException("Unable to determine company ID.");
@@ -127,8 +139,16 @@ public final class CompanyService {
             if (duplicate != null && duplicate.id() != id) throw new IllegalArgumentException("Another company already uses this name in the " + type.displayName() + " master.");
             String sql = "UPDATE " + table + " SET company_name=?, contact_person=?, address=?, phone_number=?, email_address=?, active=?, updated_at=? WHERE id=?";
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                bindCompany(statement, companyName, contactPerson, address, phoneNumber, emailAddress, now);
-                statement.setInt(7, active ? 1 : 0); statement.setLong(8, id);
+                // UPDATE has a different parameter order from INSERT. Do not reuse
+                // bindCompany() here because parameter 6 is the active flag, not a timestamp.
+                statement.setString(1, companyName.trim());
+                statement.setString(2, blankToNull(contactPerson));
+                statement.setString(3, blankToNull(address));
+                statement.setString(4, blankToNull(phoneNumber));
+                statement.setString(5, blankToNull(emailAddress));
+                statement.setInt(6, active ? 1 : 0);
+                statement.setString(7, now);
+                statement.setLong(8, id);
                 if (statement.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
             }
             return findById(type, id);

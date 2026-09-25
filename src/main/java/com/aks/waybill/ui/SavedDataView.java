@@ -75,6 +75,15 @@ public final class SavedDataView extends AppView {
                     carrierMode ? (((SavedDataService.CarrierRecord)cell.getValue()).active() ? "Active" : "Inactive") : (((SavedDataService.LocationRecord)cell.getValue()).active() ? "Active" : "Inactive")));
             table.getColumns().add(status);
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+            table.setRowFactory(tv -> {
+                TableRow<Object> row = new TableRow<>();
+                row.setOnMouseClicked(event -> {
+                    if (event.getClickCount() == 2 && !row.isEmpty()) {
+                        openDialog(row.getItem());
+                    }
+                });
+                return row;
+            });
             VBox.setVgrow(table, Priority.ALWAYS);
             message.getStyleClass().add("form-message");
             getChildren().addAll(toolbar, table, message);
@@ -135,10 +144,10 @@ public final class SavedDataView extends AppView {
                 if (result != save) return;
                 try {
                     if (isCarrier) {
-                        if (existing == null) SavedDataService.createCarrier(name.getText(), driver.getText(), vehicle.getText());
+                        if (existing == null) SavedDataService.createCarrier(name.getText(), driver.getText(), vehicle.getText(), active.isSelected());
                         else SavedDataService.updateCarrier(((SavedDataService.CarrierRecord)existing).id(), name.getText(), driver.getText(), vehicle.getText(), active.isSelected());
                     } else {
-                        if (existing == null) SavedDataService.createLocation(name.getText());
+                        if (existing == null) SavedDataService.createLocation(name.getText(), active.isSelected());
                         else SavedDataService.updateLocation(((SavedDataService.LocationRecord)existing).id(), name.getText(), active.isSelected());
                     }
                     load();
