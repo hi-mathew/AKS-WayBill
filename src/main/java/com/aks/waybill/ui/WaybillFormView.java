@@ -12,6 +12,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Popup;
@@ -127,6 +128,11 @@ public class WaybillFormView extends AppView {
         configureSuggestionPopups();
         configureSavedSelectors();
         build();
+        // If a table cell is being edited and the user clicks elsewhere, commit the
+        // editor value before JavaFX cancels the TableView edit session.
+        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            if (!isNodeInside(event.getTarget(), itemsTable)) commitActiveItemEdit();
+        });
         installDirtyTracking();
         applyMode();
 
@@ -1303,6 +1309,24 @@ public class WaybillFormView extends AppView {
     private static GridPane grid2() { GridPane grid = new GridPane(); grid.setHgap(18); grid.setVgap(10); ColumnConstraints left = new ColumnConstraints(); left.setPercentWidth(50); left.setHgrow(Priority.ALWAYS); ColumnConstraints right = new ColumnConstraints(); right.setPercentWidth(50); right.setHgrow(Priority.ALWAYS); grid.getColumnConstraints().addAll(left, right); return grid; }
     private static void addField(GridPane grid, int col, int row, String labelText, Region control) { VBox box = labeledControl(labelText, control); GridPane.setHgrow(box, Priority.ALWAYS); grid.add(box, col, row); }
 
+    private void commitActiveItemEdit() {
+        if (itemsTable.getEditingCell() == null) return;
+        // Trigger the normal TableView edit transition. PersistentTextCell.cancelEdit()
+        // converts an implicit JavaFX cancellation into a commit, while ESC remains
+        // an explicit cancel.
+        itemsTable.edit(-1, null);
+    }
+
+    private static boolean isNodeInside(Object target, Node ancestor) {
+        if (!(target instanceof Node node)) return false;
+        Node current = node;
+        while (current != null) {
+            if (current == ancestor) return true;
+            current = current.getParent();
+        }
+        return false;
+    }
+
     private static TableColumn<ItemRow, String> editableColumn(String title, int index, double width, boolean numeric, int maxLength) {
         TableColumn<ItemRow, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
@@ -1316,12 +1340,88 @@ public class WaybillFormView extends AppView {
         private final boolean numeric;
         private final int maxLength;
         private TextField editor;
-        private PersistentTextCell(boolean numeric, int maxLength) { this.numeric = numeric; this.maxLength = maxLength; }
-        @Override public void startEdit() { if (isEmpty()) return; super.startEdit(); createEditor(); editor.setText(getItem() == null ? "" : getItem()); setText(null); setGraphic(editor); editor.requestFocus(); editor.selectAll(); }
-        private void createEditor() { editor = new TextField(); editor.setMaxWidth(Double.MAX_VALUE); if (numeric) InputLimits.numeric(editor, maxLength, 3); else InputLimits.maxLength(editor, maxLength); editor.setOnAction(event -> commitEditorValue()); editor.focusedProperty().addListener((obs, oldFocused, focused) -> { if (!focused && isEditing()) commitEditorValue(); }); }
-        private void commitEditorValue() { if (!isEditing() || editor == null) return; commitEdit(editor.getText() == null ? "" : editor.getText()); }
-        @Override public void cancelEdit() { super.cancelEdit(); editor = null; setText(getItem()); setGraphic(null); }
-        @Override protected void updateItem(String item, boolean empty) { super.updateItem(item, empty); if (empty) { setText(null); setGraphic(null); } else if (isEditing() && editor != null) { editor.setText(item == null ? "" : item); setText(null); setGraphic(editor); } else { setText(item); setGraphic(null); } }
+        private boolean cancelWithoutCommit;
+
+        private PersistentTextCell(boolean numeric, int maxLength) {
+            this.numeric = numeric;
+            this.maxLength = maxLength;
+        }
+
+        @Override public void startEdit() {
+            if (isEmpty()) return;
+            super.startEdit();
+            cancelWithoutCommit = false;
+            createEditor();
+            editor.setText(getItem() == null ? "" : getItem());
+            setText(null);
+            setGraphic(editor);
+            editor.requestFocus();
+            editor.selectAll();
+        }
+
+        private void createEditor() {
+            editor = new TextField();
+            editor.setMaxWidth(Double.MAX_VALUE);
+            if (numeric) InputLimits.numeric(editor, maxLength, 3);
+            else InputLimits.maxLength(editor, maxLength);
+            editor.setOnAction(event -> commitEditorValue());
+            editor.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, event -> {
+                if (event.getCode() == KeyCode.ESCAPE) {
+                    cancelWithoutCommit = true;
+                    cancelEdit();
+                    event.consume();
+                }
+            });
+            editor.focusedProperty().addListener((obs, oldFocused, focused) -> {
+                if (!focused && isEditing()) commitEditorValue();
+            });
+        }
+
+        private void commitEditorValue() {
+            if (!isEditing() || editor == null) return;
+            String value = editor.getText() == null ? "" : editor.getText();
+            commitEdit(value);
+        }
+
+        @Override public void cancelEdit() {
+            // JavaFX may cancel a TableCell edit when the user clicks elsewhere.
+            // Treat that as an implicit commit so mouse navigation never discards
+            // a value that is visibly present in the editor. ESC remains a true cancel.
+            if (isEditing() && editor != null && !cancelWithoutCommit) {
+                String value = editor.getText() == null ? "" : editor.getText();
+                commitWithoutReenteringEdit(value);
+                return;
+            }
+            super.cancelEdit();
+            editor = null;
+            setText(getItem());
+            setGraphic(null);
+            cancelWithoutCommit = false;
+        }
+
+        private void commitWithoutReenteringEdit(String value) {
+            super.commitEdit(value);
+            editor = null;
+            setText(value);
+            setGraphic(null);
+            cancelWithoutCommit = false;
+        }
+
+        @Override protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty) {
+                setText(null);
+                setGraphic(null);
+                editor = null;
+            } else if (isEditing() && editor != null) {
+                editor.setText(item == null ? "" : item);
+                setText(null);
+                setGraphic(editor);
+            } else {
+                setText(item);
+                setGraphic(null);
+            }
+        }
     }
 
     private static final class ItemRow {

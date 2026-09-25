@@ -259,6 +259,10 @@ public final class WaybillService {
                 saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
                 saveLocationMaster(connection, data.originLoadingPoint());
                 saveLocationMaster(connection, data.destinationUnloadingPoint());
+                // Keep reusable company master data in sync while retaining a snapshot in the waybill itself.
+                // Company IDs remain NULL by design so deleting a master never affects historical waybills.
+                findOrCreateCompany(connection, data.shipper(), "shipper_company");
+                findOrCreateCompany(connection, data.consignee(), "consignee_company");
 
                 long waybillId;
                 String sql = "INSERT INTO waybill "
@@ -341,6 +345,10 @@ public final class WaybillService {
                 saveCarrierMaster(connection, data.carrierName(), data.driverName(), data.vehicleTrailerNo());
                 saveLocationMaster(connection, data.originLoadingPoint());
                 saveLocationMaster(connection, data.destinationUnloadingPoint());
+                // Keep reusable company master data in sync while retaining a snapshot in the waybill itself.
+                // Company IDs remain NULL by design so deleting a master never affects historical waybills.
+                findOrCreateCompany(connection, data.shipper(), "shipper_company");
+                findOrCreateCompany(connection, data.consignee(), "consignee_company");
                 LocalDateTime now = LocalDateTime.now();
 
                 String sql = "UPDATE waybill SET waybill_date=?, shipper_company_id=NULL, consignee_company_id=NULL, shipper_company_name=?, shipper_contact_person=?, shipper_address=?, shipper_phone_number=?, shipper_email_address=?, consignee_company_name=?, consignee_contact_person=?, consignee_address=?, consignee_phone_number=?, consignee_email_address=?, carrier_name=?, driver_name=?, vehicle_trailer_no=?, "
