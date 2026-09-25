@@ -314,16 +314,58 @@ public class DashboardView extends BorderPane {
     }
 
     private void showAbout() {
-        Alert dialog=new Alert(Alert.AlertType.INFORMATION);
+        Alert dialog = new Alert(Alert.AlertType.INFORMATION);
         dialog.setTitle("About W.A.S.P");
+        dialog.getDialogPane().getStyleClass().add("wasp-about-dialog");
         dialog.setHeaderText("W.A.S.P (Waybill Automation & Shipping Platform)");
-        dialog.setContentText("W.A.S.P (Waybill Automation & Shipping Platform) is a dedicated waybill management solution developed to simplify, standardize, and accelerate the waybill creation process within logistics operations. Designed with practicality and ease of use in mind, W.A.S.P enables users to generate professional waybills efficiently while reducing repetitive data entry, minimizing documentation errors, and improving overall productivity.\n\n" +
-                "The platform allows for the organized management of customer, sender, receiver, and carrier information, enabling faster preparation of shipping documents and ensuring consistency across all waybills. By automating routine processes and centralizing essential data, W.A.S.P helps users save time, maintain accuracy, and enhance operational efficiency in day-to-day shipment handling activities.\n\n" +
-                "W.A.S.P has been developed as an operational tool to support the documentation requirements of modern logistics services while providing a simple, reliable, and user-friendly experience for both administrative and operational staff.\n\n" +
-                "W.A.S.P is a proprietary application owned and operated by AKS Global Logistics. All rights relating to the software, branding, business processes, and operational use of the application are reserved by AKS Global Logistics.\n\n" +
-                "Developed by: Deepesh V. Thampi\nOwned by: AKS Global Logistics\n\nVersion 1.4.0");
+
+        VBox about = new VBox(14);
+        about.getStyleClass().add("about-content");
+        about.setFillWidth(true);
+        about.setPrefWidth(650);
+        about.setMaxWidth(650);
+
+        about.getChildren().addAll(
+                aboutParagraph("W.A.S.P (Waybill Automation & Shipping Platform) is a dedicated waybill management solution developed to simplify, standardize, and accelerate the waybill creation process within logistics operations. Designed with practicality and ease of use in mind, W.A.S.P enables users to generate professional waybills efficiently while reducing repetitive data entry, minimizing documentation errors, and improving overall productivity."),
+                aboutParagraph("The platform allows for the organized management of customer, sender, receiver, and carrier information, enabling faster preparation of shipping documents and ensuring consistency across all waybills. By automating routine processes and centralizing essential data, W.A.S.P helps users save time, maintain accuracy, and enhance operational efficiency in day-to-day shipment handling activities."),
+                aboutParagraph("W.A.S.P has been developed as an operational tool to support the documentation requirements of modern logistics services while providing a simple, reliable, and user-friendly experience for both administrative and operational staff."),
+                aboutSectionTitle("Ownership"),
+                aboutParagraph("W.A.S.P is a proprietary application owned and operated by AKS Global Logistics. All rights relating to the software, branding, business processes, and operational use of the application are reserved by AKS Global Logistics."),
+                aboutMetadata("Developed by", "Deepesh V. Thampi"),
+                aboutMetadata("Owned by", "AKS Global Logistics"),
+                aboutMetadata("Version", "1.4.0")
+        );
+
+        dialog.getDialogPane().setContent(about);
         if(getScene()!=null) dialog.initOwner(getScene().getWindow());
         dialog.showAndWait();
+    }
+
+    private Label aboutParagraph(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("about-paragraph");
+        label.setWrapText(true);
+        label.setPrefWidth(650);
+        label.setMaxWidth(650);
+        label.setTextOverrun(OverrunStyle.CLIP);
+        return label;
+    }
+
+    private Label aboutSectionTitle(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("about-section-title");
+        return label;
+    }
+
+    private HBox aboutMetadata(String key, String value) {
+        Label keyLabel = new Label(key + ":");
+        keyLabel.getStyleClass().add("about-metadata-key");
+        Label valueLabel = new Label(value);
+        valueLabel.getStyleClass().add("about-metadata-value");
+        HBox row = new HBox(5, keyLabel, valueLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("about-metadata-row");
+        return row;
     }
 
     private void showDashboard() {

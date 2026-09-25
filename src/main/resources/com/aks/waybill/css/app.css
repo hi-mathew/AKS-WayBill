@@ -285,6 +285,33 @@
     -fx-font-size: 17px;
     -fx-font-weight: 700;
 }
+/* About W.A.S.P content */
+.wasp-dialog-pane .about-content {
+    -fx-padding: 18px 20px 14px 20px;
+}
+.wasp-dialog-pane .about-paragraph {
+    -fx-text-fill: #566579;
+    -fx-font-size: 13px;
+    -fx-line-spacing: 2px;
+}
+.wasp-dialog-pane .about-section-title {
+    -fx-text-fill: #152235;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-padding: 3px 0 0 0;
+}
+.wasp-dialog-pane .about-metadata-row {
+    -fx-padding: 0;
+}
+.wasp-dialog-pane .about-metadata-key {
+    -fx-text-fill: #152235;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+}
+.wasp-dialog-pane .about-metadata-value {
+    -fx-text-fill: #566579;
+    -fx-font-size: 13px;
+}
 .wasp-dialog-pane .content.label {
     -fx-text-fill: #566579;
     -fx-font-size: 13px;

@@ -254,6 +254,9 @@ public class Main extends Application {
                 Screen.getPrimary().getVisualBounds().getWidth() - 80);
         double dialogWidth = Math.min(availableScreenWidth,
                 Math.max(560, requiredButtonWidth + safetyMargin));
+        if (pane.getStyleClass().contains("wasp-about-dialog")) {
+            dialogWidth = Math.min(availableScreenWidth, Math.max(dialogWidth, 760));
+        }
 
         pane.setMinWidth(dialogWidth);
         pane.setPrefWidth(dialogWidth);
@@ -282,6 +285,7 @@ public class Main extends Application {
 
         // Values captured by the runLater lambda must be final/effectively final.
         final double finalButtonWidth = commonButtonWidth;
+        final double finalDialogWidth = dialogWidth;
 
         javafx.application.Platform.runLater(() -> {
             pane.applyCss();
@@ -306,8 +310,8 @@ public class Main extends Application {
             }
 
             if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage dialogStage) {
-                dialogStage.setMinWidth(dialogWidth);
-                if (dialogStage.getWidth() < dialogWidth) dialogStage.setWidth(dialogWidth);
+                dialogStage.setMinWidth(finalDialogWidth);
+                if (dialogStage.getWidth() < finalDialogWidth) dialogStage.setWidth(finalDialogWidth);
                 centerDialog(dialogStage);
             }
         });
