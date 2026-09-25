@@ -72,7 +72,7 @@ public final class WaybillService {
     }
 
     public static WaybillPage findPage(String search, LocalDate fromDate, LocalDate toDate, int page, int pageSize) {
-        return findPage(search, fromDate, toDate, page, pageSize, null);
+        return findPage(search, fromDate, toDate, null, page, pageSize, null);
     }
 
     /**
@@ -80,11 +80,15 @@ public final class WaybillService {
      * all waybills; normal users see only waybills they created.
      */
     public static WaybillPage findPageForCurrentUser(String search, LocalDate fromDate, LocalDate toDate, int page, int pageSize) {
-        Long ownerId = SessionContext.isAdmin() ? null : SessionContext.requireUserId();
-        return findPage(search, fromDate, toDate, page, pageSize, ownerId);
+        return findPageForCurrentUser(search, fromDate, toDate, null, page, pageSize);
     }
 
-    private static WaybillPage findPage(String search, LocalDate fromDate, LocalDate toDate, int page, int pageSize, Long ownerId) {
+    public static WaybillPage findPageForCurrentUser(String search, LocalDate fromDate, LocalDate toDate, String status, int page, int pageSize) {
+        Long ownerId = SessionContext.isAdmin() ? null : SessionContext.requireUserId();
+        return findPage(search, fromDate, toDate, status, page, pageSize, ownerId);
+    }
+
+    private static WaybillPage findPage(String search, LocalDate fromDate, LocalDate toDate, String status, int page, int pageSize, Long ownerId) {
         int safePageSize = Math.max(1, Math.min(100, pageSize));
         int safePage = Math.max(0, page);
         String term = search == null ? "" : search.trim();
@@ -98,6 +102,7 @@ public final class WaybillService {
         }
         if (fromDate != null) { where.append(" AND w.waybill_date >= ? "); params.add(DB_DATE.format(fromDate)); }
         if (toDate != null) { where.append(" AND w.waybill_date <= ? "); params.add(DB_DATE.format(toDate)); }
+        if (status != null && !status.isBlank()) { where.append(" AND UPPER(w.status) = UPPER(?) "); params.add(status.trim()); }
 
         String base = " FROM waybill w " + where;
         String countSql = "SELECT COUNT(*)" + base;
@@ -123,7 +128,7 @@ public final class WaybillService {
             }
             int totalPages = (int)Math.max(1, (total + safePageSize - 1) / safePageSize);
             int normalizedPage = Math.min(safePage, totalPages - 1);
-            if (normalizedPage != safePage) return findPage(term, fromDate, toDate, normalizedPage, safePageSize, ownerId);
+            if (normalizedPage != safePage) return findPage(term, fromDate, toDate, status, normalizedPage, safePageSize, ownerId);
             return new WaybillPage(rows, safePage, safePageSize, total);
         } catch (SQLException e) {
             throw new IllegalStateException("Unable to load saved waybills", e);
@@ -174,6 +179,10 @@ public final class WaybillService {
     }
 
     public static List<WaybillExportRow> findAllForExcelForCurrentUser(String search, LocalDate fromDate, LocalDate toDate) {
+        return findAllForExcelForCurrentUser(search, fromDate, toDate, null);
+    }
+
+    public static List<WaybillExportRow> findAllForExcelForCurrentUser(String search, LocalDate fromDate, LocalDate toDate, String status) {
         Long ownerId = SessionContext.isAdmin() ? null : SessionContext.requireUserId();
         String term = search == null ? "" : search.trim();
         StringBuilder where = new StringBuilder(" WHERE 1=1 "); List<Object> params = new ArrayList<>();
@@ -181,6 +190,7 @@ public final class WaybillService {
         if(!term.isBlank()){where.append(" AND (w.waybill_number LIKE ? COLLATE NOCASE OR COALESCE(sc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(cc.company_name,'') LIKE ? COLLATE NOCASE OR COALESCE(w.carrier_name,'') LIKE ? COLLATE NOCASE) ");String like="%"+term+"%";Collections.addAll(params,like,like,like,like);}
         if(fromDate!=null){where.append(" AND w.waybill_date>=? ");params.add(DB_DATE.format(fromDate));}
         if(toDate!=null){where.append(" AND w.waybill_date<=? ");params.add(DB_DATE.format(toDate));}
+        if(status!=null&&!status.isBlank()){where.append(" AND UPPER(w.status)=UPPER(?) ");params.add(status.trim());}
         String sql="SELECT w.waybill_number,w.waybill_date,COALESCE(w.shipper_company_name,''),COALESCE(w.consignee_company_name,''),COALESCE(w.carrier_name,''),COALESCE(w.driver_name,''),COALESCE(w.vehicle_trailer_no,''),COALESCE(w.origin_loading_point,''),COALESCE(w.destination_unloading_point,''),w.estimated_delivery_date,COALESCE(u.username,''),w.created_at FROM waybill w LEFT JOIN app_user u ON u.id=w.created_by"+where+" ORDER BY w.waybill_date DESC,w.id DESC";
         List<WaybillExportRow> rows=new ArrayList<>();
         try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(sql)){bind(p,params);try(ResultSet r=p.executeQuery()){while(r.next())rows.add(new WaybillExportRow(r.getString(1),LocalDate.parse(r.getString(2),DB_DATE),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getString(7),r.getString(8),r.getString(9),parseDate(r.getString(10)),r.getString(11),r.getString(12)));}return rows;}catch(SQLException e){throw new IllegalStateException("Unable to load waybills for Excel export",e);}

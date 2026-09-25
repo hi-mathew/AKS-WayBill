@@ -29,6 +29,7 @@ public final class SavedWaybillsView extends AppView {
     { InputLimits.maxLength(searchField, 400); }
     private final DatePicker fromDate = new DatePicker();
     private final DatePicker toDate = new DatePicker();
+    private final ComboBox<String> statusFilter = new ComboBox<>();
     private final TableView<WaybillService.WaybillListRow> table = new TableView<>();
     private final Label pageInfo = new Label();
     private final Label resultInfo = new Label();
@@ -61,17 +62,20 @@ public final class SavedWaybillsView extends AppView {
         searchField.setOnAction(event -> loadPage(0));
         fromDate.setPromptText("From date"); fromDate.setPrefWidth(150);
         toDate.setPromptText("To date"); toDate.setPrefWidth(150);
+        statusFilter.getItems().setAll("All", "DRAFT", "FINAL");
+        statusFilter.setValue("All");
+        statusFilter.setPrefWidth(130);
         Button search = button("Search", "primary-button"); search.setOnAction(event -> loadPage(0));
-        Button clear = button("Clear", "secondary-button"); clear.setOnAction(event -> { searchField.clear(); fromDate.setValue(null); toDate.setValue(null); loadPage(0); });
-        VBox searchBox = labeled("Search", searchField); VBox fromBox = labeled("From", fromDate); VBox toBox = labeled("To", toDate);
-        HBox searchRow = new HBox(12, searchBox, fromBox, toBox, search, clear); searchRow.setAlignment(Pos.BOTTOM_LEFT); HBox.setHgrow(searchBox, Priority.ALWAYS); searchField.setMaxWidth(Double.MAX_VALUE);
+        Button clear = button("Clear", "secondary-button"); clear.setOnAction(event -> { searchField.clear(); fromDate.setValue(null); toDate.setValue(null); statusFilter.setValue("All"); loadPage(0); });
+        VBox searchBox = labeled("Search", searchField); VBox fromBox = labeled("From", fromDate); VBox toBox = labeled("To", toDate); VBox statusBox = labeled("Status", statusFilter);
+        HBox searchRow = new HBox(12, searchBox, fromBox, toBox, statusBox, search, clear); searchRow.setAlignment(Pos.BOTTOM_LEFT); HBox.setHgrow(searchBox, Priority.ALWAYS); searchField.setMaxWidth(Double.MAX_VALUE);
         filterCard.getChildren().addAll(filterTitle, searchRow);
 
         TableColumn<WaybillService.WaybillListRow,String> number = column("Waybill No.", r -> r.waybillNumber(), 200);
         TableColumn<WaybillService.WaybillListRow,String> date = column("Date", r -> DISPLAY_DATE.format(r.waybillDate()), 100);
-        TableColumn<WaybillService.WaybillListRow,String> shipper = column("Shipper / Consignor", r -> r.shipperName(), 170);
-        TableColumn<WaybillService.WaybillListRow,String> consignee = column("Consignee / Receiver", r -> r.consigneeName(), 170);
-        TableColumn<WaybillService.WaybillListRow,String> carrier = column("Carrier", r -> r.carrierName(), 150);
+        TableColumn<WaybillService.WaybillListRow,String> shipper = columnWithTooltip("Shipper / Consignor", r -> r.shipperName(), 170);
+        TableColumn<WaybillService.WaybillListRow,String> consignee = columnWithTooltip("Consignee / Receiver", r -> r.consigneeName(), 170);
+        TableColumn<WaybillService.WaybillListRow,String> carrier = columnWithTooltip("Carrier", r -> r.carrierName(), 150);
         TableColumn<WaybillService.WaybillListRow,String> status = column("Status", r -> r.status(), 85);
 
         TableColumn<WaybillService.WaybillListRow, Void> actions = new TableColumn<>("Actions");
@@ -191,7 +195,8 @@ public final class SavedWaybillsView extends AppView {
     private void exportExcel() {
         FileChooser chooser=new FileChooser(); chooser.setTitle("Export Saved Waybills to Excel"); chooser.setInitialFileName("AKS-Waybills-"+java.time.LocalDate.now()+".xlsx"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)","*.xlsx"));
         java.io.File file=chooser.showSaveDialog(getScene()==null?null:getScene().getWindow()); if(file==null)return;
-        try{var rows=WaybillService.findAllForExcelForCurrentUser(searchField.getText(),fromDate.getValue(),toDate.getValue());ExcelExportService.export(file.toPath(),rows);new Alert(Alert.AlertType.INFORMATION,"Excel export created successfully.\nRecords exported: "+rows.size(),ButtonType.OK).showAndWait();}catch(Exception ex){showError(ex.getMessage());}
+        try{String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
+        var rows=WaybillService.findAllForExcelForCurrentUser(searchField.getText(),fromDate.getValue(),toDate.getValue(),selectedStatus);ExcelExportService.export(file.toPath(),rows);new Alert(Alert.AlertType.INFORMATION,"Excel export created successfully.\nRecords exported: "+rows.size(),ButtonType.OK).showAndWait();}catch(Exception ex){showError(ex.getMessage());}
     }
 
     private void openView(long id) { onView.accept(id); }
@@ -200,7 +205,8 @@ public final class SavedWaybillsView extends AppView {
 
     private void loadPage(int page) {
         try {
-            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), Math.max(0, page), pageSize);
+            String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
+            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), selectedStatus, Math.max(0, page), pageSize);
             currentPage = result.page(); totalPages = result.totalPages(); table.getItems().setAll(result.rows());
             long start = result.totalRows() == 0 ? 0 : (long) currentPage * pageSize + 1;
             long end = Math.min(result.totalRows(), (long) (currentPage + 1) * pageSize);
@@ -240,6 +246,23 @@ public final class SavedWaybillsView extends AppView {
     }
     private static TableColumn<WaybillService.WaybillListRow,String> column(String title, java.util.function.Function<WaybillService.WaybillListRow,String> value, double width) {
         TableColumn<WaybillService.WaybillListRow,String> column = new TableColumn<>(title); column.setPrefWidth(width); column.setCellValueFactory(data -> new SimpleStringProperty(value.apply(data.getValue()) == null ? "" : value.apply(data.getValue()))); return column;
+    }
+
+    private static TableColumn<WaybillService.WaybillListRow,String> columnWithTooltip(String title, java.util.function.Function<WaybillService.WaybillListRow,String> value, double width) {
+        TableColumn<WaybillService.WaybillListRow,String> column = column(title, value, width);
+        column.setCellFactory(col -> new TableCell<>() {
+                        @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null || item.isBlank()) {
+                    setText(null);
+                    setTooltip(null);
+                } else {
+                    setText(item);
+                    setTooltip(new Tooltip(item));
+                }
+            }
+        });
+        return column;
     }
     private void showError(String message) { Alert alert = new Alert(Alert.AlertType.ERROR); alert.setTitle("Saved Waybills"); alert.setHeaderText(null); alert.setContentText(message == null ? "Unable to load saved waybills." : message); alert.showAndWait(); }
 }
