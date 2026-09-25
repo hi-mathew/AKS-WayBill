@@ -423,3 +423,70 @@
 .waybill-form-view .waybill-number{-fx-padding:8px 12px;-fx-font-size:20px;}
 .waybill-form-view .primary-button,.waybill-form-view .secondary-button{-fx-border-width:0;-fx-border-insets:0;}
 .waybill-form-view .primary-button:focused,.waybill-form-view .secondary-button:focused{-fx-border-width:0;-fx-background-insets:0;}
+
+/* W.A.S.P master-data tabs: replace the native grey TabPane appearance with the
+   same clean white / soft-blue visual language used across the application. */
+.wasp-master-tabs,
+.wasp-company-tabs {
+    -fx-background-color: transparent;
+    -fx-tab-min-height: 38px;
+    -fx-tab-max-height: 38px;
+}
+.wasp-master-tabs .tab-header-area,
+.wasp-company-tabs .tab-header-area {
+    -fx-padding: 0 0 0 0;
+    -fx-background-color: transparent;
+}
+.wasp-master-tabs .tab-header-background,
+.wasp-company-tabs .tab-header-background {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+.wasp-master-tabs .headers-region,
+.wasp-company-tabs .headers-region {
+    -fx-background-color: transparent;
+}
+.wasp-master-tabs .tab,
+.wasp-company-tabs .tab {
+    -fx-background-color: #eef4f8;
+    -fx-background-radius: 7px 7px 0 0;
+    -fx-border-color: #dbe4ec;
+    -fx-border-width: 1px 1px 0 1px;
+    -fx-border-radius: 7px 7px 0 0;
+    -fx-padding: 9px 17px 8px 17px;
+    -fx-cursor: hand;
+}
+.wasp-master-tabs .tab:hover,
+.wasp-company-tabs .tab:hover {
+    -fx-background-color: #e3edf4;
+}
+.wasp-master-tabs .tab:selected,
+.wasp-company-tabs .tab:selected {
+    -fx-background-color: white;
+    -fx-border-color: #dbe4ec #dbe4ec #0b4b7d #dbe4ec;
+    -fx-border-width: 1px 1px 3px 1px;
+}
+.wasp-master-tabs .tab .tab-label,
+.wasp-company-tabs .tab .tab-label {
+    -fx-text-fill: #52647a;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+}
+.wasp-master-tabs .tab:selected .tab-label,
+.wasp-company-tabs .tab:selected .tab-label {
+    -fx-text-fill: #0b4b7d;
+}
+.wasp-master-tabs .tab-content-area,
+.wasp-company-tabs .tab-content-area {
+    -fx-background-color: white;
+    -fx-border-color: #dbe4ec;
+    -fx-border-width: 1px;
+    -fx-border-radius: 0 7px 7px 7px;
+    -fx-background-radius: 0 7px 7px 7px;
+    -fx-padding: 16px;
+}
+.wasp-company-tabs .tab-content-area {
+    -fx-padding: 16px 0 0 0;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}

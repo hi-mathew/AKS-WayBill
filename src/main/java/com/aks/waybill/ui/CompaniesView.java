@@ -16,6 +16,7 @@ public final class CompaniesView extends AppView {
     public CompaniesView() {
         super("Companies", "Shippers / Consignors and Consignees / Receivers are maintained as separate company masters.");
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabs.getStyleClass().add("wasp-company-tabs");
         Tab shippers = new Tab("Shippers / Consignors"); shippers.setContent(new CompanyMasterTab(CompanyService.CompanyType.SHIPPER));
         Tab consignees = new Tab("Consignees / Receivers"); consignees.setContent(new CompanyMasterTab(CompanyService.CompanyType.CONSIGNEE));
         tabs.getTabs().addAll(shippers, consignees);

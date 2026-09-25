@@ -16,6 +16,7 @@ public final class SavedDataView extends AppView {
     public SavedDataView() {
         super("Saved Data", "Companies, carriers and locations are remembered for faster waybill entry.");
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabs.getStyleClass().add("wasp-master-tabs");
         Tab companies = new Tab("Companies");
         companies.setContent(new CompaniesView());
         Tab carriers = new Tab("Carriers");
