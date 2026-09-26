@@ -686,8 +686,24 @@ public class DashboardView extends BorderPane {
 
         WaybillService.WaybillPage page = WaybillService.findPageForCurrentUser(null, null, null, 0, 5);
         if (page.rows().isEmpty()) {
-            Label empty = label("No saved waybills yet. Create your first waybill using New Waybill.", "empty-state");
-            card.getChildren().add(empty);
+            card.setAlignment(Pos.CENTER);
+            card.setPadding(new Insets(22, 20, 22, 20));
+            card.setMinHeight(112);
+            card.setPrefHeight(112);
+            card.setMaxWidth(Double.MAX_VALUE);
+            VBox emptyContent = new VBox(7);
+            emptyContent.setAlignment(Pos.CENTER);
+
+            Label emptyTitle = label("No saved waybills yet.", "dashboard-empty-state-title");
+            Label emptyMessage = label("Create your first waybill to get started.", "dashboard-empty-state-message");
+            Button newWaybill = new Button("＋ New Waybill");
+            newWaybill.getStyleClass().add("primary-button");
+            newWaybill.setPrefHeight(36);
+            newWaybill.setMinWidth(140);
+            newWaybill.setOnAction(e -> showNewWaybill());
+
+            emptyContent.getChildren().addAll(emptyTitle, emptyMessage, newWaybill);
+            card.getChildren().add(emptyContent);
             return card;
         }
 
