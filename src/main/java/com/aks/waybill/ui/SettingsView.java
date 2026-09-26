@@ -10,9 +10,9 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.FileChooser;
-import javafx.stage.Window;
-
+import java.nio.file.Files;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -189,32 +189,142 @@ public final class SettingsView extends AppView {
         card.getChildren().addAll(title,desc,row,paginationMessage); return card;
     }
 
+    private TableView<BackupService.BackupInfo> backupTable;
+
     private VBox backupCard() {
         VBox card=card();
         Label title=new Label("Database Backup & Restore"); title.getStyleClass().add("settings-card-title");
-        Label desc=new Label("Back up the local SQLite database to a safe location, or restore from a previous backup. A restore also creates a safety copy of the current database and requires an application restart."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        Label desc=new Label("Create backups in the W.A.S.P backup folder, review previous backups, or restore a selected backup. A restore first creates a safety copy of the current database and then closes the application."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+
+        backupTable=new TableView<>();
+        backupTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        backupTable.setPlaceholder(new Label("No backups have been created yet."));
+        fitTableHeight(backupTable, 0, 6, 38);
+
+        TableColumn<BackupService.BackupInfo,String> name=new TableColumn<>("Backup File");
+        name.setMinWidth(300); name.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().path().getFileName().toString()));
+        TableColumn<BackupService.BackupInfo,String> type=new TableColumn<>("Type");
+        type.setMinWidth(120); type.setMaxWidth(150); type.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().type()));
+        TableColumn<BackupService.BackupInfo,String> performedBy=new TableColumn<>("Performed By");
+        performedBy.setMinWidth(120); performedBy.setMaxWidth(150);
+        performedBy.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().performedBy()));
+        TableColumn<BackupService.BackupInfo,String> date=new TableColumn<>("Created / Modified");
+        date.setMinWidth(170); date.setMaxWidth(200);
+        date.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(
+                DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(d.getValue().modified())));
+        TableColumn<BackupService.BackupInfo,String> size=new TableColumn<>("Size");
+        size.setMinWidth(90); size.setMaxWidth(110); size.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(formatBytes(d.getValue().size())));
+        backupTable.getColumns().setAll(name,type,performedBy,date,size);
+        refreshBackups();
+
         Button backup=primary("Backup Now"); backup.setOnAction(e->backupDatabase());
-        Button restore=secondary("Restore Backup"); restore.setOnAction(e->restoreDatabase());
-        card.getChildren().addAll(title,desc,new HBox(10,backup,restore)); return card;
+        Button restore=secondary("Restore Selected"); restore.setOnAction(e->restoreSelectedBackup());
+        Button delete=secondary("Delete Selected"); delete.setOnAction(e->deleteSelectedBackup());
+        Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
+        Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
+        HBox buttons=new HBox(8,backup,restore,delete,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT);
+        card.getChildren().addAll(title,desc,backupTable,buttons); return card;
+    }
+
+    private void refreshBackups(){
+        if(backupTable==null) return;
+        try{
+            backupTable.getItems().setAll(BackupService.listBackups());
+            fitTableHeight(backupTable, backupTable.getItems().size(), 6, 38);
+        }catch(Exception ex){showSimpleError(ex.getMessage());}
     }
 
     private void backupDatabase() {
-        FileChooser chooser=new FileChooser(); chooser.setTitle("Save W.A.S.P Database Backup"); chooser.setInitialFileName(BackupService.defaultBackupPath().getFileName().toString()); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite Database (*.db)","*.db"));
-        Window owner=getScene()==null?null:getScene().getWindow(); java.io.File file=chooser.showSaveDialog(owner); if(file==null)return;
-        try{Path saved=BackupService.backupTo(file.toPath()); new Alert(Alert.AlertType.INFORMATION,"Database backup created successfully:\n"+saved,ButtonType.OK).showAndWait();}catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Backup failed: "+message(ex),ButtonType.OK).showAndWait();}
+        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
+                "Create a database backup now? The backup will be saved automatically in the W.A.S.P backup folder.",
+                ButtonType.OK,ButtonType.CANCEL);
+        confirm.setTitle("Create Database Backup");
+        confirm.setHeaderText("Backup Database");
+        if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK) return;
+        try {
+            Path saved=BackupService.backupTo(BackupService.defaultBackupPath());
+            refreshBackups();
+            new Alert(Alert.AlertType.INFORMATION,"Database backup created successfully.\n\n"+saved.getFileName(),ButtonType.OK).showAndWait();
+        } catch(Exception ex) { new Alert(Alert.AlertType.ERROR,"Backup failed: "+message(ex),ButtonType.OK).showAndWait(); }
     }
 
-    private void restoreDatabase() {
-        FileChooser chooser=new FileChooser(); chooser.setTitle("Select W.A.S.P Database Backup"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite Database (*.db)","*.db"));
-        Window owner=getScene()==null?null:getScene().getWindow(); java.io.File file=chooser.showOpenDialog(owner); if(file==null)return;
-        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,"Restore this database backup? The current database will first be preserved as a safety copy, and the application will close after restore.",ButtonType.OK,ButtonType.CANCEL); confirm.setHeaderText("Restore Database"); if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
-        try{BackupService.restoreFrom(file.toPath());new Alert(Alert.AlertType.INFORMATION,"Database restored successfully. The application will now close. Start W.A.S.P again to continue.",ButtonType.OK).showAndWait();Platform.exit();}catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Restore failed: "+message(ex),ButtonType.OK).showAndWait();}
+    private void restoreSelectedBackup(){
+        BackupService.BackupInfo selected=backupTable.getSelectionModel().getSelectedItem();
+        if(selected==null){showSimpleError("Select a backup from the list first.");return;}
+        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
+                "Restore "+selected.path().getFileName()+"?\n\nThe current database will first be preserved as a safety copy. W.A.S.P will close after the restore; start the application again to continue.",
+                ButtonType.OK,ButtonType.CANCEL);
+        confirm.setTitle("Restore Database"); confirm.setHeaderText("Restore Selected Backup");
+        if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+        try{
+            BackupService.restoreFrom(selected.path());
+            new Alert(Alert.AlertType.INFORMATION,"Database restored successfully. The application will now close. Start W.A.S.P again to continue.",ButtonType.OK).showAndWait();
+            Platform.exit();
+        }catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Restore failed: "+message(ex),ButtonType.OK).showAndWait();}
     }
 
-    private VBox card(){VBox v=new VBox(18);v.getStyleClass().add("settings-card");v.setPadding(new Insets(24));return v;}
-    private Button primary(String s){Button b=new Button(s);b.getStyleClass().add("primary-button");b.setDefaultButton(true);return b;}
-    private Button secondary(String s){Button b=new Button(s);b.getStyleClass().add("secondary-button");return b;}
-    private void addField(GridPane g,int row,String label,TextField f,String prompt){Label l=new Label(label);l.getStyleClass().add("field-label");f.setPromptText(prompt);f.setPrefHeight(40);f.setMaxWidth(Double.MAX_VALUE);f.getStyleClass().add("settings-field");GridPane.setHgrow(f,Priority.ALWAYS);g.add(l,0,row);g.add(f,1,row);}
+    private void deleteSelectedBackup(){
+        BackupService.BackupInfo selected=backupTable.getSelectionModel().getSelectedItem();
+        if(selected==null){showSimpleError("Select a backup from the list first.");return;}
+        Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete "+selected.path().getFileName()+"? This cannot be undone.",ButtonType.OK,ButtonType.CANCEL);
+        confirm.setTitle("Delete Backup"); confirm.setHeaderText("Delete Selected Backup");
+        if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+        try{BackupService.deleteBackup(selected.path());refreshBackups();}
+        catch(Exception ex){showSimpleError(ex.getMessage());}
+    }
+
+    private void openBackupFolder(){
+        try{Path dir=com.aks.waybill.config.AppPaths.backupDirectory();Files.createDirectories(dir);
+            new ProcessBuilder("explorer.exe",dir.toAbsolutePath().toString()).start();
+        }catch(Exception ex){showSimpleError("Unable to open the backup folder: "+message(ex));}
+    }
+
+    private static String formatBytes(long bytes){
+        if(bytes<1024) return bytes+" B";
+        if(bytes<1024*1024) return String.format("%.1f KB",bytes/1024.0);
+        return String.format("%.1f MB",bytes/(1024.0*1024.0));
+    }
+
+    private static VBox card() {
+        VBox box = new VBox(12);
+        box.getStyleClass().add("settings-card");
+        box.setPadding(new Insets(16));
+        return box;
+    }
+
+    private static void addField(GridPane grid, int row, String labelText, Region control, String prompt) {
+        Label label = new Label(labelText);
+        label.getStyleClass().add("field-label");
+        if (control instanceof TextInputControl input) {
+            input.setPromptText(prompt);
+        }
+        control.setMaxWidth(Double.MAX_VALUE);
+        control.getStyleClass().add("settings-field");
+        GridPane.setHgrow(control, Priority.ALWAYS);
+        grid.add(label, 0, row);
+        grid.add(control, 1, row);
+        ColumnConstraints left = grid.getColumnConstraints().isEmpty() ? new ColumnConstraints() : grid.getColumnConstraints().get(0);
+        if (grid.getColumnConstraints().isEmpty()) {
+            left.setMinWidth(170);
+            ColumnConstraints right = new ColumnConstraints();
+            right.setHgrow(Priority.ALWAYS);
+            grid.getColumnConstraints().addAll(left, right);
+        }
+    }
+
+    private static Button primary(String text) {
+        Button button = new Button(text);
+        button.getStyleClass().add("primary-button");
+        return button;
+    }
+
+    private static Button secondary(String text) {
+        Button button = new Button(text);
+        button.getStyleClass().add("secondary-button");
+        return button;
+    }
+
     private void loadAll(){loadNumbering();loadProfile(); pageSize.setValue(SettingsService.getPageSize());}
     private void confirmResetNumbering(){ Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Reset the numbering fields to the values currently stored in the database? Unsaved changes on this screen will be lost.",ButtonType.OK,ButtonType.CANCEL); if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK) loadNumbering(); }
     private void confirmResetProfile(){ Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Reset the company profile fields to the values currently stored in the database? Unsaved changes on this screen will be lost.",ButtonType.OK,ButtonType.CANCEL); if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK) loadProfile(); }
