@@ -4,6 +4,7 @@ import com.aks.waybill.db.Database;
 import com.aks.waybill.logging.WaspLogger;
 import com.aks.waybill.security.SessionContext;
 import com.aks.waybill.service.BackupService;
+import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.ui.DashboardView;
 import com.aks.waybill.ui.LoginView;
 import javafx.application.Application;
@@ -487,7 +488,12 @@ public class Main extends Application {
             javafx.concurrent.Task<java.nio.file.Path> task = new javafx.concurrent.Task<>() {
                 @Override protected java.nio.file.Path call() {
                     updateMessage("Creating database backup...");
-                    return BackupService.backupTo(BackupService.defaultBackupPath());
+                    java.nio.file.Path created = BackupService.backupTo(BackupService.defaultBackupPath());
+                    if (SettingsService.isBackupRetentionEnabled()) {
+                        updateMessage("Applying backup retention policy...");
+                        BackupService.cleanupOldBackups(SettingsService.getBackupRetentionCount());
+                    }
+                    return created;
                 }
             };
             task.messageProperty().addListener((obs, oldValue, newValue) -> message.setText(newValue));

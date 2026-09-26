@@ -29,6 +29,9 @@ public final class SettingsView extends AppView {
     private final TextField phone = new TextField();
     private final TextField email = new TextField();
     private final ComboBox<Integer> pageSize = new ComboBox<>();
+    private final CheckBox backupRetentionEnabled = new CheckBox("Automatically remove older regular backups");
+    private final ComboBox<Integer> backupRetentionCount = new ComboBox<>();
+    private final Label backupRetentionMessage = new Label();
     { InputLimits.maxLength(part1, InputLimits.PART1); InputLimits.numeric(sequence, InputLimits.SEQUENCE, 0); InputLimits.maxLength(companyName, InputLimits.COMPANY_NAME); InputLimits.maxLength(crNumber, InputLimits.CR_NUMBER); InputLimits.maxLength(vatNumber, InputLimits.VAT_NUMBER); InputLimits.maxLength(phone, InputLimits.PHONE); InputLimits.maxLength(email, InputLimits.EMAIL); }
     private final Label numberingMessage = new Label();
     private final Label profileMessage = new Label();
@@ -218,13 +221,41 @@ public final class SettingsView extends AppView {
         backupTable.getColumns().setAll(name,type,performedBy,date,size);
         refreshBackups();
 
+        backupRetentionEnabled.setSelected(SettingsService.isBackupRetentionEnabled());
+        backupRetentionCount.getItems().setAll(5, 10, 20, 50, 100);
+        backupRetentionCount.setValue(SettingsService.getBackupRetentionCount());
+        backupRetentionCount.setPrefWidth(110);
+        backupRetentionCount.setDisable(!backupRetentionEnabled.isSelected());
+        backupRetentionEnabled.selectedProperty().addListener((obs, oldValue, newValue) -> backupRetentionCount.setDisable(!newValue));
+        backupRetentionMessage.getStyleClass().add("settings-message");
+        Button saveRetention=secondary("Save Retention Settings");
+        saveRetention.setOnAction(e -> saveBackupRetention());
+        HBox retentionRow=new HBox(12, backupRetentionEnabled, new Label("Keep latest"), backupRetentionCount, new Label("regular backups"), saveRetention);
+        retentionRow.setAlignment(Pos.CENTER_LEFT);
+        retentionRow.setPadding(new Insets(4,0,4,0));
+
         Button backup=primary("Backup Now"); backupNowButton=backup; backup.setOnAction(e->backupDatabase());
         Button restore=secondary("Restore Selected"); restore.setOnAction(e->restoreSelectedBackup());
         Button delete=secondary("Delete Selected"); delete.setOnAction(e->deleteSelectedBackup());
         Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
         HBox buttons=new HBox(8,backup,restore,delete,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
-        card.getChildren().addAll(title,desc,backupTable,buttons); return card;
+        card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTable,buttons); return card;
+    }
+
+    private void saveBackupRetention() {
+        try {
+            SettingsService.saveBackupRetention(backupRetentionEnabled.isSelected(), backupRetentionCount.getValue());
+            if (backupRetentionEnabled.isSelected()) {
+                int deleted = BackupService.cleanupOldBackups(backupRetentionCount.getValue());
+                refreshBackups();
+                setMessage(backupRetentionMessage, deleted == 0 ? "Retention settings saved. No old backups needed to be removed." : "Retention settings saved. " + deleted + " old backup(s) removed.", false);
+            } else {
+                setMessage(backupRetentionMessage, "Retention settings saved. Older backups will not be removed automatically.", false);
+            }
+        } catch (Exception ex) {
+            setMessage(backupRetentionMessage, message(ex), true);
+        }
     }
 
     private void refreshBackups(){
@@ -250,7 +281,12 @@ public final class SettingsView extends AppView {
         javafx.concurrent.Task<Path> task = new javafx.concurrent.Task<>() {
             @Override protected Path call() {
                 updateMessage("Creating database backup...");
-                return BackupService.backupTo(BackupService.defaultBackupPath());
+                Path created = BackupService.backupTo(BackupService.defaultBackupPath());
+                if (SettingsService.isBackupRetentionEnabled()) {
+                    updateMessage("Applying backup retention policy...");
+                    BackupService.cleanupOldBackups(SettingsService.getBackupRetentionCount());
+                }
+                return created;
             }
         };
         Dialog<Void> dialog = createBackupProgressDialog(task);

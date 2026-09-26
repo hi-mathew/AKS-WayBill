@@ -11,10 +11,14 @@ public final class SettingsService {
     public static final String WAYBILL_PART_1 = "waybill.part1";
     public static final String WAYBILL_NEXT_SEQUENCE = "waybill.next_sequence";
     public static final String LIST_PAGE_SIZE = "application.list_page_size";
+    public static final String BACKUP_RETENTION_ENABLED = "backup.retention.enabled";
+    public static final String BACKUP_RETENTION_COUNT = "backup.retention.count";
 
     private static final String DEFAULT_PART_1 = "AKS";
     private static final long DEFAULT_NEXT_SEQUENCE = 1001L;
     private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final boolean DEFAULT_BACKUP_RETENTION_ENABLED = false;
+    private static final int DEFAULT_BACKUP_RETENTION_COUNT = 10;
 
     private SettingsService() {}
 
@@ -47,6 +51,39 @@ public final class SettingsService {
             ensureDefault(c, LIST_PAGE_SIZE, String.valueOf(DEFAULT_PAGE_SIZE));
             return Integer.parseInt(getValue(c, LIST_PAGE_SIZE));
         } catch (Exception e) { throw new IllegalStateException("Unable to load pagination setting", e); }
+    }
+
+    public static boolean isBackupRetentionEnabled() {
+        try (Connection c = Database.getConnection()) {
+            ensureDefault(c, BACKUP_RETENTION_ENABLED, String.valueOf(DEFAULT_BACKUP_RETENTION_ENABLED));
+            return Boolean.parseBoolean(getValue(c, BACKUP_RETENTION_ENABLED));
+        } catch (Exception e) { throw new IllegalStateException("Unable to load backup retention setting", e); }
+    }
+
+    public static int getBackupRetentionCount() {
+        try (Connection c = Database.getConnection()) {
+            ensureDefault(c, BACKUP_RETENTION_COUNT, String.valueOf(DEFAULT_BACKUP_RETENTION_COUNT));
+            return Integer.parseInt(getValue(c, BACKUP_RETENTION_COUNT));
+        } catch (Exception e) { throw new IllegalStateException("Unable to load backup retention count", e); }
+    }
+
+    public static void saveBackupRetention(boolean enabled, int keepCount) {
+        if (keepCount != 5 && keepCount != 10 && keepCount != 20 && keepCount != 50 && keepCount != 100) {
+            throw new IllegalArgumentException("Backup retention count must be 5, 10, 20, 50 or 100.");
+        }
+        try (Connection c = Database.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                upsert(c, BACKUP_RETENTION_ENABLED, String.valueOf(enabled));
+                upsert(c, BACKUP_RETENTION_COUNT, String.valueOf(keepCount));
+                c.commit();
+            } catch (Exception e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (Exception e) { throw new IllegalStateException("Unable to save backup retention settings", e); }
     }
 
     public static void savePageSize(int pageSize) {

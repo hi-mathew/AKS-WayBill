@@ -38,6 +38,28 @@ public final class BackupService {
                     .collect(Collectors.toList());
         }catch(IOException e){throw new IllegalStateException("Unable to read the backup folder: "+e.getMessage(),e);}
     }
+    /** Deletes the oldest regular backups when retention is enabled. Safety copies are never removed by retention. */
+    public static int cleanupOldBackups(int keepCount) {
+        if (keepCount < 1) throw new IllegalArgumentException("Backup retention count must be greater than zero.");
+        List<BackupInfo> regular = listBackups().stream()
+                .filter(b -> "Manual Backup".equals(b.type()))
+                .sorted(Comparator.comparing(BackupInfo::modified).reversed())
+                .collect(Collectors.toList());
+        int deleted = 0;
+        for (int i = keepCount; i < regular.size(); i++) {
+            Path target = regular.get(i).path().toAbsolutePath().normalize();
+            try {
+                if (Files.deleteIfExists(target)) {
+                    deleted++;
+                    AuditLogService.log("RETENTION_DELETE", "DATABASE", null, "Old backup removed by retention policy: " + target.getFileName());
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException("Unable to remove old backup " + target.getFileName() + ": " + e.getMessage(), e);
+            }
+        }
+        return deleted;
+    }
+
     public static void deleteBackup(Path file){
         if(file==null) throw new IllegalArgumentException("Select a backup first.");
         Path target=file.toAbsolutePath().normalize();
