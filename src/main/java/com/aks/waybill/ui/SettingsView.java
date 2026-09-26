@@ -190,6 +190,7 @@ public final class SettingsView extends AppView {
     }
 
     private TableView<BackupService.BackupInfo> backupTable;
+    private Button backupNowButton;
 
     private VBox backupCard() {
         VBox card=card();
@@ -217,12 +218,12 @@ public final class SettingsView extends AppView {
         backupTable.getColumns().setAll(name,type,performedBy,date,size);
         refreshBackups();
 
-        Button backup=primary("Backup Now"); backup.setOnAction(e->backupDatabase());
+        Button backup=primary("Backup Now"); backupNowButton=backup; backup.setOnAction(e->backupDatabase());
         Button restore=secondary("Restore Selected"); restore.setOnAction(e->restoreSelectedBackup());
         Button delete=secondary("Delete Selected"); delete.setOnAction(e->deleteSelectedBackup());
         Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
-        HBox buttons=new HBox(8,backup,restore,delete,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT);
+        HBox buttons=new HBox(8,backup,restore,delete,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
         card.getChildren().addAll(title,desc,backupTable,buttons); return card;
     }
 
@@ -236,16 +237,57 @@ public final class SettingsView extends AppView {
 
     private void backupDatabase() {
         Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
-                "Create a database backup now? The backup will be saved automatically in the W.A.S.P backup folder.",
+                "Create a database backup now? The backup will be saved automatically in the W.A.S.P backup folder and verified after creation.",
                 ButtonType.OK,ButtonType.CANCEL);
         confirm.setTitle("Create Database Backup");
         confirm.setHeaderText("Backup Database");
         if(confirm.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK) return;
-        try {
-            Path saved=BackupService.backupTo(BackupService.defaultBackupPath());
+
+        runBackupTask(backupNowButton);
+    }
+
+    private void runBackupTask(Button backupButton) {
+        javafx.concurrent.Task<Path> task = new javafx.concurrent.Task<>() {
+            @Override protected Path call() {
+                updateMessage("Creating database backup...");
+                return BackupService.backupTo(BackupService.defaultBackupPath());
+            }
+        };
+        Dialog<Void> dialog = createBackupProgressDialog(task);
+        backupButton.setDisable(true);
+        task.setOnSucceeded(e -> {
+            dialog.close();
+            backupButton.setDisable(false);
             refreshBackups();
-            new Alert(Alert.AlertType.INFORMATION,"Database backup created successfully.\n\n"+saved.getFileName(),ButtonType.OK).showAndWait();
-        } catch(Exception ex) { new Alert(Alert.AlertType.ERROR,"Backup failed: "+message(ex),ButtonType.OK).showAndWait(); }
+            new Alert(Alert.AlertType.INFORMATION,"Database backup created and verified successfully.\n\n"+task.getValue().getFileName(),ButtonType.OK).showAndWait();
+        });
+        task.setOnFailed(e -> {
+            dialog.close();
+            backupButton.setDisable(false);
+            new Alert(Alert.AlertType.ERROR,"Backup failed: "+message(task.getException()),ButtonType.OK).showAndWait();
+        });
+        Thread thread = new Thread(task, "wasp-backup");
+        thread.setDaemon(true);
+        thread.start();
+        dialog.show();
+    }
+
+    private Dialog<Void> createBackupProgressDialog(javafx.concurrent.Task<?> task) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Creating Backup");
+        dialog.setHeaderText("Creating and verifying database backup");
+        if (getScene()!=null) dialog.initOwner(getScene().getWindow());
+        ProgressIndicator indicator = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
+        Label message = new Label("Please wait while W.A.S.P creates and verifies the backup.");
+        message.setWrapText(true);
+        VBox box = new VBox(12, indicator, message);
+        box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(20));
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        dialog.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true);
+        task.messageProperty().addListener((obs, oldValue, newValue) -> message.setText(newValue));
+        return dialog;
     }
 
     private void restoreSelectedBackup(){
@@ -334,5 +376,5 @@ public final class SettingsView extends AppView {
     private void loadProfile(){try{var p=ReportProfileService.get();companyName.setText(p.companyName());crNumber.setText(p.crNumber());vatNumber.setText(p.vatNumber());address.setText(p.address());phone.setText(p.phone());email.setText(p.email());setMessage(profileMessage,"Company profile loaded.",false);}catch(Exception e){setMessage(profileMessage,message(e),true);}}
     private void saveProfile(){try{ReportProfileService.save(companyName.getText(),crNumber.getText(),vatNumber.getText(),address.getText(),phone.getText(),email.getText());setMessage(profileMessage,"Report company profile saved successfully.",false);}catch(Exception e){setMessage(profileMessage,message(e),true);}}
     private void setMessage(Label l,String text,boolean error){l.setText(text);l.getStyleClass().removeAll("success-message","error-message");l.getStyleClass().add(error?"error-message":"success-message");}
-    private String message(Exception e){return e.getMessage()==null?"Operation failed.":e.getMessage();}
+    private String message(Throwable e){return e.getMessage()==null?"Operation failed.":e.getMessage();}
 }

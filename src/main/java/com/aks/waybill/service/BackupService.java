@@ -16,7 +16,7 @@ public final class BackupService {
     private BackupService(){}
     public static Path backupTo(Path target){
         if(target==null)throw new IllegalArgumentException("Backup file is required.");
-        try{Path d=target.toAbsolutePath().normalize();Files.createDirectories(AppPaths.backupDirectory());if(d.getParent()!=null)Files.createDirectories(d.getParent());if(d.equals(AppPaths.databaseFile().toAbsolutePath().normalize()))throw new IllegalArgumentException("The backup file cannot be the active database file.");if(Files.exists(d))Files.delete(d);String escaped=d.toString().replace("'","''");try(Connection c=Database.getConnection();Statement s=c.createStatement()){s.execute("VACUUM INTO '"+escaped+"'");}AuditLogService.log("BACKUP","DATABASE",null,"Database backup created: "+d.getFileName());return d;}catch(Exception e){throw new IllegalStateException("Unable to create database backup: "+e.getMessage(),e);}
+        try{Path d=target.toAbsolutePath().normalize();Files.createDirectories(AppPaths.backupDirectory());if(d.getParent()!=null)Files.createDirectories(d.getParent());if(d.equals(AppPaths.databaseFile().toAbsolutePath().normalize()))throw new IllegalArgumentException("The backup file cannot be the active database file.");if(Files.exists(d))Files.delete(d);String escaped=d.toString().replace("'","''");try(Connection c=Database.getConnection();Statement s=c.createStatement()){s.execute("VACUUM INTO '"+escaped+"'");}validateDatabase(d); AuditLogService.log("BACKUP","DATABASE",null,"Database backup created and verified: "+d.getFileName());return d;}catch(Exception e){throw new IllegalStateException("Unable to create database backup: "+e.getMessage(),e);}
     }
     public static Path defaultBackupPath(){
         Path dir=AppPaths.backupDirectory();
@@ -64,7 +64,7 @@ public final class BackupService {
                 + "OR (a.action='RESTORE' AND a.details LIKE ? ESCAPE '\\')) "
                 + "ORDER BY a.id DESC LIMIT 1";
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
-            p.setString(1, "Database backup created: " + backupPattern);
+            p.setString(1, "%Database backup created%" + backupPattern);
             p.setString(2, "%Safety copy created: " + backupPattern);
             try (ResultSet r = p.executeQuery()) {
                 return r.next() ? r.getString(1) : "Not recorded";

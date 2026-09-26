@@ -13,6 +13,8 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
@@ -463,25 +465,54 @@ public class Main extends Application {
         ButtonType continueWithout = new ButtonType("Continue Without Backup", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         backup.getButtonTypes().setAll(continueWithout, backupNow, cancel);
-        // This is an informational reminder with choices, not a yes/no question.
-        // Use the information badge instead of the generic confirmation '?'.
         setDialogGraphic(backup.getDialogPane(), "i", "wasp-dialog-info");
         if (owner != null) backup.initOwner(owner);
         var result = backup.showAndWait().orElse(cancel);
         if (result == cancel) return false;
         if (result == backupNow) {
-            try {
-                BackupService.backupTo(BackupService.defaultBackupPath());
-                Alert done = new Alert(Alert.AlertType.INFORMATION, "Today's database backup was created successfully.", ButtonType.OK);
+            Dialog<Void> progress = new Dialog<>();
+            progress.setTitle("Creating Backup");
+            progress.setHeaderText("Creating and verifying database backup");
+            if (owner != null) progress.initOwner(owner);
+            ProgressIndicator indicator = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
+            javafx.scene.control.Label message = new javafx.scene.control.Label("Please wait while W.A.S.P creates and verifies the backup.");
+            message.setWrapText(true);
+            javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(12, indicator, message);
+            box.setAlignment(javafx.geometry.Pos.CENTER);
+            box.setPadding(new javafx.geometry.Insets(20));
+            progress.getDialogPane().setContent(box);
+            progress.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+            progress.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true);
+
+            javafx.concurrent.Task<java.nio.file.Path> task = new javafx.concurrent.Task<>() {
+                @Override protected java.nio.file.Path call() {
+                    updateMessage("Creating database backup...");
+                    return BackupService.backupTo(BackupService.defaultBackupPath());
+                }
+            };
+            task.messageProperty().addListener((obs, oldValue, newValue) -> message.setText(newValue));
+            final boolean[] success = {false};
+            task.setOnSucceeded(e -> {
+                success[0] = true;
+                progress.close();
+            });
+            task.setOnFailed(e -> progress.close());
+            Thread thread = new Thread(task, "wasp-exit-backup");
+            thread.setDaemon(true);
+            thread.start();
+            progress.showAndWait();
+
+            if (success[0]) {
+                Alert done = new Alert(Alert.AlertType.INFORMATION, "Today's database backup was created and verified successfully.", ButtonType.OK);
                 if (owner != null) done.initOwner(owner);
                 done.showAndWait();
                 return true;
-            } catch (Exception ex) {
-                Alert error = new Alert(Alert.AlertType.ERROR, "Backup failed: " + (ex.getMessage() == null ? "Unknown error." : ex.getMessage()), ButtonType.OK);
-                if (owner != null) error.initOwner(owner);
-                error.showAndWait();
-                return false;
             }
+            Throwable error = task.getException();
+            Alert err = new Alert(Alert.AlertType.ERROR, "Backup failed: " + (error == null || error.getMessage() == null ? "Unknown error." : error.getMessage()), ButtonType.OK);
+            if (owner != null) err.initOwner(owner);
+            err.showAndWait();
+            return false;
         }
         return true;
     }
