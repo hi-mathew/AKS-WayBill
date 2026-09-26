@@ -5,15 +5,15 @@ import com.aks.waybill.service.ReportProfileService;
 import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.service.BackupService;
 import com.aks.waybill.service.TermsConditionService;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
-import javafx.application.Platform;
-import java.nio.file.Path;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -37,11 +37,25 @@ public final class SettingsView extends AppView {
 
     public SettingsView() {
         super("Settings", "Configure waybill numbering and the issuing company information used on reports.");
-        VBox content = new VBox(18, numberingCard(), profileCard(), termsCard(), paginationCard(), backupCard());
-        content.setMaxWidth(900);
-        ScrollPane scroll = new ScrollPane(content);
-        scroll.setFitToWidth(true); scroll.getStyleClass().add("content-scroll");
-        getChildren().add(scroll); VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        TabPane tabs = new TabPane();
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabs.getStyleClass().add("wasp-master-tabs");
+
+        Tab numbering = new Tab("Waybill Numbering");
+        numbering.setContent(numberingCard());
+        Tab profile = new Tab("Company Profile");
+        profile.setContent(profileCard());
+        Tab terms = new Tab("Terms & Conditions");
+        terms.setContent(termsCard());
+        Tab pagination = new Tab("Pagination");
+        pagination.setContent(paginationCard());
+        Tab backup = new Tab("Backup & Restore");
+        backup.setContent(backupCard());
+
+        tabs.getTabs().addAll(numbering, profile, terms, pagination, backup);
+        VBox.setVgrow(tabs, Priority.ALWAYS);
+        getChildren().add(tabs);
         loadAll();
     }
 
@@ -80,17 +94,12 @@ public final class SettingsView extends AppView {
     private VBox termsCard() {
         VBox card=card();
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
-        Label desc=new Label("Manage the clauses printed on generated waybills. Changes are used for new report generation without requiring an application rebuild."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
         TableView<TermsConditionService.Clause> table=new TableView<>();
-        table.setPrefHeight(320);
-        table.setMinHeight(260);
+        table.setPrefHeight(360);
+        table.setMinHeight(300);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Keep the identifying columns visible even when the Settings screen is
-        // resized/re-laid out inside the outer ScrollPane.  Using only prefWidth
-        // with the FLEX_LAST_COLUMN policy can cause JavaFX to collapse the
-        // non-last columns during a constrained layout pass, leaving only Text
-        // visible.  Explicit min/pref widths make the grid stable.
         TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No.");
         no.setMinWidth(55); no.setPrefWidth(65); no.setMaxWidth(75);
         no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().clauseNumber())));
@@ -107,23 +116,65 @@ public final class SettingsView extends AppView {
         active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
         table.getColumns().setAll(no,clause,text,active);
-        Runnable reload=()->table.getItems().setAll(TermsConditionService.findAll()); reload.run();
-        Button add=primary("Add Clause"); add.setOnAction(e->editTermsClause(table,null,reload));
-        Button edit=secondary("Edit"); edit.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(table,x,reload);});
-        Button up=secondary("Move Up"); up.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x!=null){TermsConditionService.move(x.id(),true);reload.run();table.getSelectionModel().select(x);}});
-        Button down=secondary("Move Down"); down.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x!=null){TermsConditionService.move(x.id(),false);reload.run();table.getSelectionModel().select(x);}});
-        Button delete=secondary("Delete"); delete.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reload.run();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
+
+        Runnable reload=()->table.getItems().setAll(TermsConditionService.findAll());
+        reload.run();
+
+        table.setRowFactory(tv -> {
+            TableRow<TermsConditionService.Clause> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                    editTermsClause(table, row.getItem(), reload);
+                }
+            });
+            return row;
+        });
+
+        Button add=primary("Add Clause");
+        add.setOnAction(e->editTermsClause(table,null,reload));
+        Button edit=secondary("Edit");
+        edit.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(table,x,reload);});
+        Button up=secondary("Move Up");
+        up.setOnAction(e->moveClause(table,true,reload));
+        Button down=secondary("Move Down");
+        down.setOnAction(e->moveClause(table,false,reload));
+        Button delete=secondary("Delete");
+        delete.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reload.run();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
         HBox buttons=new HBox(8,add,edit,up,down,delete); buttons.setAlignment(Pos.CENTER_RIGHT);
         card.getChildren().addAll(title,desc,table,buttons); return card;
     }
 
+    private void moveClause(TableView<TermsConditionService.Clause> table, boolean up, Runnable reload) {
+        TermsConditionService.Clause selected = table.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showSimpleError("Select a clause first.");
+            return;
+        }
+        long selectedId = selected.id();
+        try {
+            TermsConditionService.move(selectedId, up);
+            reload.run();
+            for (int i = 0; i < table.getItems().size(); i++) {
+                if (table.getItems().get(i).id() == selectedId) {
+                    table.getSelectionModel().select(i);
+                    table.scrollTo(i);
+                    break;
+                }
+            }
+        } catch (RuntimeException ex) {
+            showSimpleError(ex.getMessage());
+        }
+    }
+
     private void editTermsClause(TableView<TermsConditionService.Clause> table, TermsConditionService.Clause existing, Runnable reload) {
         Dialog<ButtonType> dialog=new Dialog<>(); dialog.setTitle(existing==null?"Add Terms & Conditions Clause":"Edit Terms & Conditions Clause");
-        TextField number=new TextField(existing==null?"":String.valueOf(existing.clauseNumber())); TextField title=new TextField(existing==null?"":existing.title()); TextArea text=new TextArea(existing==null?"":existing.text()); CheckBox active=new CheckBox("Active"); active.setSelected(existing==null||existing.active());
-        InputLimits.numeric(number,6,0); InputLimits.maxLength(title,300); InputLimits.maxLength(text,3000); text.setWrapText(true); text.setPrefRowCount(7);
-        VBox form=new VBox(8,new Label("Clause Number"),number,new Label("Clause Title"),title,new Label("Clause Text"),text,active); form.setPrefWidth(650); dialog.getDialogPane().setContent(form);
+        TextField title=new TextField(existing==null?"":existing.title()); TextArea text=new TextArea(existing==null?"":existing.text()); CheckBox active=new CheckBox("Active"); active.setSelected(existing==null||existing.active());
+        InputLimits.maxLength(title,300); InputLimits.maxLength(text,3000); text.setWrapText(true); text.setPrefRowCount(7);
+        Label numberValue = new Label(existing == null ? "Assigned automatically when saved" : "Clause " + existing.clauseNumber());
+        numberValue.getStyleClass().add("settings-note");
+        VBox form=new VBox(8,new Label("Clause Number"),numberValue,new Label("Clause Title"),title,new Label("Clause Text"),text,active); form.setPrefWidth(650); dialog.getDialogPane().setContent(form);
         ButtonType save=new ButtonType(existing==null?"Add":"Save",ButtonBar.ButtonData.OK_DONE); dialog.getDialogPane().getButtonTypes().addAll(save,ButtonType.CANCEL);
-        dialog.setResultConverter(b->{if(b!=save)return null;try{int n=Integer.parseInt(number.getText().trim());if(existing==null)TermsConditionService.create(title.getText(),text.getText(),active.isSelected());else TermsConditionService.update(existing.id(),n,title.getText(),text.getText(),existing.displayOrder(),active.isSelected());reload.run();return b;}catch(Exception ex){showSimpleError(ex.getMessage());return null;}}); dialog.showAndWait();
+        dialog.setResultConverter(b->{if(b!=save)return null;try{if(existing==null)TermsConditionService.create(title.getText(),text.getText(),active.isSelected());else TermsConditionService.update(existing.id(),title.getText(),text.getText(),existing.displayOrder(),active.isSelected());reload.run();return b;}catch(Exception ex){showSimpleError(ex.getMessage());return null;}}); dialog.showAndWait();
     }
 
     private void showSimpleError(String message){new Alert(Alert.AlertType.ERROR,message==null?"Operation failed.":message,ButtonType.OK).showAndWait();}

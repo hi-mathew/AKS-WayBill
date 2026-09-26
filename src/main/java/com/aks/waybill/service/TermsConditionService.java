@@ -40,9 +40,11 @@ public final class TermsConditionService {
         return save(0, nextNumber, title, text, nextOrder, active);
     }
 
-    public static Clause update(long id, int clauseNumber, String title, String text, int displayOrder, boolean active) {
+    public static Clause update(long id, String title, String text, int displayOrder, boolean active) {
         if (id <= 0) throw new IllegalArgumentException("Valid clause is required.");
-        return save(id, clauseNumber, title, text, displayOrder, active);
+        Clause existing = findById(id);
+        if (existing == null) throw new IllegalArgumentException("The selected clause no longer exists.");
+        return save(id, existing.clauseNumber(), title, text, displayOrder, active);
     }
 
     private static Clause save(long id, int clauseNumber, String title, String text, int displayOrder, boolean active) {
@@ -60,6 +62,7 @@ public final class TermsConditionService {
                     if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected clause no longer exists.");
                 }
             }
+            normalizeOrdering(c);
             AuditLogService.log(id == 0 ? "CREATE" : "UPDATE", "TERMS_CONDITION", id, "Terms & Conditions clause saved");
             return findById(id);
         } catch (SQLException e) { throw new IllegalStateException("Unable to save Terms & Conditions clause", e); }
@@ -77,6 +80,7 @@ public final class TermsConditionService {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("DELETE FROM terms_condition WHERE id=?")) {
             p.setLong(1, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected clause no longer exists.");
+            normalizeOrdering(c);
             AuditLogService.log("DELETE", "TERMS_CONDITION", id, "Terms & Conditions clause deleted");
         } catch (SQLException e) { throw new IllegalStateException("Unable to delete Terms & Conditions clause", e); }
     }
@@ -93,10 +97,31 @@ public final class TermsConditionService {
             try (PreparedStatement p=c.prepareStatement("UPDATE terms_condition SET display_order=?,updated_at=? WHERE id=?")) {
                 String now=LocalDateTime.now().toString();
                 p.setInt(1,b.displayOrder()); p.setString(2,now); p.setLong(3,a.id()); p.addBatch();
-                p.setInt(1,a.displayOrder()); p.setString(2,now); p.setLong(3,b.id()); p.addBatch(); p.executeBatch(); c.commit();
+                p.setInt(1,a.displayOrder()); p.setString(2,now); p.setLong(3,b.id()); p.addBatch(); p.executeBatch();
+                normalizeOrdering(c);
+                c.commit();
             } catch (RuntimeException|SQLException e) { c.rollback(); throw e; } finally { c.setAutoCommit(true); }
             AuditLogService.log("REORDER", "TERMS_CONDITION", id, "Terms & Conditions clause reordered");
         } catch (SQLException e) { throw new IllegalStateException("Unable to reorder Terms & Conditions",e); }
+    }
+
+    private static void normalizeOrdering(Connection c) throws SQLException {
+        List<Long> ids = new ArrayList<>();
+        try (PreparedStatement p = c.prepareStatement("SELECT id FROM terms_condition ORDER BY display_order,id"); ResultSet r = p.executeQuery()) {
+            while (r.next()) ids.add(r.getLong(1));
+        }
+        try (PreparedStatement p = c.prepareStatement("UPDATE terms_condition SET display_order=?, clause_number=?, updated_at=? WHERE id=?")) {
+            String now = LocalDateTime.now().toString();
+            for (int i = 0; i < ids.size(); i++) {
+                int number = i + 1;
+                p.setInt(1, number);
+                p.setInt(2, number);
+                p.setString(3, now);
+                p.setLong(4, ids.get(i));
+                p.addBatch();
+            }
+            p.executeBatch();
+        }
     }
 
     private static Clause read(ResultSet r) throws SQLException { return new Clause(r.getLong(1),r.getInt(2),r.getString(3),r.getString(4),r.getInt(5),r.getInt(6)==1); }

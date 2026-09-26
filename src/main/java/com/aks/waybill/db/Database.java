@@ -71,6 +71,7 @@ public final class Database {
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)");
                 s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 seedTermsConditions(c);
+                normalizeTermsConditionOrder(c);
             }
         } catch (IOException | SQLException e) {
             throw new IllegalStateException("Unable to initialize W.A.S.P database", e);
@@ -155,6 +156,20 @@ public final class Database {
         String now = java.time.LocalDateTime.now().toString();
         try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)")) {
             for (int i=0;i<clauses.length;i++) { p.setInt(1,Integer.parseInt(clauses[i][0])); p.setString(2,clauses[i][1]); p.setString(3,clauses[i][2]); p.setInt(4,i+1); p.setString(5,now); p.setString(6,now); p.addBatch(); }
+            p.executeBatch();
+        }
+    }
+
+    private static void normalizeTermsConditionOrder(Connection c) throws SQLException {
+        java.util.List<Long> ids = new java.util.ArrayList<>();
+        try (PreparedStatement p = c.prepareStatement("SELECT id FROM terms_condition ORDER BY display_order,id"); ResultSet r = p.executeQuery()) {
+            while (r.next()) ids.add(r.getLong(1));
+        }
+        try (PreparedStatement p = c.prepareStatement("UPDATE terms_condition SET display_order=?, clause_number=? WHERE id=?")) {
+            for (int i = 0; i < ids.size(); i++) {
+                int number = i + 1;
+                p.setInt(1, number); p.setInt(2, number); p.setLong(3, ids.get(i)); p.addBatch();
+            }
             p.executeBatch();
         }
     }
