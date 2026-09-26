@@ -7,7 +7,7 @@ import java.nio.file.Paths;
 
 /** Centralized paths for application binaries and persistent user data. */
 public final class AppPaths {
-    private static final String APP_NAME = "AKS-Waybill";
+    private static final String APP_NAME = "W.A.S.P-Data";
 
     private AppPaths() {
     }
@@ -62,7 +62,7 @@ public final class AppPaths {
 
     /**
      * Persistent user-data directory. Packaged Windows installations use
-     * %LOCALAPPDATA%\AKS-Waybill so database files are never written under
+     * %LOCALAPPDATA%\W.A.S.P-Data so database files are never written under
      * Program Files. During IntelliJ/Maven development we retain the existing
      * project-local data directory for convenience.
      */
