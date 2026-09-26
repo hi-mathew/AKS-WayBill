@@ -127,7 +127,7 @@ public class DashboardView extends BorderPane {
         navigationScroll.setFitToWidth(true);
         navigationScroll.setFitToHeight(false);
         navigationScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         navigationScroll.setPannable(false);
         navigationScroll.setFocusTraversable(false);
         navigationScroll.setMinHeight(0);
@@ -137,22 +137,25 @@ public class DashboardView extends BorderPane {
         Button signOut = nav("⇥  Sign out", false);
         signOut.setOnAction(e -> requestLogout(logout));
 
-        Label footer1 = label("W.A.S.P", "app-footer-title");
-        Label footer2 = label("Simplifying Waybill Creation. Improving Operational Efficiency.", "app-footer");
+        Label footer1 = label("W.A.S.P.", "app-footer-title");
+        Label footer2 = label("Simplifying Waybill Creation.\nImproving Operational Efficiency.", "app-footer-tagline");
         footer2.setWrapText(true);
         footer2.setTextOverrun(OverrunStyle.CLIP);
-        Label footer3 = label("© AKS Global Logistics. All Rights Reserved.", "app-footer");
-        footer3.setWrapText(true);
-        footer3.setTextOverrun(OverrunStyle.CLIP);
-        Label footer4 = label("Developed by: Deepesh V. Thampi", "app-footer");
-        footer4.setWrapText(true);
-        footer4.setTextOverrun(OverrunStyle.CLIP);
-        Label footer5 = label("Owned by: AKS Global Logistics", "app-footer");
-        footer5.setWrapText(true);
-        footer5.setTextOverrun(OverrunStyle.CLIP);
 
-        VBox footer = new VBox(2, footer1, footer2, footer3, footer4, footer5);
-        footer.setPadding(new Insets(6, 18, 4, 18));
+        Separator footerSeparator = new Separator(Orientation.HORIZONTAL);
+        footerSeparator.getStyleClass().add("app-footer-separator");
+
+        Label developed = label("Developed by:  Deepesh V. Thampi", "app-footer-credit");
+        Label owned = label("Owned by:      AKS Global Logistics", "app-footer-credit");
+        Label copyright = label("© " + LocalDate.now().getYear() + " AKS Global Logistics  ·  All Rights Reserved.", "app-footer-copyright");
+
+        for (Label footerLabel : List.of(footer2, developed, owned, copyright)) {
+            footerLabel.setWrapText(true);
+            footerLabel.setTextOverrun(OverrunStyle.CLIP);
+        }
+
+        VBox footer = new VBox(2, footer1, footer2, footerSeparator, developed, owned, copyright);
+        footer.setPadding(new Insets(4, 18, 3, 18));
         footer.setMaxWidth(Double.MAX_VALUE);
 
         VBox bottom = new VBox(2, footer, signOut);

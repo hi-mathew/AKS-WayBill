@@ -64,7 +64,13 @@
 .window-control-button:hover { -fx-background-color: #e8eef8; }
 .window-close-button:hover { -fx-background-color: #f4d7d7; -fx-text-fill: #a51d2d; }
 .app-footer { -fx-text-fill: #8b98aa; -fx-font-size: 9px; -fx-line-spacing: 2px; }
-.app-footer-title { -fx-text-fill: #58708f; -fx-font-size: 10px; -fx-font-weight: bold; }
+.app-footer-title { -fx-text-fill: #8fb0c7; -fx-font-size: 10px; -fx-font-weight: 800; }
+.app-footer-tagline { -fx-text-fill: #7898af; -fx-font-size: 9px; -fx-line-spacing: 1px; }
+.app-footer-separator { -fx-background-color: #254b64; -fx-border-color: #254b64; -fx-opacity: 0.9; }
+.app-footer-section { -fx-text-fill: #6f94ae; -fx-font-size: 8px; -fx-font-weight: 800; -fx-padding: 2px 0 0 0; }
+.app-footer-label { -fx-text-fill: #8eabc0; -fx-font-size: 8px; -fx-font-weight: 700; }
+.app-footer-value { -fx-text-fill: #b4c9d8; -fx-font-size: 9px; }
+.app-footer-copyright { -fx-text-fill: #718fa5; -fx-font-size: 8px; }
 .status-draft { -fx-text-fill: #b26a00; -fx-font-weight: bold; }
 .status-final { -fx-text-fill: #1d6b45; -fx-font-weight: bold; }
 
@@ -612,4 +618,31 @@
 }
 .table-view.fit-no-scroll .corner {
     -fx-background-color: transparent;
+}
+
+/* v81: compact sidebar footer so the fixed navigation never needs a scrollbar. */
+.app-footer-title {
+    -fx-font-size: 10px;
+    -fx-font-weight: 800;
+    -fx-padding: 0 0 1px 0;
+}
+.app-footer-tagline {
+    -fx-font-size: 8px;
+    -fx-line-spacing: 0px;
+}
+.app-footer-separator {
+    -fx-padding: 2px 0 2px 0;
+    -fx-opacity: 0.85;
+}
+.app-footer-credit {
+    -fx-text-fill: #b4c9d8;
+    -fx-font-size: 8px;
+    -fx-font-weight: 600;
+    -fx-line-spacing: 0px;
+}
+.app-footer-copyright {
+    -fx-text-fill: #718fa5;
+    -fx-font-size: 7px;
+    -fx-line-spacing: 0px;
+    -fx-padding: 1px 0 0 0;
 }
