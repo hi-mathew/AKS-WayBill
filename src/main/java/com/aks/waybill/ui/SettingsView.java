@@ -32,6 +32,7 @@ public final class SettingsView extends AppView {
     { InputLimits.maxLength(part1, InputLimits.PART1); InputLimits.numeric(sequence, InputLimits.SEQUENCE, 0); InputLimits.maxLength(companyName, InputLimits.COMPANY_NAME); InputLimits.maxLength(crNumber, InputLimits.CR_NUMBER); InputLimits.maxLength(vatNumber, InputLimits.VAT_NUMBER); InputLimits.maxLength(phone, InputLimits.PHONE); InputLimits.maxLength(email, InputLimits.EMAIL); }
     private final Label numberingMessage = new Label();
     private final Label profileMessage = new Label();
+    private final Label paginationMessage = new Label();
     private final Label preview = new Label();
 
     public SettingsView() {
@@ -80,12 +81,31 @@ public final class SettingsView extends AppView {
         VBox card=card();
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
         Label desc=new Label("Manage the clauses printed on generated waybills. Changes are used for new report generation without requiring an application rebuild."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
-        TableView<TermsConditionService.Clause> table=new TableView<>(); table.setPrefHeight(320);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No."); no.setPrefWidth(55); no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().clauseNumber())));
-        TableColumn<TermsConditionService.Clause,String> clause=new TableColumn<>("Clause"); clause.setPrefWidth(180); clause.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().title()));
-        TableColumn<TermsConditionService.Clause,String> text=new TableColumn<>("Text"); text.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().text()));
-        TableColumn<TermsConditionService.Clause,String> active=new TableColumn<>("Status"); active.setPrefWidth(90); active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
+        TableView<TermsConditionService.Clause> table=new TableView<>();
+        table.setPrefHeight(320);
+        table.setMinHeight(260);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        // Keep the identifying columns visible even when the Settings screen is
+        // resized/re-laid out inside the outer ScrollPane.  Using only prefWidth
+        // with the FLEX_LAST_COLUMN policy can cause JavaFX to collapse the
+        // non-last columns during a constrained layout pass, leaving only Text
+        // visible.  Explicit min/pref widths make the grid stable.
+        TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No.");
+        no.setMinWidth(55); no.setPrefWidth(65); no.setMaxWidth(75);
+        no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().clauseNumber())));
+
+        TableColumn<TermsConditionService.Clause,String> clause=new TableColumn<>("Clause");
+        clause.setMinWidth(160); clause.setPrefWidth(190);
+        clause.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().title()));
+
+        TableColumn<TermsConditionService.Clause,String> text=new TableColumn<>("Text");
+        text.setMinWidth(300);
+        text.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().text()));
+
+        TableColumn<TermsConditionService.Clause,String> active=new TableColumn<>("Status");
+        active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
+        active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
         table.getColumns().setAll(no,clause,text,active);
         Runnable reload=()->table.getItems().setAll(TermsConditionService.findAll()); reload.run();
         Button add=primary("Add Clause"); add.setOnAction(e->editTermsClause(table,null,reload));
@@ -113,9 +133,10 @@ public final class SettingsView extends AppView {
         Label title=new Label("List Pagination"); title.getStyleClass().add("settings-card-title");
         Label desc=new Label("Choose how many records are shown per page in paginated lists such as Saved Waybills and Companies."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
         pageSize.getItems().setAll(10,20,50,100); pageSize.setPrefWidth(160); pageSize.getStyleClass().add("settings-field");
-        Button save=primary("Save Page Size"); save.setOnAction(e->{try{SettingsService.savePageSize(pageSize.getValue()); setMessage(profileMessage,"Page size saved. It will apply when list screens are opened or refreshed.",false);}catch(Exception ex){setMessage(profileMessage,message(ex),true);}});
+        Button save=primary("Save Page Size"); save.setOnAction(e->{try{SettingsService.savePageSize(pageSize.getValue()); setMessage(paginationMessage,"Page size saved. It will apply when list screens are opened or refreshed.",false);}catch(Exception ex){setMessage(paginationMessage,message(ex),true);}});
+        paginationMessage.getStyleClass().add("settings-message"); paginationMessage.setWrapText(true);
         HBox row=new HBox(12,new Label("Rows per page"),pageSize,save); row.setAlignment(Pos.CENTER_LEFT);
-        card.getChildren().addAll(title,desc,row); return card;
+        card.getChildren().addAll(title,desc,row,paginationMessage); return card;
     }
 
     private VBox backupCard() {
