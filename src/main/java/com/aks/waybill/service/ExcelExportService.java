@@ -11,9 +11,13 @@ import org.apache.poi.xssf.usermodel.DefaultIndexedColorMap;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Creates a professionally formatted Excel export of saved waybills.
@@ -24,11 +28,21 @@ import java.util.List;
  */
 public final class ExcelExportService {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
-    private static final DateTimeFormatter GENERATED_AT = DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mm a");
+    private static final DateTimeFormatter GENERATED_AT =
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mm a", Locale.ENGLISH);
+    private static final DateTimeFormatter CREATED_AT =
+            DateTimeFormatter.ofPattern("dd-MMM-yyyy hh:mm a", Locale.ENGLISH);
 
     private static final int HEADER_ROW = 3;
     private static final int FIRST_DATA_ROW = 4;
     private static final int COLUMN_COUNT = 12;
+
+    // Excel widths are measured in approximately character units. These values
+    // intentionally give descriptive fields more room while keeping the sheet
+    // practical for on-screen review and A4 landscape printing.
+    private static final int[] COLUMN_WIDTHS = {
+            24, 14, 28, 28, 30, 22, 24, 34, 34, 20, 18, 24
+    };
 
     private ExcelExportService() {
     }
@@ -109,13 +123,14 @@ public final class ExcelExportService {
             CellStyle evenStyle = dataStyle(wb, lighterBlue, darkText, border);
             CellStyle dateStyleOdd = dataStyle(wb, white, darkText, border);
             dateStyleOdd.setDataFormat(wb.createDataFormat().getFormat("dd-mmm-yyyy"));
+            dateStyleOdd.setAlignment(HorizontalAlignment.CENTER);
             CellStyle dateStyleEven = dataStyle(wb, lighterBlue, darkText, border);
             dateStyleEven.setDataFormat(wb.createDataFormat().getFormat("dd-mmm-yyyy"));
+            dateStyleEven.setAlignment(HorizontalAlignment.CENTER);
 
             int rowIndex = FIRST_DATA_ROW;
             for (WaybillService.WaybillExportRow row : exportRows) {
                 Row excelRow = sheet.createRow(rowIndex);
-                excelRow.setHeightInPoints(42);
 
                 CellStyle base = ((rowIndex - FIRST_DATA_ROW) % 2 == 0) ? oddStyle : evenStyle;
                 CellStyle date = ((rowIndex - FIRST_DATA_ROW) % 2 == 0) ? dateStyleOdd : dateStyleEven;
@@ -131,7 +146,11 @@ public final class ExcelExportService {
                 writeText(excelRow, 8, row.destination(), base);
                 writeDate(excelRow, 9, row.estimatedDeliveryDate(), date);
                 writeText(excelRow, 10, row.createdBy(), base);
-                writeText(excelRow, 11, row.createdAt(), base);
+                writeCreatedAt(excelRow, 11, row.createdAt(), base);
+
+                // Let wrapped descriptive fields determine a sensible row height,
+                // while preventing an unusually long value from creating a huge row.
+                excelRow.setHeightInPoints(calculateRowHeight(excelRow, COLUMN_WIDTHS));
 
                 rowIndex++;
             }
@@ -145,22 +164,8 @@ public final class ExcelExportService {
 
             // Explicit widths work better than autoSizeColumn for long addresses and
             // prevent a single long value from creating an unusably wide worksheet.
-            int[] widths = {
-                    24, // Waybill
-                    14, // Date
-                    28, // Shipper
-                    28, // Consignee
-                    27, // Carrier
-                    22, // Driver
-                    23, // Vehicle
-                    32, // Origin
-                    32, // Destination
-                    20, // Estimated delivery
-                    18, // Created by
-                    24  // Created at
-            };
-            for (int i = 0; i < widths.length; i++) {
-                sheet.setColumnWidth(i, widths[i] * 256);
+            for (int i = 0; i < COLUMN_WIDTHS.length; i++) {
+                sheet.setColumnWidth(i, COLUMN_WIDTHS[i] * 256);
             }
 
             // Print setup: landscape, fit all columns to one page width, repeat the
@@ -286,10 +291,60 @@ public final class ExcelExportService {
         style.setRightBorderColor(borderIndex);
     }
 
+    private static float calculateRowHeight(Row row, int[] widths) {
+        int maxLines = 1;
+        for (int i = 0; i < widths.length; i++) {
+            Cell cell = row.getCell(i);
+            if (cell == null || cell.getCellType() != CellType.STRING) {
+                continue;
+            }
+            String value = cell.getStringCellValue();
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            int charsPerLine = Math.max(8, (int) Math.floor(widths[i] * 0.95));
+            int lines = 0;
+            for (String part : value.split("\\R", -1)) {
+                lines += Math.max(1, (int) Math.ceil(part.length() / (double) charsPerLine));
+            }
+            maxLines = Math.max(maxLines, lines);
+        }
+        // Keep normal rows compact, allow wrapping to breathe, and cap unusually
+        // long values so one record cannot dominate the worksheet.
+        return Math.min(72f, Math.max(30f, 14f + maxLines * 13f));
+    }
+
     private static void writeText(Row row, int column, String value, CellStyle style) {
         Cell cell = row.createCell(column);
         cell.setCellValue(s(value));
         cell.setCellStyle(style);
+    }
+
+    private static void writeCreatedAt(Row row, int column, String value, CellStyle style) {
+        Cell cell = row.createCell(column);
+        cell.setCellStyle(style);
+        String displayValue = formatCreatedAt(value);
+        cell.setCellValue(displayValue);
+    }
+
+    private static String formatCreatedAt(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String text = value.trim();
+        try {
+            return Instant.parse(text).atZone(ZoneId.systemDefault()).format(CREATED_AT);
+        } catch (Exception ignored) {
+        }
+        try {
+            return OffsetDateTime.parse(text).atZoneSameInstant(ZoneId.systemDefault()).format(CREATED_AT);
+        } catch (Exception ignored) {
+        }
+        try {
+            return LocalDateTime.parse(text).format(CREATED_AT);
+        } catch (Exception ignored) {
+        }
+        return text;
     }
 
     private static void writeDate(Row row, int column, java.time.LocalDate value, CellStyle style) {
