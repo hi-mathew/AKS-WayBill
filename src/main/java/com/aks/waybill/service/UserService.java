@@ -2,6 +2,7 @@ package com.aks.waybill.service;
 
 import com.aks.waybill.db.Database;
 import com.aks.waybill.security.PasswordService;
+import com.aks.waybill.security.SessionContext;
 
 import java.sql.*;
 import java.time.Instant;
@@ -64,6 +65,14 @@ public final class UserService {
 
     public static UserRecord update(long id, String username, String displayName, String userCode, String role) {
         validate(username, displayName, userCode, role);
+        UserRecord existing = findById(id);
+        if (existing == null) throw new IllegalArgumentException("The selected user no longer exists.");
+        if (existing.id() == SessionContext.requireUserId() && !"ADMIN".equalsIgnoreCase(role)) {
+            throw new IllegalArgumentException("The currently logged-in administrator cannot change their own role to USER.");
+        }
+        if (existing.enabled() && "ADMIN".equalsIgnoreCase(existing.role()) && !"ADMIN".equalsIgnoreCase(role) && countActiveAdmins() <= 1) {
+            throw new IllegalArgumentException("At least one active administrator account must remain.");
+        }
         String now = Instant.now().toString();
         String sql = "UPDATE app_user SET username=?, display_name=?, user_code=?, role=?, updated_at=? WHERE id=?";
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
@@ -84,6 +93,14 @@ public final class UserService {
     }
 
     public static void setEnabled(long id, boolean enabled) {
+        UserRecord existing = findById(id);
+        if (existing == null) throw new IllegalArgumentException("The selected user no longer exists.");
+        if (existing.id() == SessionContext.requireUserId() && !enabled) {
+            throw new IllegalArgumentException("The account currently in use cannot be disabled.");
+        }
+        if (!enabled && existing.enabled() && "ADMIN".equalsIgnoreCase(existing.role()) && countActiveAdmins() <= 1) {
+            throw new IllegalArgumentException("At least one active administrator account must remain.");
+        }
         String now = Instant.now().toString();
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("UPDATE app_user SET enabled=?, updated_at=? WHERE id=?")) {
             p.setInt(1, enabled ? 1 : 0); p.setString(2, now); p.setLong(3, id);
@@ -98,6 +115,16 @@ public final class UserService {
             p.setString(1, PasswordService.hash(password)); p.setString(2, now); p.setLong(3, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected user no longer exists.");
         } catch (SQLException e) { throw new IllegalStateException("Unable to reset password", e); }
+    }
+
+    private static int countActiveAdmins() {
+        try (Connection c = Database.getConnection();
+             PreparedStatement p = c.prepareStatement("SELECT COUNT(*) FROM app_user WHERE enabled=1 AND role='ADMIN'" );
+             ResultSet r = p.executeQuery()) {
+            return r.next() ? r.getInt(1) : 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Unable to verify active administrator accounts", e);
+        }
     }
 
     private static void validate(String username, String displayName, String userCode, String role) {

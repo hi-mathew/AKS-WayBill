@@ -7,10 +7,21 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 
 /** Administrator-only user management. */
 public final class UserManagementView extends AppView {
+    private static final double TABLE_ROW_HEIGHT = 38.0;
+    private static final double TABLE_HEADER_HEIGHT = 32.0;
+    private static final double TABLE_EMPTY_HEIGHT = 72.0;
+    private static final DateTimeFormatter DISPLAY_DATE_TIME = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+
     private final TableView<UserService.UserRecord> table = new TableView<>();
     private final Label message = new Label();
 
@@ -24,9 +35,9 @@ public final class UserManagementView extends AppView {
         VBox root=new VBox(14); root.setPadding(new Insets(4,0,30,0));
         HBox toolbar=new HBox(10); toolbar.setAlignment(Pos.CENTER_LEFT);
         Button add=primary("＋ Add User"); add.setOnAction(e->openEditor(null));
-        Button edit=secondary("Edit"); edit.setOnAction(e->{var r=table.getSelectionModel().getSelectedItem();if(r!=null)openEditor(r);});
-        Button toggle=secondary("Enable / Disable"); toggle.setOnAction(e->toggleSelected());
-        Button reset=secondary("Reset Password"); reset.setOnAction(e->resetSelected());
+        Button edit=secondary("Edit"); edit.getStyleClass().add("user-selection-action"); edit.setOnAction(e->{var r=table.getSelectionModel().getSelectedItem();if(r!=null)openEditor(r);});
+        Button toggle=secondary("Enable / Disable"); toggle.getStyleClass().add("user-selection-action"); toggle.setOnAction(e->toggleSelected());
+        Button reset=secondary("Reset Password"); reset.getStyleClass().add("user-selection-action"); reset.setOnAction(e->resetSelected());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->load());
         toolbar.getChildren().addAll(add,edit,toggle,reset,refresh);
 
@@ -36,13 +47,61 @@ public final class UserManagementView extends AppView {
         TableColumn<UserService.UserRecord,String> role=new TableColumn<>("Role"); role.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().role())); role.setPrefWidth(100);
         TableColumn<UserService.UserRecord,String> status=new TableColumn<>("Status"); status.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().enabled()?"Active":"Disabled")); status.setPrefWidth(110);
         TableColumn<UserService.UserRecord,String> last=new TableColumn<>("Last Login"); last.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(format(c.getValue().lastLoginAt()))); last.setPrefWidth(190);
-        table.getColumns().setAll(username,name,code,role,status,last); table.setPlaceholder(new Label("No users found.")); table.setPrefHeight(420); VBox.setVgrow(table,Priority.ALWAYS);
-        table.setRowFactory(tv->{TableRow<UserService.UserRecord> row=new TableRow<>();row.setOnMouseClicked(e->{if(e.getClickCount()==2&&!row.isEmpty())openEditor(row.getItem());});return row;});
+        table.getColumns().setAll(username,name,code,role,status,last);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setPlaceholder(new Label("No users found."));
+        table.setMinHeight(TABLE_EMPTY_HEIGHT);
+        table.setPrefHeight(TABLE_EMPTY_HEIGHT);
+        VBox.setVgrow(table,Priority.NEVER);
+        table.setRowFactory(tv->{
+            TableRow<UserService.UserRecord> row=new TableRow<>();
+            row.setOnMouseClicked(e->{
+                if(e.getClickCount()==2 && !row.isEmpty()) openEditor(row.getItem());
+            });
+            return row;
+        });
+
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> updateActionState());
         message.getStyleClass().add("settings-message"); message.setWrapText(true);
-        root.getChildren().addAll(toolbar,table,message); return root;
+        root.getChildren().addAll(toolbar,table,message);
+        updateActionState();
+        return root;
     }
 
-    private void load(){try{table.getItems().setAll(UserService.findAll());setMessage("Users loaded.",false);}catch(Exception e){setMessage(msg(e),true);}}
+    private void load(){
+        try {
+            table.getItems().setAll(UserService.findAll());
+            updateTableHeight();
+            updateActionState();
+            setMessage("Users loaded.",false);
+        } catch(Exception e) {
+            updateTableHeight();
+            updateActionState();
+            setMessage(msg(e),true);
+        }
+    }
+
+    private void updateTableHeight() {
+        int rows = table.getItems().size();
+        double height = rows == 0
+                ? TABLE_EMPTY_HEIGHT
+                : TABLE_HEADER_HEIGHT + (rows * TABLE_ROW_HEIGHT) + 2;
+        table.setPrefHeight(height);
+        table.setMinHeight(height);
+        table.setMaxHeight(height);
+    }
+
+    private void updateActionState() {
+        UserService.UserRecord selected = table.getSelectionModel().getSelectedItem();
+        // Toolbar buttons are looked up by their style/class rather than kept as
+        // fields so the view remains compact. Add a marker class to the buttons
+        // that require a selected row.
+        for (javafx.scene.Node node : ((HBox) table.getParent().getChildrenUnmodifiable().get(0)).getChildrenUnmodifiable()) {
+            if (node instanceof Button button && button.getStyleClass().contains("user-selection-action")) {
+                button.setDisable(selected == null);
+            }
+        }
+    }
 
     private void toggleSelected(){var u=table.getSelectionModel().getSelectedItem();if(u==null){setMessage("Select a user first.",true);return;}if(u.id()==SessionContext.requireUserId()&&!u.enabled()){setMessage("You cannot enable/disable the current session this way.",true);return;}if(u.id()==SessionContext.requireUserId()&&u.enabled()){setMessage("You cannot disable the account currently in use.",true);return;}try{UserService.setEnabled(u.id(),!u.enabled());load();}catch(Exception e){setMessage(msg(e),true);}}
 
@@ -62,5 +121,24 @@ public final class UserManagementView extends AppView {
     private Button secondary(String s){Button b=new Button(s);b.getStyleClass().add("secondary-button");return b;}
     private void setMessage(String s,boolean error){message.setText(s);message.getStyleClass().removeAll("success-message","error-message");message.getStyleClass().add(error?"error-message":"success-message");}
     private String msg(Exception e){return e.getMessage()==null?"Operation failed.":e.getMessage();}
-    private String format(String value){return value==null||value.isBlank()?"Never":value.replace('T',' ');}
+    private String format(String value){
+        if (value == null || value.isBlank()) return "Never";
+
+        // Login timestamps are stored as UTC instants (e.g. 2026-09-26T06:18:42Z).
+        // Convert them to the workstation's local timezone before displaying them.
+        try {
+            return Instant.parse(value).atZone(ZoneId.systemDefault()).format(DISPLAY_DATE_TIME);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return OffsetDateTime.parse(value).atZoneSameInstant(ZoneId.systemDefault()).format(DISPLAY_DATE_TIME);
+            } catch (DateTimeParseException ignoredAgain) {
+                // Backward compatibility for legacy timestamps that have no offset.
+                try {
+                    return LocalDateTime.parse(value.replace("Z", "")).format(DISPLAY_DATE_TIME);
+                } catch (DateTimeParseException legacyIgnored) {
+                    return value.replace('T', ' ');
+                }
+            }
+        }
+    }
 }
