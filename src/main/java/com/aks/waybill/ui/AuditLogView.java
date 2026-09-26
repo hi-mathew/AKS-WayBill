@@ -10,7 +10,7 @@ import javafx.scene.layout.*;
 import java.time.format.DateTimeFormatter;
 
 public final class AuditLogView extends AppView {
-    private static final DateTimeFormatter DATE=DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+    private static final DateTimeFormatter DATE=DateTimeFormatter.ofPattern("dd-MM-yyyy hh:mm:ss a");
     private final TextField search=new TextField();
     private final TableView<AuditLogService.AuditRecord> table=new TableView<>();
     private final Label info=new Label(); private final Label pageInfo=new Label();
