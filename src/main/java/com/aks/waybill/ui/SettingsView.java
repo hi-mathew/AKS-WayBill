@@ -1,6 +1,7 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.security.SessionContext;
+import com.aks.waybill.config.AppPaths;
 import com.aks.waybill.service.ReportProfileService;
 import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.service.BackupService;
@@ -10,6 +11,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+import java.io.File;
 import java.nio.file.Files;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -237,9 +240,10 @@ public final class SettingsView extends AppView {
         Button backup=primary("Backup Now"); backupNowButton=backup; backup.setOnAction(e->backupDatabase());
         Button restore=secondary("Restore Selected"); restore.setOnAction(e->restoreSelectedBackup());
         Button delete=secondary("Delete Selected"); delete.setOnAction(e->deleteSelectedBackup());
+        Button export=secondary("Export Backup..."); export.setOnAction(e->exportSelectedBackup());
         Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
-        HBox buttons=new HBox(8,backup,restore,delete,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
+        HBox buttons=new HBox(8,backup,restore,delete,export,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
         card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTable,buttons); return card;
     }
 
@@ -339,6 +343,34 @@ public final class SettingsView extends AppView {
             new Alert(Alert.AlertType.INFORMATION,"Database restored successfully. The application will now close. Start W.A.S.P again to continue.",ButtonType.OK).showAndWait();
             Platform.exit();
         }catch(Exception ex){new Alert(Alert.AlertType.ERROR,"Restore failed: "+message(ex),ButtonType.OK).showAndWait();}
+    }
+
+    private void exportSelectedBackup(){
+        BackupService.BackupInfo selected=backupTable.getSelectionModel().getSelectedItem();
+        if(selected==null){showSimpleError("Select a backup from the list first.");return;}
+
+        FileChooser chooser=new FileChooser();
+        chooser.setTitle("Export Backup");
+        chooser.setInitialFileName(selected.path().getFileName().toString());
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite Database Backup (*.db)","*.db"));
+        Path initialDir=AppPaths.defaultSaveDirectory();
+        if(Files.isDirectory(initialDir)) chooser.setInitialDirectory(initialDir.toFile());
+        File chosen=chooser.showSaveDialog(getScene()==null?null:getScene().getWindow());
+        if(chosen==null)return;
+        Path target=chosen.toPath();
+        if(!target.getFileName().toString().toLowerCase().endsWith(".db")){target=Path.of(target+".db");}
+        if(Files.exists(target)){
+            Alert overwrite=new Alert(Alert.AlertType.CONFIRMATION,
+                    "A file with this name already exists. Replace it?",ButtonType.OK,ButtonType.CANCEL);
+            overwrite.setTitle("Confirm Export");
+            overwrite.setHeaderText("Replace Existing Backup");
+            if(overwrite.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;
+        }
+        try{
+            BackupService.exportBackup(selected.path(),target);
+            new Alert(Alert.AlertType.INFORMATION,
+                    "Backup exported and verified successfully.\n\nFile: "+target.getFileName()+"\nLocation: "+target.getParent(),ButtonType.OK).showAndWait();
+        }catch(Exception ex){showSimpleError(ex.getMessage());}
     }
 
     private void deleteSelectedBackup(){

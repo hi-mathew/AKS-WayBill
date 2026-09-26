@@ -86,6 +86,19 @@ public final class AppPaths {
         return dataDirectory().resolve("backups");
     }
 
+    /** Default folder used by file-save dialogs so they do not open at This PC. */
+    public static Path defaultSaveDirectory() {
+        Path documents = Paths.get(System.getProperty("user.home"), "Documents");
+        try {
+            if (Files.isDirectory(documents)) {
+                return documents;
+            }
+        } catch (SecurityException ignored) {
+            // Fall back to the user home directory below.
+        }
+        return Paths.get(System.getProperty("user.home"));
+    }
+
     public static Path databaseFile() {
         return dataDirectory().resolve("waybill.db");
     }

@@ -60,6 +60,38 @@ public final class BackupService {
         return deleted;
     }
 
+    public static Path exportBackup(Path source, Path target) {
+        if (source == null || !Files.isRegularFile(source)) {
+            throw new IllegalArgumentException("Select a valid backup first.");
+        }
+        if (target == null) {
+            throw new IllegalArgumentException("An export destination is required.");
+        }
+        Path sourcePath = source.toAbsolutePath().normalize();
+        Path backupDir = AppPaths.backupDirectory().toAbsolutePath().normalize();
+        Path targetPath = target.toAbsolutePath().normalize();
+        if (sourcePath.equals(AppPaths.databaseFile().toAbsolutePath().normalize())) {
+            throw new IllegalArgumentException("The active database cannot be exported as a backup.");
+        }
+        if (!Files.isRegularFile(sourcePath) || !sourcePath.getFileName().toString().toLowerCase().endsWith(".db")) {
+            throw new IllegalArgumentException("Invalid backup file.");
+        }
+        if (targetPath.getParent() != null && targetPath.getParent().equals(backupDir)) {
+            throw new IllegalArgumentException("Choose an export location outside the W.A.S.P backup folder.");
+        }
+        try {
+            if (targetPath.getParent() != null) Files.createDirectories(targetPath.getParent());
+            Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            validateDatabase(targetPath);
+            AuditLogService.log("EXPORT_BACKUP", "DATABASE", null,
+                    "Backup exported and verified: " + targetPath.getFileName());
+            return targetPath;
+        } catch (Exception e) {
+            try { Files.deleteIfExists(targetPath); } catch (IOException ignored) {}
+            throw new IllegalStateException("Unable to export the backup: " + e.getMessage(), e);
+        }
+    }
+
     public static void deleteBackup(Path file){
         if(file==null) throw new IllegalArgumentException("Select a backup first.");
         Path target=file.toAbsolutePath().normalize();

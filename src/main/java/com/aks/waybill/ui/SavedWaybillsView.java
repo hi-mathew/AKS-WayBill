@@ -1,5 +1,7 @@
 package com.aks.waybill.ui;
 
+import com.aks.waybill.config.AppPaths;
+
 import com.aks.waybill.service.WaybillService;
 import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.service.ExcelExportService;
@@ -14,6 +16,7 @@ import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -193,6 +196,7 @@ public final class SavedWaybillsView extends AppView {
 
     private void exportExcel() {
         FileChooser chooser=new FileChooser(); chooser.setTitle("Export Saved Waybills to Excel"); chooser.setInitialFileName("AKS-Waybills-"+java.time.LocalDate.now()+".xlsx"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)","*.xlsx"));
+        Path initialDir=AppPaths.defaultSaveDirectory(); if(java.nio.file.Files.isDirectory(initialDir)) chooser.setInitialDirectory(initialDir.toFile());
         java.io.File file=chooser.showSaveDialog(getScene()==null?null:getScene().getWindow()); if(file==null)return;
         try{String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
         var rows=WaybillService.findAllForExcelForCurrentUser(searchField.getText(),fromDate.getValue(),toDate.getValue(),selectedStatus);ExcelExportService.export(file.toPath(),rows);new Alert(Alert.AlertType.INFORMATION,"Excel export created successfully.\nRecords exported: "+rows.size(),ButtonType.OK).showAndWait();}catch(Exception ex){showError(ex.getMessage());}

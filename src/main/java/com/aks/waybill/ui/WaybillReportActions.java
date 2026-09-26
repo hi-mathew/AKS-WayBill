@@ -1,6 +1,7 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.report.WaybillReportService;
+import com.aks.waybill.config.AppPaths;
 import com.aks.waybill.service.WaybillService;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -44,6 +45,8 @@ public final class WaybillReportActions {
                 ? new FileChooser.ExtensionFilter("PDF Document (*.pdf)", "*.pdf")
                 : new FileChooser.ExtensionFilter("Word Document (*.docx)", "*.docx");
         chooser.getExtensionFilters().add(filter);
+        Path initialDir = AppPaths.defaultSaveDirectory();
+        if (java.nio.file.Files.isDirectory(initialDir)) chooser.setInitialDirectory(initialDir.toFile());
         File file = chooser.showSaveDialog(owner);
         if (file == null) return;
         if (!file.getName().toLowerCase().endsWith(pdf ? ".pdf" : ".docx")) {
