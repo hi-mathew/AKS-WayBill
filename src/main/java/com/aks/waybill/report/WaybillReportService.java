@@ -61,11 +61,6 @@ public final class WaybillReportService {
         if (waybill == null) {
             throw new IllegalArgumentException("Waybill data is required.");
         }
-        if (waybill.items() != null && waybill.items().size() > 3) {
-            throw new IllegalArgumentException(
-                    "The approved waybill template has space for a maximum of 3 items. " +
-                    "A continuation-page layout is required before reports with more than 3 items can be generated.");
-        }
 
         Files.createDirectories(output.toAbsolutePath().getParent());
         Path temporary = Files.createTempFile(output.toAbsolutePath().getParent(), "aks-waybill-report-", ".docx");
@@ -80,11 +75,6 @@ public final class WaybillReportService {
     public static void generatePdf(WaybillService.WaybillDetails waybill, Path output) throws IOException {
         if (waybill == null) {
             throw new IllegalArgumentException("Waybill data is required.");
-        }
-        if (waybill.items() != null && waybill.items().size() > 3) {
-            throw new IllegalArgumentException(
-                    "The approved waybill template has space for a maximum of 3 items. " +
-                    "A continuation-page layout is required before reports with more than 3 items can be generated.");
         }
 
         Files.createDirectories(output.toAbsolutePath().getParent());
@@ -191,10 +181,72 @@ public final class WaybillReportService {
         double weight = 0;
         double volume = 0;
 
-        int count = items == null ? 0 : Math.min(items.size(), 3);
-        for (int rowIndex = 0; rowIndex < 3; rowIndex++) {
+        int itemCount = items == null ? 0 : items.size();
+
+        // The approved template contains three item rows followed by the totals
+        // row and the special-instructions row. For additional items, insert new
+        // rows into that SAME table immediately before the totals row. This keeps
+        // the document structure intact and lets Word paginate one continuous
+        // table naturally.
+        if (itemCount > 3) {
+            XWPFTableRow templateOddRow = table.getRows().get(1);
+            XWPFTableRow templateEvenRow = table.getRows().get(2);
+            int insertPosition = 4; // immediately before the original totals row
+
+            for (int itemIndex = 3; itemIndex < itemCount; itemIndex++) {
+                // Use POI's insertNewTableRow so the new row is registered in both
+                // the underlying CTTbl and XWPFTable's row list. The previous
+                // implementation used addRow() with a cloned XWPFTableRow; that
+                // can leave the wrapper pointing at a detached CTRow, which is why
+                // the generated report showed a blank fourth row containing the
+                // old item number while the totals were still correct.
+                XWPFTableRow templateRow = ((itemIndex + 1) % 2 == 0)
+                        ? templateEvenRow : templateOddRow;
+                XWPFTableRow insertedRow = table.insertNewTableRow(insertPosition++);
+
+                for (int column = 0; column < templateRow.getTableCells().size(); column++) {
+                    XWPFTableCell newCell = insertedRow.createCell();
+                    XWPFTableCell templateCell = templateRow.getCell(column);
+
+                    // Copy cell properties only. Keep the newly-created cell's
+                    // XWPF wrapper/paragraph cache intact so setCellText() below
+                    // writes to the actual row that belongs to the table.
+                    if (templateCell.getCTTc().getTcPr() != null) {
+                        newCell.getCTTc().setTcPr(
+                                (org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr)
+                                        templateCell.getCTTc().getTcPr().copy());
+                    }
+
+                    XWPFParagraph newParagraph = newCell.getParagraphs().isEmpty()
+                            ? newCell.addParagraph() : newCell.getParagraphs().get(0);
+                    XWPFParagraph templateParagraph = templateCell.getParagraphs().isEmpty()
+                            ? null : templateCell.getParagraphs().get(0);
+                    if (templateParagraph != null && templateParagraph.getCTP().getPPr() != null) {
+                        newParagraph.getCTP().setPPr(
+                                (org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr)
+                                        templateParagraph.getCTP().getPPr().copy());
+                    }
+                }
+
+                if (templateRow.getCtRow().getTrPr() != null) {
+                    insertedRow.getCtRow().setTrPr(
+                            (org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTrPr)
+                                    templateRow.getCtRow().getTrPr().copy());
+                }
+            }
+
+            // Repeat the approved header when the SAME table flows to another
+            // page, and keep each item row together.
+            table.getRows().get(0).setRepeatHeader(true);
+            for (int rowIndex = 1; rowIndex < 1 + itemCount; rowIndex++) {
+                table.getRows().get(rowIndex).setCantSplitRow(true);
+            }
+        }
+
+        // Populate all item rows in the now-expanded single table.
+        for (int rowIndex = 0; rowIndex < itemCount; rowIndex++) {
             XWPFTableRow row = table.getRows().get(rowIndex + 1);
-            WaybillService.WaybillItemData item = rowIndex < count ? items.get(rowIndex) : null;
+            WaybillService.WaybillItemData item = items.get(rowIndex);
             setCellText(row.getCell(0), String.valueOf(rowIndex + 1));
             setCellText(row.getCell(1), safe(item == null ? null : item.description()));
             setCellText(row.getCell(2), safe(item == null ? null : item.packageType()));
@@ -209,22 +261,35 @@ public final class WaybillReportService {
             }
         }
 
-        XWPFTableRow totals = table.getRows().get(4);
+        // Clear unused template item rows when fewer than three items are supplied.
+        for (int rowIndex = itemCount; rowIndex < 3; rowIndex++) {
+            XWPFTableRow row = table.getRows().get(rowIndex + 1);
+            setCellText(row.getCell(0), String.valueOf(rowIndex + 1));
+            for (int column = 1; column < 6; column++) {
+                setCellText(row.getCell(column), "");
+            }
+        }
+
+        int totalsRowIndex = itemCount > 3 ? 1 + itemCount : 4;
+        XWPFTableRow totals = table.getRows().get(totalsRowIndex);
+        setCellText(totals.getCell(0), "");
+        setCellText(totals.getCell(1), "TOTALS");
+        setCellText(totals.getCell(2), "");
         setCellText(totals.getCell(3), number(quantity));
         setCellText(totals.getCell(4), number(weight));
         setCellText(totals.getCell(5), number(volume));
 
-        XWPFTableCell special = table.getRows().get(5).getCell(0);
+        // The special-instructions row follows the totals row. Its position moves
+        // automatically when additional item rows are inserted above it.
+        XWPFTableCell special = table.getRows().get(totalsRowIndex + 1).getCell(0);
         String instructions = extractRunText(special, 1);
-        // The actual dynamic content is inserted by populateSpecialInstructions.
-        // Keep this call here so the approved cell structure is validated.
         if (instructions == null) {
             replaceRunText(special, 1, "");
         }
     }
 
     private static void populateSpecialInstructions(XWPFTable table, String instructions, boolean hazardous) {
-        XWPFTableCell cell = table.getRows().get(5).getCell(0);
+        XWPFTableCell cell = table.getRows().get(table.getRows().size() - 1).getCell(0);
         XWPFParagraph paragraph = cell.getParagraphs().get(0);
         if (paragraph.getRuns().size() >= 5) {
             XWPFRun instructionRun = paragraph.getRuns().get(1);
