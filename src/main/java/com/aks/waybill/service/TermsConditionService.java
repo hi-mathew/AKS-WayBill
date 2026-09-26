@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 
 import java.sql.*;
@@ -28,7 +30,7 @@ public final class TermsConditionService {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql); ResultSet r = p.executeQuery()) {
             while (r.next()) result.add(read(r));
             return result;
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in TermsConditionService", e);
             throw new IllegalStateException("Unable to load Terms & Conditions", e);
         }
     }
@@ -64,15 +66,16 @@ public final class TermsConditionService {
             }
             normalizeOrdering(c);
             AuditLogService.log(id == 0 ? "CREATE" : "UPDATE", "TERMS_CONDITION", id, "Terms & Conditions clause saved");
+            WaspLogger.info("Terms & Conditions clause saved. clauseId=" + id);
             return findById(id);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to save Terms & Conditions clause", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to save Terms & Conditions clause", e); throw new IllegalStateException("Unable to save Terms & Conditions clause", e); }
     }
 
     public static Clause findById(long id) {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("SELECT id,clause_number,clause_title,clause_text,display_order,active FROM terms_condition WHERE id=?")) {
             p.setLong(1, id);
             try (ResultSet r = p.executeQuery()) { return r.next() ? read(r) : null; }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load Terms & Conditions clause", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load Terms & Conditions clause", e); throw new IllegalStateException("Unable to load Terms & Conditions clause", e); }
     }
 
     public static void delete(long id) {
@@ -82,7 +85,8 @@ public final class TermsConditionService {
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected clause no longer exists.");
             normalizeOrdering(c);
             AuditLogService.log("DELETE", "TERMS_CONDITION", id, "Terms & Conditions clause deleted");
-        } catch (SQLException e) { throw new IllegalStateException("Unable to delete Terms & Conditions clause", e); }
+            WaspLogger.info("Terms & Conditions clause deleted. clauseId=" + id);
+        } catch (SQLException e) { WaspLogger.error("Unable to delete Terms & Conditions clause", e); throw new IllegalStateException("Unable to delete Terms & Conditions clause", e); }
     }
 
     public static void move(long id, boolean up) {
@@ -100,9 +104,9 @@ public final class TermsConditionService {
                 p.setInt(1,a.displayOrder()); p.setString(2,now); p.setLong(3,b.id()); p.addBatch(); p.executeBatch();
                 normalizeOrdering(c);
                 c.commit();
-            } catch (RuntimeException|SQLException e) { c.rollback(); throw e; } finally { c.setAutoCommit(true); }
+            } catch (RuntimeException|SQLException e) { WaspLogger.error("Operation failed in TermsConditionService", e); c.rollback(); throw e; } finally { c.setAutoCommit(true); }
             AuditLogService.log("REORDER", "TERMS_CONDITION", id, "Terms & Conditions clause reordered");
-        } catch (SQLException e) { throw new IllegalStateException("Unable to reorder Terms & Conditions",e); }
+        } catch (SQLException e) { WaspLogger.error("Operation failed in TermsConditionService", e); throw new IllegalStateException("Unable to reorder Terms & Conditions",e); }
     }
 
     private static void normalizeOrdering(Connection c) throws SQLException {

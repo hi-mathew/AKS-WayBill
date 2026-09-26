@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 
 import java.sql.Connection;
@@ -27,7 +29,7 @@ public final class SettingsService {
             ensureDefault(c, WAYBILL_PART_1, DEFAULT_PART_1);
             ensureDefault(c, WAYBILL_NEXT_SEQUENCE, String.valueOf(DEFAULT_NEXT_SEQUENCE));
             return new WaybillNumberSettings(getValue(c, WAYBILL_PART_1), Long.parseLong(getValue(c, WAYBILL_NEXT_SEQUENCE)));
-        } catch (Exception e) { throw new IllegalStateException("Unable to load waybill number settings", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to load waybill number settings", e); throw new IllegalStateException("Unable to load waybill number settings", e); }
     }
 
     public static void saveWaybillNumberSettings(String part1, long nextSequence) {
@@ -39,10 +41,10 @@ public final class SettingsService {
         try (Connection c = Database.getConnection()) {
             c.setAutoCommit(false);
             try { upsert(c, WAYBILL_PART_1, p1); upsert(c, WAYBILL_NEXT_SEQUENCE, String.valueOf(nextSequence)); c.commit(); }
-            catch (Exception e) { c.rollback(); throw e; }
+            catch (Exception e) { WaspLogger.error("Operation failed in SettingsService", e); c.rollback(); throw e; }
             finally { c.setAutoCommit(true); }
         } catch (IllegalArgumentException e) { throw e; }
-        catch (Exception e) { throw new IllegalStateException("Unable to save waybill number settings", e); }
+        catch (Exception e) { WaspLogger.error("Operation failed in SettingsService", e); throw new IllegalStateException("Unable to save waybill number settings", e); }
     }
 
 
@@ -50,21 +52,21 @@ public final class SettingsService {
         try (Connection c = Database.getConnection()) {
             ensureDefault(c, LIST_PAGE_SIZE, String.valueOf(DEFAULT_PAGE_SIZE));
             return Integer.parseInt(getValue(c, LIST_PAGE_SIZE));
-        } catch (Exception e) { throw new IllegalStateException("Unable to load pagination setting", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to load pagination setting", e); throw new IllegalStateException("Unable to load pagination setting", e); }
     }
 
     public static boolean isBackupRetentionEnabled() {
         try (Connection c = Database.getConnection()) {
             ensureDefault(c, BACKUP_RETENTION_ENABLED, String.valueOf(DEFAULT_BACKUP_RETENTION_ENABLED));
             return Boolean.parseBoolean(getValue(c, BACKUP_RETENTION_ENABLED));
-        } catch (Exception e) { throw new IllegalStateException("Unable to load backup retention setting", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to load backup retention setting", e); throw new IllegalStateException("Unable to load backup retention setting", e); }
     }
 
     public static int getBackupRetentionCount() {
         try (Connection c = Database.getConnection()) {
             ensureDefault(c, BACKUP_RETENTION_COUNT, String.valueOf(DEFAULT_BACKUP_RETENTION_COUNT));
             return Integer.parseInt(getValue(c, BACKUP_RETENTION_COUNT));
-        } catch (Exception e) { throw new IllegalStateException("Unable to load backup retention count", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to load backup retention count", e); throw new IllegalStateException("Unable to load backup retention count", e); }
     }
 
     public static void saveBackupRetention(boolean enabled, int keepCount) {
@@ -77,13 +79,13 @@ public final class SettingsService {
                 upsert(c, BACKUP_RETENTION_ENABLED, String.valueOf(enabled));
                 upsert(c, BACKUP_RETENTION_COUNT, String.valueOf(keepCount));
                 c.commit();
-            } catch (Exception e) {
+            } catch (Exception e) { WaspLogger.error("Operation failed in SettingsService", e);
                 c.rollback();
                 throw e;
             } finally {
                 c.setAutoCommit(true);
             }
-        } catch (Exception e) { throw new IllegalStateException("Unable to save backup retention settings", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to save backup retention settings", e); throw new IllegalStateException("Unable to save backup retention settings", e); }
     }
 
     public static void savePageSize(int pageSize) {
@@ -91,7 +93,7 @@ public final class SettingsService {
             throw new IllegalArgumentException("Page size must be 10, 20, 50 or 100.");
         }
         try (Connection c = Database.getConnection()) { upsert(c, LIST_PAGE_SIZE, String.valueOf(pageSize)); }
-        catch (Exception e) { throw new IllegalStateException("Unable to save pagination setting", e); }
+        catch (Exception e) { WaspLogger.error("Operation failed in SettingsService", e); throw new IllegalStateException("Unable to save pagination setting", e); }
     }
 
     private static String normalizePart(String v) { return v == null ? "" : v.trim().toUpperCase(); }

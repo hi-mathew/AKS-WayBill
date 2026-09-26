@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 
 import java.sql.Connection;
@@ -43,7 +45,7 @@ public final class CompanyService {
         if (companyName == null || companyName.trim().isEmpty()) return null;
         try (Connection connection = Database.getConnection()) {
             return findByName(connection, type, companyName.trim(), activeOnly);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load company", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load company", e); throw new IllegalStateException("Unable to load company", e); }
     }
 
     public static CompanyRecord findById(CompanyType type, long id) {
@@ -51,7 +53,7 @@ public final class CompanyService {
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setLong(1, id);
             try (ResultSet rs = statement.executeQuery()) { return rs.next() ? read(rs) : null; }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load company", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load company", e); throw new IllegalStateException("Unable to load company", e); }
     }
 
     public static CompanyPage findPage(CompanyType type, String search, int page, int pageSize) {
@@ -86,7 +88,7 @@ public final class CompanyService {
                 try (ResultSet rs = statement.executeQuery()) { while (rs.next()) rows.add(read(rs)); }
             }
             return new CompanyPage(rows, normalizedPage, safePageSize, total);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load companies", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load companies", e); throw new IllegalStateException("Unable to load companies", e); }
     }
 
     public static long countAll() {
@@ -94,7 +96,7 @@ public final class CompanyService {
              PreparedStatement statement = connection.prepareStatement("SELECT (SELECT COUNT(*) FROM shipper_company) + (SELECT COUNT(*) FROM consignee_company)" );
              ResultSet rs = statement.executeQuery()) {
             return rs.next() ? rs.getLong(1) : 0;
-        } catch (SQLException e) { throw new IllegalStateException("Unable to count companies", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to count companies", e); throw new IllegalStateException("Unable to count companies", e); }
     }
 
     public static CompanyRecord create(CompanyType type, String companyName, String contactPerson, String address,
@@ -123,10 +125,12 @@ public final class CompanyService {
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     if (!keys.next()) throw new SQLException("Unable to determine company ID.");
-                    return findById(type, keys.getLong(1));
+                    CompanyRecord created = findById(type, keys.getLong(1));
+                    WaspLogger.info("Company created. type=" + type + ", name=" + companyName.trim());
+                    return created;
                 }
             }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to create company", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to create company", e); throw new IllegalStateException("Unable to create company", e); }
     }
 
     public static CompanyRecord update(CompanyType type, long id, String companyName, String contactPerson, String address,
@@ -151,15 +155,18 @@ public final class CompanyService {
                 statement.setLong(8, id);
                 if (statement.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
             }
-            return findById(type, id);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to update company", e); }
+            CompanyRecord updated = findById(type, id);
+            WaspLogger.info("Company updated. type=" + type + ", id=" + id + ", name=" + companyName.trim());
+            return updated;
+        } catch (SQLException e) { WaspLogger.error("Unable to update company", e); throw new IllegalStateException("Unable to update company", e); }
     }
 
     public static void setActive(CompanyType type, long id, boolean active) {
         String sql = "UPDATE " + table(type) + " SET active=?, updated_at=? WHERE id=?";
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, active ? 1 : 0); statement.setString(2, DB_DATE_TIME.format(LocalDateTime.now())); statement.setLong(3, id); statement.executeUpdate();
-        } catch (SQLException e) { throw new IllegalStateException("Unable to update company status", e); }
+            WaspLogger.info("Company status updated. type=" + type + ", id=" + id + ", active=" + active);
+        } catch (SQLException e) { WaspLogger.error("Unable to update company status", e); throw new IllegalStateException("Unable to update company status", e); }
     }
 
     /** Deletes the master record itself. Historical waybills contain their own snapshot of party data. */
@@ -172,8 +179,9 @@ public final class CompanyService {
             d.setLong(1, id);
             if (d.executeUpdate() == 0) throw new IllegalArgumentException("The selected company no longer exists.");
             com.aks.waybill.service.AuditLogService.log("DELETE", "COMPANY", id, "Company master deleted by Administrator; historical waybills retain their stored snapshot.");
+            WaspLogger.info("Company deleted. type=" + type + ", id=" + id);
             return "The company was deleted successfully. Historical waybills remain unchanged.";
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in CompanyService", e);
             throw new IllegalStateException("Unable to delete company", e);
         }
     }
@@ -188,7 +196,7 @@ public final class CompanyService {
                 + (activeOnly ? " WHERE active=1" : "") + " ORDER BY company_name COLLATE NOCASE, id";
         try (Connection connection = Database.getConnection(); PreparedStatement statement = connection.prepareStatement(sql); ResultSet rs = statement.executeQuery()) {
             List<CompanyRecord> result = new ArrayList<>(); while (rs.next()) result.add(read(rs)); return result;
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load companies", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load companies", e); throw new IllegalStateException("Unable to load companies", e); }
     }
 
     private static CompanyRecord findByName(Connection connection, CompanyType type, String name, boolean activeOnly) throws SQLException {

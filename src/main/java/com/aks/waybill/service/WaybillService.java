@@ -130,7 +130,7 @@ public final class WaybillService {
             int normalizedPage = Math.min(safePage, totalPages - 1);
             if (normalizedPage != safePage) return findPage(term, fromDate, toDate, status, normalizedPage, safePageSize, ownerId);
             return new WaybillPage(rows, safePage, safePageSize, total);
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in WaybillService", e);
             throw new IllegalStateException("Unable to load saved waybills", e);
         }
     }
@@ -161,7 +161,7 @@ public final class WaybillService {
                 }
                 return new WaybillDetails(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), shipper, consignee, rs.getString(14), rs.getString(15), rs.getString(16), rs.getString(17), rs.getString(18), parseDate(rs.getString(19)), rs.getString(20), rs.getInt(21) == 1, rs.getString(22), rs.getString(23), parseDate(rs.getString(24)), rs.getString(25), parseDate(rs.getString(26)), rs.getString(27), parseDate(rs.getString(28)), items, rs.getString(29));
             }
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in WaybillService", e);
             throw new IllegalStateException("Unable to load waybill", e);
         }
     }
@@ -206,6 +206,7 @@ public final class WaybillService {
                 null, null, null, null, null, null, SessionContext.requireUserId(), source.items());
         SavedWaybill saved = save(data);
         AuditLogService.log("DUPLICATE", "WAYBILL", saved.id(), "Duplicated " + source.waybillNumber() + " as " + saved.waybillNumber());
+        WaspLogger.info("Waybill duplicated. sourceWaybill=" + source.waybillNumber() + ", newWaybill=" + saved.waybillNumber());
         return saved;
     }
 
@@ -330,14 +331,15 @@ public final class WaybillService {
                 insertAudit(connection, data.createdBy(), waybillId, waybillNumber, "CREATE");
 
                 connection.commit();
+                WaspLogger.info("Waybill created successfully. waybillId=" + waybillId + ", waybillNumber=" + waybillNumber + ", userId=" + data.createdBy());
                 return new SavedWaybill(waybillId, waybillNumber);
-            } catch (SQLException | RuntimeException e) {
+            } catch (SQLException | RuntimeException e) { WaspLogger.error("Operation failed in WaybillService", e);
                 connection.rollback();
                 throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in WaybillService", e);
             throw new IllegalStateException("Unable to save waybill", e);
         }
     }
@@ -409,13 +411,14 @@ public final class WaybillService {
                 String number = loadWaybillNumber(connection, waybillId);
                 insertAudit(connection, data.createdBy(), waybillId, number, "UPDATE");
                 connection.commit();
-            } catch (SQLException | RuntimeException exception) {
+                WaspLogger.info("Waybill updated successfully. waybillId=" + waybillId + ", waybillNumber=" + number + ", userId=" + data.createdBy());
+            } catch (SQLException | RuntimeException exception) { WaspLogger.error("Operation failed in WaybillService", exception);
                 connection.rollback();
                 throw exception;
             } finally {
                 connection.setAutoCommit(true);
             }
-        } catch (SQLException exception) {
+        } catch (SQLException exception) { WaspLogger.error("Operation failed in WaybillService", exception);
             throw new IllegalStateException("Unable to update waybill", exception);
         }
     }
@@ -469,7 +472,7 @@ public final class WaybillService {
     private static boolean isOwner(long waybillId) {
         try (Connection connection = Database.getConnection()) {
             return isOwner(connection, waybillId);
-        } catch (SQLException exception) {
+        } catch (SQLException exception) { WaspLogger.error("Operation failed in WaybillService", exception);
             throw new IllegalStateException("Unable to check waybill ownership", exception);
         }
     }
@@ -519,7 +522,7 @@ public final class WaybillService {
 
                 connection.commit();
                 WaspLogger.info("Waybill finalized successfully. waybillId=" + waybillId + ", userId=" + currentUserId);
-            } catch (SQLException | RuntimeException exception) {
+            } catch (SQLException | RuntimeException exception) { WaspLogger.error("Operation failed in WaybillService", exception);
                 try { connection.rollback(); } catch (SQLException ignored) { }
                 WaspLogger.error("Finalization failed and transaction was rolled back. waybillId=" + waybillId + ", userId=" + currentUserId, exception);
                 if (exception instanceof SQLException sqlException) {
@@ -528,7 +531,7 @@ public final class WaybillService {
                 }
                 throw exception;
             }
-        } catch (SQLException exception) {
+        } catch (SQLException exception) { WaspLogger.error("Operation failed in WaybillService", exception);
             WaspLogger.error("Unable to finalize waybill because the database operation failed. waybillId=" + waybillId + ", userId=" + currentUserId, exception);
             String detail = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
             throw new IllegalStateException("Unable to finalize waybill: " + detail, exception);
@@ -594,6 +597,7 @@ public final class WaybillService {
                 if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected waybill no longer exists.");
             }
             AuditLogService.logWithEntityLabel("DELETE","WAYBILL",waybillId,waybillNumber,"Waybill deleted by Administrator");
+            WaspLogger.info("Waybill deleted. waybillId=" + waybillId + ", waybillNumber=" + waybillNumber);
         } catch(SQLException e){throw new IllegalStateException("Unable to delete waybill",e);}
     }
 

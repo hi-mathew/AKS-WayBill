@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
@@ -197,8 +199,9 @@ public final class ExcelExportService {
             try (OutputStream out = Files.newOutputStream(target)) {
                 wb.write(out);
             }
+            WaspLogger.info("Excel export completed. file=" + target);
             return target;
-        } catch (Exception e) {
+        } catch (Exception e) { WaspLogger.error("Operation failed in ExcelExportService", e);
             throw new IllegalStateException("Unable to export Excel file: " + e.getMessage(), e);
         }
     }

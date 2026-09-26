@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 import com.aks.waybill.security.PasswordService;
 import com.aks.waybill.security.SessionContext;
@@ -24,7 +26,7 @@ public final class UserService {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql); ResultSet r = p.executeQuery()) {
             while (r.next()) result.add(read(r));
             return result;
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in UserService", e);
             throw new IllegalStateException("Unable to load users", e);
         }
     }
@@ -32,7 +34,7 @@ public final class UserService {
     public static UserRecord findById(long id) {
         try (Connection c = Database.getConnection()) {
             return findById(c, id);
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in UserService", e);
             throw new IllegalStateException("Unable to load user", e);
         }
     }
@@ -53,9 +55,11 @@ public final class UserService {
             p.executeUpdate();
             try (ResultSet keys = p.getGeneratedKeys()) {
                 if (!keys.next()) throw new SQLException("Unable to determine new user ID.");
-                return findById(c, keys.getLong(1));
+                UserRecord created = findById(c, keys.getLong(1));
+                WaspLogger.info("User created. username=" + username.trim() + ", role=" + role.trim().toUpperCase());
+                return created;
             }
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in UserService", e);
             if (e.getMessage() != null && e.getMessage().toLowerCase().contains("unique")) {
                 throw new IllegalArgumentException("Username or user code already exists.");
             }
@@ -84,7 +88,7 @@ public final class UserService {
             p.setLong(6, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected user no longer exists.");
             return findById(c, id);
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in UserService", e);
             if (e.getMessage() != null && e.getMessage().toLowerCase().contains("unique")) {
                 throw new IllegalArgumentException("Username or user code already exists.");
             }
@@ -105,7 +109,8 @@ public final class UserService {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("UPDATE app_user SET enabled=?, updated_at=? WHERE id=?")) {
             p.setInt(1, enabled ? 1 : 0); p.setString(2, now); p.setLong(3, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected user no longer exists.");
-        } catch (SQLException e) { throw new IllegalStateException("Unable to update user status", e); }
+            WaspLogger.info("User status updated. userId=" + id + ", enabled=" + enabled);
+        } catch (SQLException e) { WaspLogger.error("Unable to update user status", e); throw new IllegalStateException("Unable to update user status", e); }
     }
 
     public static void resetPassword(long id, String password) {
@@ -114,7 +119,8 @@ public final class UserService {
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("UPDATE app_user SET password_hash=?, must_change_password=0, failed_login_attempts=0, locked_until=NULL, updated_at=? WHERE id=?")) {
             p.setString(1, PasswordService.hash(password)); p.setString(2, now); p.setLong(3, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected user no longer exists.");
-        } catch (SQLException e) { throw new IllegalStateException("Unable to reset password", e); }
+            WaspLogger.info("User password reset completed. userId=" + id);
+        } catch (SQLException e) { WaspLogger.error("Unable to reset password", e); throw new IllegalStateException("Unable to reset password", e); }
     }
 
     private static int countActiveAdmins() {
@@ -122,7 +128,7 @@ public final class UserService {
              PreparedStatement p = c.prepareStatement("SELECT COUNT(*) FROM app_user WHERE enabled=1 AND role='ADMIN'" );
              ResultSet r = p.executeQuery()) {
             return r.next() ? r.getInt(1) : 0;
-        } catch (SQLException e) {
+        } catch (SQLException e) { WaspLogger.error("Operation failed in UserService", e);
             throw new IllegalStateException("Unable to verify active administrator accounts", e);
         }
     }

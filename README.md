@@ -117,3 +117,21 @@ Do not ship a pre-populated `waybill.db` inside the installer.
 ### First launch
 
 If `%LOCALAPPDATA%\AKS-Waybill\waybill.db` does not exist, SQLite creates it and the application's normal database initialization creates the required tables and initial data.
+
+
+## Technical Logging
+
+W.A.S.P. writes technical logs to `logs\wasp.log` under the persistent application data directory. The default logging level is `INFO`.
+
+The logging level can be changed without rebuilding the application by editing:
+
+`%LOCALAPPDATA%\W.A.S.P-Data\logging.properties`
+
+The file is created automatically on first startup with:
+
+```properties
+level=INFO
+consoleLevel=INFO
+```
+
+Supported values are `SEVERE`/`ERROR`, `WARNING`, `INFO`, `DEBUG`/`FINE`, `TRACE`/`FINEST`, `ALL`, and `OFF`. `consoleLevel` controls console output separately. Restart W.A.S.P. after changing the file.

@@ -1,5 +1,7 @@
 package com.aks.waybill.report;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.service.ReportProfileService;
 import com.aks.waybill.service.TermsConditionService;
 import com.aks.waybill.service.WaybillService;
@@ -58,6 +60,7 @@ public final class WaybillReportService {
     }
 
     public static void generateWord(WaybillService.WaybillDetails waybill, Path output) throws IOException {
+        WaspLogger.debug("Starting Word report generation. output=" + output);
         if (waybill == null) {
             throw new IllegalArgumentException("Waybill data is required.");
         }
@@ -67,12 +70,14 @@ public final class WaybillReportService {
         try {
             populateTemplate(waybill, temporary);
             Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
+            WaspLogger.info("Word report generated. waybillNumber=" + waybill.waybillNumber() + ", items=" + (waybill.items() == null ? 0 : waybill.items().size()) + ", output=" + output);
         } finally {
             Files.deleteIfExists(temporary);
         }
     }
 
     public static void generatePdf(WaybillService.WaybillDetails waybill, Path output) throws IOException {
+        WaspLogger.debug("Starting PDF report generation. output=" + output);
         if (waybill == null) {
             throw new IllegalArgumentException("Waybill data is required.");
         }
@@ -85,6 +90,7 @@ public final class WaybillReportService {
             if ("DRAFT".equalsIgnoreCase(waybill.status())) {
                 addDraftPdfWatermark(output);
             }
+            WaspLogger.info("PDF report generated. waybillNumber=" + waybill.waybillNumber() + ", items=" + (waybill.items() == null ? 0 : waybill.items().size()) + ", output=" + output);
         } finally {
             Files.deleteIfExists(temporary);
         }
@@ -698,7 +704,7 @@ public final class WaybillReportService {
 
             temporaryPdf = null;
 
-        } catch (Exception e) {
+        } catch (Exception e) { WaspLogger.error("Operation failed in WaybillReportService", e);
             throw new IOException("Unable to convert the approved Word waybill template to PDF.", e);
         }
     }

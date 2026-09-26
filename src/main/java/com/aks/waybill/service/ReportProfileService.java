@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 
 import java.sql.Connection;
@@ -35,7 +37,7 @@ public final class ReportProfileService {
             ensure(c, EMAIL, "");
             return new ReportProfile(get(c, COMPANY_NAME), get(c, CR_NUMBER), get(c, VAT_NUMBER),
                     get(c, ADDRESS), get(c, PHONE), get(c, EMAIL));
-        } catch (Exception e) { throw new IllegalStateException("Unable to load report company profile", e); }
+        } catch (Exception e) { WaspLogger.error("Unable to load report company profile", e); throw new IllegalStateException("Unable to load report company profile", e); }
     }
 
     public static void save(String companyName, String crNumber, String vatNumber, String address, String phone, String email) {
@@ -55,10 +57,10 @@ public final class ReportProfileService {
                 put(c, COMPANY_NAME, companyName.trim()); put(c, CR_NUMBER, crNumber.trim()); put(c, VAT_NUMBER, vatNumber.trim());
                 put(c, ADDRESS, address.trim()); put(c, PHONE, safe(phone)); put(c, EMAIL, safe(email));
                 c.commit();
-            } catch (Exception e) { c.rollback(); throw e; }
+            } catch (Exception e) { WaspLogger.error("Operation failed in ReportProfileService", e); c.rollback(); throw e; }
             finally { c.setAutoCommit(true); }
         } catch (IllegalArgumentException e) { throw e; }
-        catch (Exception e) { throw new IllegalStateException("Unable to save report company profile", e); }
+        catch (Exception e) { WaspLogger.error("Operation failed in ReportProfileService", e); throw new IllegalStateException("Unable to save report company profile", e); }
     }
 
     private static void ensure(Connection c, String key, String value) throws Exception { put(c, key, get(c, key, value)); }

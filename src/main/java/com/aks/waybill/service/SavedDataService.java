@@ -1,5 +1,7 @@
 package com.aks.waybill.service;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.db.Database;
 
 import java.sql.*;
@@ -24,7 +26,7 @@ public final class SavedDataService {
                 while (r.next()) result.add(new CarrierRecord(r.getLong(1), r.getString(2), r.getString(3), r.getString(4), r.getInt(5) == 1));
             }
             return result;
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load saved carriers", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load saved carriers", e); throw new IllegalStateException("Unable to load saved carriers", e); }
     }
 
     public static CarrierRecord findCarrierByName(String name, boolean activeOnly) {
@@ -37,7 +39,7 @@ public final class SavedDataService {
             try (ResultSet r = p.executeQuery()) {
                 return r.next() ? new CarrierRecord(r.getLong(1), r.getString(2), r.getString(3), r.getString(4), r.getInt(5) == 1) : null;
             }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to find saved carrier", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to find saved carrier", e); throw new IllegalStateException("Unable to find saved carrier", e); }
     }
 
     public static List<LocationRecord> findLocations(String search, boolean activeOnly) {
@@ -51,7 +53,7 @@ public final class SavedDataService {
                 while (r.next()) result.add(new LocationRecord(r.getLong(1), r.getString(2), r.getInt(3) == 1));
             }
             return result;
-        } catch (SQLException e) { throw new IllegalStateException("Unable to load saved locations", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to load saved locations", e); throw new IllegalStateException("Unable to load saved locations", e); }
     }
 
     /** Saves a carrier master record, or updates its driver/vehicle details when the carrier already exists. */
@@ -74,7 +76,7 @@ public final class SavedDataService {
                 p.setString(1, value); p.setString(2, blankToNull(driverName)); p.setString(3, blankToNull(vehicleTrailerNo)); p.executeUpdate();
                 try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new CarrierRecord(r.getLong(1), value, blankToNull(driverName), blankToNull(vehicleTrailerNo), true); }
             }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to save carrier", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to save carrier", e); throw new IllegalStateException("Unable to save carrier", e); }
     }
 
     public static CarrierRecord createCarrier(String name) { return createCarrier(name, null, null, true); }
@@ -98,7 +100,7 @@ public final class SavedDataService {
                 r.next();
                 return new CarrierRecord(r.getLong(1), value, blankToNull(driverName), blankToNull(vehicleTrailerNo), active);
             }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to save carrier", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to save carrier", e); throw new IllegalStateException("Unable to save carrier", e); }
     }
 
     public static CarrierRecord updateCarrier(long id, String name, String driverName, String vehicleTrailerNo, boolean active) {
@@ -111,7 +113,7 @@ public final class SavedDataService {
             p.setString(1, value); p.setString(2, blankToNull(driverName)); p.setString(3, blankToNull(vehicleTrailerNo)); p.setInt(4, active ? 1 : 0); p.setLong(5, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("Carrier no longer exists.");
             return new CarrierRecord(id, value, blankToNull(driverName), blankToNull(vehicleTrailerNo), active);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to update carrier", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to update carrier", e); throw new IllegalStateException("Unable to update carrier", e); }
     }
 
     /** Compatibility overload for older callers. */
@@ -132,7 +134,7 @@ public final class SavedDataService {
             p.setInt(2, active ? 1 : 0);
             p.executeUpdate();
             try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new LocationRecord(r.getLong(1), value, active); }
-        } catch (SQLException e) { throw new IllegalStateException("Unable to save location", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to save location", e); throw new IllegalStateException("Unable to save location", e); }
     }
 
     /** Saves a location if it is not already present. */
@@ -150,7 +152,7 @@ public final class SavedDataService {
             p.setString(1, value); p.setInt(2, active ? 1 : 0); p.setLong(3, id);
             if (p.executeUpdate() == 0) throw new IllegalArgumentException("Location no longer exists.");
             return new LocationRecord(id, value, active);
-        } catch (SQLException e) { throw new IllegalStateException("Unable to update location", e); }
+        } catch (SQLException e) { WaspLogger.error("Unable to update location", e); throw new IllegalStateException("Unable to update location", e); }
     }
 
     private static String required(String value, String field) {

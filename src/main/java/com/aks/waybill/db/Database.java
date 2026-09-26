@@ -1,5 +1,7 @@
 package com.aks.waybill.db;
 
+import com.aks.waybill.logging.WaspLogger;
+
 import com.aks.waybill.config.AppPaths;
 
 import java.io.IOException;
@@ -73,7 +75,7 @@ public final class Database {
                 seedTermsConditions(c);
                 normalizeTermsConditionOrder(c);
             }
-        } catch (IOException | SQLException e) {
+        } catch (IOException | SQLException e) { WaspLogger.error("Operation failed in Database", e);
             throw new IllegalStateException("Unable to initialize W.A.S.P database", e);
         }
     }

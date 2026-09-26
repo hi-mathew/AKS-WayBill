@@ -36,6 +36,7 @@ public class Main extends Application {
         stage = primaryStage;
         WaspLogger.initialize();
         WaspLogger.info("Starting W.A.S.P 1.4.0");
+        WaspLogger.debug("Application data directory: " + com.aks.waybill.config.AppPaths.dataDirectory());
         installDialogStyling();
         try {
             Database.initialize();
