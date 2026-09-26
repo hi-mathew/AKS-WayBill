@@ -599,3 +599,14 @@
     -fx-font-weight: 700;
     -fx-text-fill: #6c7787;
 }
+
+/* Dynamic list tables: hide the vertical scrollbar when all rows fit. */
+.table-view.fit-no-scroll .scroll-bar:vertical {
+    -fx-pref-width: 0;
+    -fx-min-width: 0;
+    -fx-max-width: 0;
+    -fx-opacity: 0;
+}
+.table-view.fit-no-scroll .corner {
+    -fx-background-color: transparent;
+}

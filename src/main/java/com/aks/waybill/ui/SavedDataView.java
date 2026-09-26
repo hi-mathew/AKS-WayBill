@@ -85,7 +85,7 @@ public final class SavedDataView extends AppView {
                 });
                 return row;
             });
-            VBox.setVgrow(table, Priority.ALWAYS);
+            fitTableHeight(table, 0, 10, 42);
             message.getStyleClass().add("form-message");
             getChildren().addAll(toolbar, table, message);
         }
@@ -94,6 +94,7 @@ public final class SavedDataView extends AppView {
             try {
                 if (carrierMode) table.setItems(FXCollections.observableArrayList(SavedDataService.findCarriers(search.getText(), false).stream().map(x -> (Object)x).toList()));
                 else table.setItems(FXCollections.observableArrayList(SavedDataService.findLocations(search.getText(), false).stream().map(x -> (Object)x).toList()));
+                fitTableHeight(table, table.getItems().size(), 10, 42);
                 message.setText("");
             } catch (RuntimeException ex) { message.setText(ex.getMessage()); }
         }

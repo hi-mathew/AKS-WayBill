@@ -96,8 +96,7 @@ public final class SettingsView extends AppView {
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
         Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
         TableView<TermsConditionService.Clause> table=new TableView<>();
-        table.setPrefHeight(360);
-        table.setMinHeight(300);
+        fitTableHeight(table, 0, 10, 38);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No.");
@@ -117,7 +116,7 @@ public final class SettingsView extends AppView {
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
         table.getColumns().setAll(no,clause,text,active);
 
-        Runnable reload=()->table.getItems().setAll(TermsConditionService.findAll());
+        Runnable reload=()->{ table.getItems().setAll(TermsConditionService.findAll()); fitTableHeight(table, table.getItems().size(), 10, 38); };
         reload.run();
 
         table.setRowFactory(tv -> {

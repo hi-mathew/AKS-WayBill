@@ -159,7 +159,7 @@ public final class SavedWaybillsView extends AppView {
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPlaceholder(new Label("No saved waybills match the current search."));
         table.setFixedCellSize(42);
-        table.setPrefHeight(600);
+        fitTableHeight(table, 0, pageSize, 42);
         table.setRowFactory(view -> {
             TableRow<WaybillService.WaybillListRow> row = new TableRow<>();
             row.setOnMouseClicked(event -> { if (event.getClickCount() == 2 && !row.isEmpty()) openView(row.getItem().id()); });
@@ -182,7 +182,6 @@ public final class SavedWaybillsView extends AppView {
         Region spacer = new Region(); HBox.setHgrow(spacer, Priority.ALWAYS); info.getChildren().addAll(resultInfo, spacer, pageInfo);
 
         root.getChildren().addAll(filterCard, table, actionsBar, info, paging);
-        VBox.setVgrow(table, Priority.ALWAYS);
         return root;
     }
 
@@ -208,6 +207,7 @@ public final class SavedWaybillsView extends AppView {
             String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
             WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), selectedStatus, Math.max(0, page), pageSize);
             currentPage = result.page(); totalPages = result.totalPages(); table.getItems().setAll(result.rows());
+            fitTableHeight(table, result.rows().size(), pageSize, 42);
             long start = result.totalRows() == 0 ? 0 : (long) currentPage * pageSize + 1;
             long end = Math.min(result.totalRows(), (long) (currentPage + 1) * pageSize);
             resultInfo.setText("Showing " + start + "–" + end + " of " + result.totalRows());
