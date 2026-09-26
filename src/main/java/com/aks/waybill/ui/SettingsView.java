@@ -36,7 +36,7 @@ public final class SettingsView extends AppView {
     private final Label preview = new Label();
 
     public SettingsView() {
-        super("Settings", "Configure waybill numbering and the issuing company information used on reports.");
+        super("Settings", "Manage waybill numbering, company information, terms and conditions, pagination, and application data settings.");
 
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
