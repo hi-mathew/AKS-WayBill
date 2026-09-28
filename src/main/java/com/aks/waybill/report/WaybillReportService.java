@@ -7,7 +7,6 @@ import com.aks.waybill.service.TermsConditionService;
 import com.aks.waybill.service.WaybillService;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFFooter;
-import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -27,11 +26,8 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.util.Matrix;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import javax.imageio.ImageIO;
 import java.io.*;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -53,8 +49,6 @@ import java.nio.charset.StandardCharsets;
 public final class WaybillReportService {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final String TEMPLATE_RESOURCE = "/com/aks/waybill/templates/transportation_waybill_template.docx";
-    private static final String REPORT_LOGO_RESOURCE = "/com/aks/waybill/images/report-logo.png";
-    private static final String TEMPLATE_LOGO_ENTRY = "word/media/image1.jpg";
 
     private WaybillReportService() {
     }
@@ -86,6 +80,12 @@ public final class WaybillReportService {
         Path temporary = Files.createTempFile(output.toAbsolutePath().getParent(), "aks-waybill-report-", ".docx");
         try {
             populateTemplate(waybill, temporary);
+            // Word renders the template logo without an outline, but the docx4j
+            // PDF renderer can interpret the DrawingML picture outline as a
+            // visible theme-colored border. Remove that outline only from the
+            // temporary PDF source document; the generated Word document remains
+            // completely unchanged and continues to use the approved template logo.
+            preparePdfTemplateLogoForDocx4j(temporary);
             convertDocxToPdf(temporary, output);
             if ("DRAFT".equalsIgnoreCase(waybill.status())) {
                 addDraftPdfWatermark(output);
@@ -116,9 +116,6 @@ public final class WaybillReportService {
             populateTermsIntro(document, waybill);
             populateRemarks(document, waybill.remarks());
             populateTermsAndConditions(tables.get(5));
-            if ("DRAFT".equalsIgnoreCase(waybill.status()) && document.getHeaderList().isEmpty()) {
-                document.createHeader(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT);
-            }
             populateFooter(document, profile);
 
             try (OutputStream out = Files.newOutputStream(output)) {
@@ -126,10 +123,16 @@ public final class WaybillReportService {
             }
         }
 
-        replaceTemplateLogo(output);
+        // Apache POI can normalize the crop rectangle of an existing anchored
+        // template image when the DOCX is serialized. The approved template
+        // relies on that crop rectangle to position the visible logo correctly
+        // inside its fixed drawing frame. Restore the template crop metadata
+        // after POI writes the document so the logo remains visually identical
+        // to the approved template.
+        restoreTemplateLogoCrop(output);
 
         if ("DRAFT".equalsIgnoreCase(waybill.status())) {
-            addDraftWatermark(output);
+            addDraftWatermarkToFooter(output);
         }
     }
 
@@ -144,12 +147,12 @@ public final class WaybillReportService {
         // 0 = "WAYBILL NO: ", 1..3 = sample waybill number parts,
         // 4 = line break, 5 = "Date: ", 6 = sample date.
         // Keep the labels intact and replace only the dynamic values.
-        setRunText(meta, 0, "WAYBILL NO: ");
-        setRunText(meta, 1, waybill.waybillNumber());
+        setRunText(meta, 0, "WAYBILL NO:");
+        setRunText(meta, 1, "\u00A0" + safe(waybill.waybillNumber()));
         setRunText(meta, 2, "");
         setRunText(meta, 3, "");
-        setRunText(meta, 5, "Date: ");
-        setRunText(meta, 6, formatLongDate(waybill.waybillDate()));
+        setRunText(meta, 5, "Date:");
+        setRunText(meta, 6, "\u00A0" + formatLongDate(waybill.waybillDate()));
     }
 
     private static void populateParties(XWPFTable table, WaybillService.WaybillDetails waybill) {
@@ -434,14 +437,14 @@ public final class WaybillReportService {
     }
 
     /**
-     * Adds a true Word/VML watermark to every header in the generated DOCX.
-     *
-     * The watermark is intentionally added at the DOCX package level instead of
-     * as ordinary XWPF header text. That makes it a floating object positioned
-     * behind the document content and repeated on every page which uses the
-     * header. The same DOCX is then passed to docx4j for PDF generation.
+     * Adds the Draft watermark to the existing template footer rather than
+     * creating a Word header. The approved template has no header, and adding
+     * one changes the page layout by reserving additional space above the body.
+     * Keeping the watermark in the existing footer preserves the template's
+     * top positioning while still allowing the Draft watermark to repeat on
+     * every page.
      */
-    private static void addDraftWatermark(Path docx) throws IOException {
+    private static void addDraftWatermarkToFooter(Path docx) throws IOException {
         Path temp = Files.createTempFile(docx.toAbsolutePath().getParent(),
                 "aks-waybill-watermark-", ".docx");
         boolean changed = false;
@@ -457,10 +460,10 @@ public final class WaybillReportService {
                 replacement.setTime(entry.getTime());
                 zipOut.putNextEntry(replacement);
 
-                if (entry.getName().matches("word/header\\d+\\.xml")) {
+                if (entry.getName().matches("word/footer\\d+\\.xml")) {
                     String xml = new String(zipIn.readAllBytes(), StandardCharsets.UTF_8);
                     if (!xml.contains("PowerPlusWaterMarkObject")) {
-                        int closing = xml.lastIndexOf("</w:hdr>");
+                        int closing = xml.lastIndexOf("</w:ftr>");
                         if (closing >= 0) {
                             xml = xml.substring(0, closing) + draftWatermarkXml() + xml.substring(closing);
                             changed = true;
@@ -478,7 +481,7 @@ public final class WaybillReportService {
 
         if (!changed) {
             Files.deleteIfExists(temp);
-            throw new IOException("Unable to add the Draft watermark because the generated document has no usable header.");
+            throw new IOException("Unable to add the Draft watermark because the generated document has no usable footer.");
         }
 
         Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
@@ -517,7 +520,7 @@ public final class WaybillReportService {
                       <v:shape id=\"PowerPlusWaterMarkObject\"
                                o:spid=\"_x0000_s1025\"
                                type=\"#_x0000_t136\"
-                               style=\"position:absolute;margin-left:0;margin-top:0;width:468pt;height:117pt;z-index:-251654144;mso-wrap-edited:f;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin;rotation:315\"
+                               style=\"position:absolute;margin-left:0;margin-top:0;width:468pt;height:117pt;z-index:-251654144;mso-wrap-edited:f;mso-position-horizontal:center;mso-position-horizontal-relative:page;mso-position-vertical:center;mso-position-vertical-relative:page;rotation:315\"
                                o:allowincell=\"f\" fillcolor=\"#D9DDE3\" stroked=\"f\">
                         <v:fill opacity=\"0.65\"/>
                         <v:textpath style=\"font-family:Arial;font-size:60pt;font-weight:bold\" string=\"D R A F T\"/>
@@ -592,85 +595,173 @@ public final class WaybillReportService {
         }
     }
 
-    private static void replaceTemplateLogo(Path docx) throws IOException {
-        byte[] logoBytes;
-        try (InputStream in = requiredResource(REPORT_LOGO_RESOURCE);
-             ByteArrayOutputStream imageOut = new ByteArrayOutputStream()) {
-            BufferedImage source = ImageIO.read(in);
-            if (source == null) {
-                throw new IOException("Unable to read the report logo image.");
-            }
-            // The supplied report logo is PNG and may contain transparency.
-            // The approved DOCX template stores its logo as JPEG, so convert it
-            // explicitly to an RGB image with a white background before encoding.
-            // The Word template has a fixed logo frame of 1,485,900 x 622,300 EMU.
-            // The supplied report logo has a different aspect ratio.  Do not simply
-            // replace the JPEG while retaining the template crop rectangle: Word
-            // would crop the lower part of the new logo.  Instead, render the logo
-            // onto a white canvas with the exact aspect ratio of the template frame.
-            final double targetAspect = 1485900d / 622300d;
-            int canvasWidth = 1800;
-            int canvasHeight = (int) Math.round(canvasWidth / targetAspect);
-            BufferedImage logo = new BufferedImage(canvasWidth, canvasHeight, BufferedImage.TYPE_INT_RGB);
-            Graphics2D graphics = logo.createGraphics();
-            try {
-                graphics.setColor(Color.WHITE);
-                graphics.fillRect(0, 0, canvasWidth, canvasHeight);
+    /**
+     * Prepares a PDF-only copy of the populated DOCX for docx4j.
+     *
+     * The approved template intentionally uses DrawingML cropping on the logo
+     * (w:srcRect). Microsoft Word honours that crop, so the blue outer area of
+     * the source JPEG is not visible in Word or in Word's PDF export.
+     *
+     * docx4j's PDF/XSL-FO path can render the underlying image without applying
+     * that crop for this particular floating picture. The result is the blue
+     * rectangular area that is outside the approved visible logo crop.
+     *
+     * To keep the approved Word document completely unchanged, only the
+     * temporary PDF source DOCX is modified: the logo image is physically
+     * cropped to the same srcRect values and the srcRect metadata is removed.
+     * The picture therefore has exactly the pixels that should be visible when
+     * docx4j converts it to PDF.
+     */
+    private static void preparePdfTemplateLogoForDocx4j(Path docx) throws IOException {
+        Path temp = Files.createTempFile(docx.toAbsolutePath().getParent(),
+                "aks-waybill-pdf-logo-crop-", ".docx");
 
-                double scale = Math.min(
-                        (canvasWidth * 0.96d) / source.getWidth(),
-                        (canvasHeight * 0.96d) / source.getHeight());
-                int drawWidth = Math.max(1, (int) Math.round(source.getWidth() * scale));
-                int drawHeight = Math.max(1, (int) Math.round(source.getHeight() * scale));
-                int x = (canvasWidth - drawWidth) / 2;
-                int y = (canvasHeight - drawHeight) / 2;
-                graphics.drawImage(source, x, y, drawWidth, drawHeight, null);
-            } finally {
-                graphics.dispose();
-            }
-            if (!ImageIO.write(logo, "jpg", imageOut)) {
-                throw new IOException("Unable to encode the report logo as JPEG. No JPEG encoder is available.");
-            }
-            logoBytes = imageOut.toByteArray();
-        }
+        try {
+            String documentXml;
+            String relationshipsXml;
 
-        Path temp = Files.createTempFile(docx.toAbsolutePath().getParent(), "aks-waybill-logo-", ".docx");
-        boolean replaced = false;
-        try (InputStream in = Files.newInputStream(docx);
-             ZipInputStream zipIn = new ZipInputStream(in);
-             OutputStream out = Files.newOutputStream(temp);
-             ZipOutputStream zipOut = new ZipOutputStream(out)) {
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(docx.toFile())) {
+                documentXml = new String(zip.getInputStream(zip.getEntry("word/document.xml")).readAllBytes(),
+                        StandardCharsets.UTF_8);
+                relationshipsXml = new String(zip.getInputStream(zip.getEntry("word/_rels/document.xml.rels")).readAllBytes(),
+                        StandardCharsets.UTF_8);
+            }
 
-            ZipEntry entry;
-            while ((entry = zipIn.getNextEntry()) != null) {
-                ZipEntry replacement = new ZipEntry(entry.getName());
-                replacement.setTime(entry.getTime());
-                zipOut.putNextEntry(replacement);
-                if (TEMPLATE_LOGO_ENTRY.equals(entry.getName())) {
-                    zipOut.write(logoBytes);
-                    replaced = true;
-                } else if ("word/document.xml".equals(entry.getName())) {
-                    String xml = new String(zipIn.readAllBytes(), StandardCharsets.UTF_8);
-                    // The supplied template contains an a:srcRect crop around the
-                    // original logo. It is correct for the original artwork but
-                    // clips the new supplied report logo. Remove that crop so the
-                    // complete logo is rendered inside the fixed logo frame.
-                    xml = xml.replaceFirst(
-                            "<a:srcRect\\s+[^>]*/>",
-                            "<a:srcRect l=\"0\" t=\"0\" r=\"0\" b=\"0\"/>");
-                    zipOut.write(xml.getBytes(StandardCharsets.UTF_8));
-                } else {
-                    zipIn.transferTo(zipOut);
+            java.util.regex.Pattern picturePattern = java.util.regex.Pattern.compile(
+                    "(<pic:pic\\b.*?<a:blip\\s+r:embed=\\\"([^\\\"]+)\\\"\\s*/>\\s*)(<a:srcRect\\b[^>]*/>)(.*?</pic:pic>)",
+                    java.util.regex.Pattern.DOTALL);
+            java.util.regex.Matcher pictureMatcher = picturePattern.matcher(documentXml);
+
+            String croppedRelationshipId = null;
+            String croppedTarget = null;
+            int cropLeft = 0;
+            int cropTop = 0;
+            int cropRight = 0;
+            int cropBottom = 0;
+
+            while (pictureMatcher.find()) {
+                String picture = pictureMatcher.group(0);
+                String relationshipId = pictureMatcher.group(2);
+                String srcRect = pictureMatcher.group(3);
+
+                // The approved template has one logo picture. Restrict this
+                // operation to that picture rather than altering any future
+                // pictures that may use cropping for another purpose.
+                if (!picture.contains("<a:blip r:embed=\"rId8\"")) {
+                    continue;
                 }
-                zipOut.closeEntry();
-                zipIn.closeEntry();
+
+                cropLeft = parseCropValue(srcRect, "l");
+                cropTop = parseCropValue(srcRect, "t");
+                cropRight = parseCropValue(srcRect, "r");
+                cropBottom = parseCropValue(srcRect, "b");
+                croppedRelationshipId = relationshipId;
+
+                java.util.regex.Pattern relPattern = java.util.regex.Pattern.compile(
+                        "<Relationship\\b[^>]*\\bId=\\\"" + java.util.regex.Pattern.quote(relationshipId)
+                                + "\\\"[^>]*\\bTarget=\\\"([^\\\"]+)\\\"[^>]*/>");
+                java.util.regex.Matcher relMatcher = relPattern.matcher(relationshipsXml);
+                if (!relMatcher.find()) {
+                    throw new IOException("Unable to resolve the template logo relationship " + relationshipId + ".");
+                }
+
+                croppedTarget = relMatcher.group(1).replace('\\', '/');
+                if (croppedTarget.startsWith("/")) {
+                    croppedTarget = croppedTarget.substring(1);
+                } else if (!croppedTarget.startsWith("word/")) {
+                    croppedTarget = "word/" + croppedTarget;
+                }
+
+                String replacement = picture.replace(srcRect, "");
+                replacement = replacement.replace("<a:ln><a:noFill/></a:ln>", "");
+                replacement = replacement.replace("<a:ln w=\"0\"><a:noFill/></a:ln>", "");
+                documentXml = documentXml.substring(0, pictureMatcher.start())
+                        + replacement
+                        + documentXml.substring(pictureMatcher.end());
+                break;
             }
-        }
-        if (!replaced) {
+
+            if (croppedRelationshipId == null || croppedTarget == null) {
+                WaspLogger.warning("PDF logo crop metadata was not found; using the populated DOCX unchanged.");
+                Files.copy(docx, temp, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            }
+
+            byte[] originalImage;
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(docx.toFile())) {
+                java.util.zip.ZipEntry imageEntry = zip.getEntry(croppedTarget);
+                if (imageEntry == null) {
+                    throw new IOException("Unable to find the template logo image " + croppedTarget + ".");
+                }
+                originalImage = zip.getInputStream(imageEntry).readAllBytes();
+            }
+
+            BufferedImage sourceImage;
+            try (ByteArrayInputStream imageIn = new ByteArrayInputStream(originalImage)) {
+                sourceImage = javax.imageio.ImageIO.read(imageIn);
+            }
+            if (sourceImage == null) {
+                throw new IOException("Unable to read the template logo image for PDF cropping.");
+            }
+
+            int width = sourceImage.getWidth();
+            int height = sourceImage.getHeight();
+            int left = Math.max(0, Math.min(width - 1, (int) Math.round(width * cropLeft / 100000.0)));
+            int top = Math.max(0, Math.min(height - 1, (int) Math.round(height * cropTop / 100000.0)));
+            int right = Math.max(left + 1, Math.min(width, (int) Math.round(width * (100000 - cropRight) / 100000.0)));
+            int bottom = Math.max(top + 1, Math.min(height, (int) Math.round(height * (100000 - cropBottom) / 100000.0)));
+
+            BufferedImage croppedImage = sourceImage.getSubimage(left, top, right - left, bottom - top);
+            byte[] croppedBytes;
+            try (ByteArrayOutputStream imageOut = new ByteArrayOutputStream()) {
+                String format = croppedTarget.toLowerCase().endsWith(".png") ? "png" : "jpg";
+                if (!javax.imageio.ImageIO.write(croppedImage, format, imageOut)) {
+                    throw new IOException("Unable to write the cropped template logo image.");
+                }
+                croppedBytes = imageOut.toByteArray();
+            }
+
+            try (InputStream in = Files.newInputStream(docx);
+                 ZipInputStream zipIn = new ZipInputStream(in);
+                 OutputStream out = Files.newOutputStream(temp);
+                 ZipOutputStream zipOut = new ZipOutputStream(out)) {
+
+                ZipEntry entry;
+                while ((entry = zipIn.getNextEntry()) != null) {
+                    ZipEntry replacementEntry = new ZipEntry(entry.getName());
+                    replacementEntry.setTime(entry.getTime());
+                    zipOut.putNextEntry(replacementEntry);
+
+                    if ("word/document.xml".equals(entry.getName())) {
+                        zipOut.write(documentXml.getBytes(StandardCharsets.UTF_8));
+                    } else if (croppedTarget.equals(entry.getName())) {
+                        zipOut.write(croppedBytes);
+                    } else {
+                        zipIn.transferTo(zipOut);
+                    }
+
+                    zipOut.closeEntry();
+                    zipIn.closeEntry();
+                }
+            }
+
+            Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
+            WaspLogger.debug("Prepared PDF-only logo crop. source=" + width + "x" + height
+                    + ", crop=" + cropLeft + "," + cropTop + "," + cropRight + "," + cropBottom
+                    + ", result=" + (right - left) + "x" + (bottom - top));
+        } finally {
             Files.deleteIfExists(temp);
-            throw new IOException("The approved waybill template does not contain its expected logo image.");
         }
-        Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static int parseCropValue(String srcRect, String attribute) throws IOException {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "\\b" + java.util.regex.Pattern.quote(attribute) + "=\\\"(\\d+)\\\"").matcher(srcRect);
+        if (!matcher.find()) {
+            throw new IOException("The template logo crop is missing the '" + attribute + "' value.");
+        }
+        return Integer.parseInt(matcher.group(1));
     }
 
     private static void convertDocxToPdf(Path docx, Path pdf) throws IOException {
@@ -810,6 +901,81 @@ public final class WaybillReportService {
             if (text != null) builder.append(text);
         }
         return builder.toString();
+    }
+
+    private static void restoreTemplateLogoCrop(Path output) throws IOException {
+        String templateXml = readZipEntryFromResource(TEMPLATE_RESOURCE, "word/document.xml");
+        String templateCrop = extractLogoCrop(templateXml);
+        if (templateCrop == null) {
+            WaspLogger.warning("Approved template logo crop metadata was not found.");
+            return;
+        }
+
+        Path patched = Files.createTempFile(output.toAbsolutePath().getParent(),
+                "aks-waybill-logo-fix-", ".docx");
+        try {
+            try (ZipInputStream zin = new ZipInputStream(Files.newInputStream(output));
+                 ZipOutputStream zout = new ZipOutputStream(Files.newOutputStream(patched))) {
+
+                ZipEntry entry;
+                byte[] buffer = new byte[8192];
+                while ((entry = zin.getNextEntry()) != null) {
+                    ZipEntry replacement = new ZipEntry(entry.getName());
+                    replacement.setMethod(ZipEntry.DEFLATED);
+                    zout.putNextEntry(replacement);
+
+                    if ("word/document.xml".equals(entry.getName())) {
+                        String generatedXml = new String(zin.readAllBytes(), StandardCharsets.UTF_8);
+                        String updatedXml = replaceLogoCrop(generatedXml, templateCrop);
+                        zout.write(updatedXml.getBytes(StandardCharsets.UTF_8));
+                    } else {
+                        int read;
+                        while ((read = zin.read(buffer)) != -1) {
+                            zout.write(buffer, 0, read);
+                        }
+                    }
+                    zout.closeEntry();
+                }
+            }
+
+            Files.move(patched, output, StandardCopyOption.REPLACE_EXISTING);
+            WaspLogger.debug("Restored approved template logo crop metadata.");
+        } finally {
+            Files.deleteIfExists(patched);
+        }
+    }
+
+    private static String readZipEntryFromResource(String resource, String entryName) throws IOException {
+        try (InputStream input = requiredResource(resource);
+             ZipInputStream zin = new ZipInputStream(input)) {
+            ZipEntry entry;
+            while ((entry = zin.getNextEntry()) != null) {
+                if (entryName.equals(entry.getName())) {
+                    return new String(zin.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+        }
+        throw new IOException("Required template entry was not found: " + entryName);
+    }
+
+    private static String extractLogoCrop(String xml) {
+        int blip = xml.indexOf("<a:blip r:embed=\"rId8\"/>");
+        if (blip < 0) return null;
+        int srcStart = xml.indexOf("<a:srcRect", blip);
+        if (srcStart < 0) return null;
+        int srcEnd = xml.indexOf("/>", srcStart);
+        if (srcEnd < 0) return null;
+        return xml.substring(srcStart, srcEnd + 2);
+    }
+
+    private static String replaceLogoCrop(String xml, String templateCrop) {
+        int blip = xml.indexOf("<a:blip r:embed=\"rId8\"/>");
+        if (blip < 0) return xml;
+        int srcStart = xml.indexOf("<a:srcRect", blip);
+        if (srcStart < 0) return xml;
+        int srcEnd = xml.indexOf("/>", srcStart);
+        if (srcEnd < 0) return xml;
+        return xml.substring(0, srcStart) + templateCrop + xml.substring(srcEnd + 2);
     }
 
     private static InputStream requiredResource(String path) throws IOException {
