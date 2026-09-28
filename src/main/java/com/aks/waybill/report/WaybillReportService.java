@@ -25,6 +25,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.util.Matrix;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.io.*;
 import java.awt.image.BufferedImage;
@@ -63,6 +64,16 @@ public final class WaybillReportService {
         Path temporary = Files.createTempFile(output.toAbsolutePath().getParent(), "aks-waybill-report-", ".docx");
         try {
             populateTemplate(waybill, temporary);
+
+            // Resolve the actual Terms & Conditions page before finalising the Word file.
+            // Do not use a Word PAGEREF field here: Word can show an external-reference
+            // security prompt for the generated field, and its cached result may also be
+            // stale. Instead, render a temporary PDF from a PDF-only copy of the DOCX,
+            // locate the real T&C page, and write that page number as a literal into the
+            // Word document. This keeps Word prompt-free and keeps Word/PDF references
+            // consistent for the same report.
+            resolveTermsPageForWord(temporary);
+
             Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
             WaspLogger.info("Word report generated. waybillNumber=" + waybill.waybillNumber() + ", items=" + (waybill.items() == null ? 0 : waybill.items().size()) + ", output=" + output);
         } finally {
@@ -80,13 +91,20 @@ public final class WaybillReportService {
         Path temporary = Files.createTempFile(output.toAbsolutePath().getParent(), "aks-waybill-report-", ".docx");
         try {
             populateTemplate(waybill, temporary);
-            // Word renders the template logo without an outline, but the docx4j
-            // PDF renderer can interpret the DrawingML picture outline as a
-            // visible theme-colored border. Remove that outline only from the
-            // temporary PDF source document; the generated Word document remains
-            // completely unchanged and continues to use the approved template logo.
+            // For the PDF path the page number of the Terms & Conditions cannot
+            // be known until the document has been laid out. Render once with
+            // the cached Word field result, locate the actual T&C page, update
+            // the cached result, and render the final PDF again.
             preparePdfTemplateLogoForDocx4j(temporary);
             convertDocxToPdf(temporary, output);
+            int termsPage = findTermsAndConditionsPage(output);
+            if (termsPage > 0) {
+                setTermsPageLiteral(temporary, termsPage);
+                convertDocxToPdf(temporary, output);
+                WaspLogger.debug("Resolved Terms & Conditions page for PDF. page=" + termsPage);
+            } else {
+                WaspLogger.warning("Unable to locate Terms & Conditions heading in generated PDF; retaining the default field result.");
+            }
             if ("DRAFT".equalsIgnoreCase(waybill.status())) {
                 addDraftPdfWatermark(output);
             }
@@ -313,13 +331,34 @@ public final class WaybillReportService {
                     (instructions != null && instructions.length() > 180 ? 8 : 9);
             instructionRun.setFontSize(instructionFontSize);
 
+            String reference = buildHazardousMaterialsReference();
             paragraph.getRuns().get(4).setText((hazardous ? "[X] Yes    [ ] No" : "[ ] Yes    [X] No") +
-                    "    *(Subject to Section 4 of Terms & Conditions on Page 2)*", 0);
+                    (reference.isBlank() ? "" : "    *(" + reference + ")*"), 0);
         } else {
+            String reference = buildHazardousMaterialsReference();
             setCellText(cell, "Special Instructions / Handling: " + safe(instructions) + "    Hazardous Materials: " +
                     (hazardous ? "[X] Yes    [ ] No" : "[ ] Yes    [X] No") +
-                    "    *(Subject to Section 4 of Terms & Conditions on Page 2)*");
+                    (reference.isBlank() ? "" : "    *(" + reference + ")*"));
         }
+    }
+
+    private static String buildHazardousMaterialsReference() {
+        List<TermsConditionService.Clause> references = TermsConditionService.findHazardousMaterialReferences();
+        if (references.isEmpty()) return "";
+        String numbers;
+        if (references.size() == 1) {
+            numbers = "Section " + references.get(0).clauseNumber();
+        } else if (references.size() == 2) {
+            numbers = "Sections " + references.get(0).clauseNumber() + " and " + references.get(1).clauseNumber();
+        } else {
+            StringBuilder b = new StringBuilder("Sections ");
+            for (int i = 0; i < references.size(); i++) {
+                if (i > 0) b.append(i == references.size() - 1 ? " and " : ", ");
+                b.append(references.get(i).clauseNumber());
+            }
+            numbers = b.toString();
+        }
+        return "Subject to " + numbers + " of Terms & Conditions on Page 2";
     }
 
     private static void populateDeclarations(XWPFTable table, WaybillService.WaybillDetails waybill) {
@@ -581,6 +620,129 @@ public final class WaybillReportService {
                 Files.deleteIfExists(temporary);
             }
         }
+    }
+
+    private static void resolveTermsPageForWord(Path wordDocx) throws IOException {
+        if (buildHazardousMaterialsReference().isBlank()) return;
+
+        Path pdfPreviewDocx = Files.createTempFile(wordDocx.toAbsolutePath().getParent(),
+                "aks-waybill-word-page-preview-", ".docx");
+        Path pdfPreview = Files.createTempFile(wordDocx.toAbsolutePath().getParent(),
+                "aks-waybill-word-page-preview-", ".pdf");
+        try {
+            Files.copy(wordDocx, pdfPreviewDocx, StandardCopyOption.REPLACE_EXISTING);
+            preparePdfTemplateLogoForDocx4j(pdfPreviewDocx);
+            convertDocxToPdf(pdfPreviewDocx, pdfPreview);
+            int termsPage = findTermsAndConditionsPage(pdfPreview);
+            if (termsPage > 0) {
+                setTermsPageLiteral(wordDocx, termsPage);
+                WaspLogger.debug("Resolved Terms & Conditions page for Word. page=" + termsPage);
+            } else {
+                WaspLogger.warning("Unable to locate Terms & Conditions heading for Word report; retaining the default page reference.");
+            }
+        } finally {
+            Files.deleteIfExists(pdfPreviewDocx);
+            Files.deleteIfExists(pdfPreview);
+        }
+    }
+
+    private static void addTermsPageReferenceToWord(Path docx) throws IOException {
+        if (buildHazardousMaterialsReference().isBlank()) return;
+        rewriteDocxEntry(docx, "word/document.xml", xml -> {
+            final String heading = "TRANSPORTATION WAYBILL TERMS &amp; CONDITIONS";
+            if (!xml.contains("w:name=\"TermsAndConditionsPage\"")) {
+                int hp = xml.indexOf("<w:t>" + heading + "</w:t>");
+                if (hp >= 0) {
+                    int runStart = xml.lastIndexOf("<w:r>", hp);
+                    int textEnd = xml.indexOf("</w:t>", hp);
+                    int runEnd = xml.indexOf("</w:r>", textEnd);
+                    if (runStart >= 0 && textEnd >= 0 && runEnd >= 0) {
+                        xml = xml.substring(0, runStart)
+                                + "<w:bookmarkStart w:id=\"987654\" w:name=\"TermsAndConditionsPage\"/>"
+                                + xml.substring(runStart, runEnd + 6)
+                                + "<w:bookmarkEnd w:id=\"987654\"/>"
+                                + xml.substring(runEnd + 6);
+                    }
+                }
+            }
+
+            // The field replaces only the page number inside the existing note,
+            // preserving the approved typography and the dynamically generated
+            // Section/Sections wording.
+                    String field = "<w:fldSimple w:instr=\" PAGEREF TermsAndConditionsPage \\h \"><w:r><w:rPr><w:sz w:val=\"17\"/></w:rPr><w:t>2</w:t></w:r></w:fldSimple>";
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("(<w:t[^>]*>[^<]*Subject to [^<]*Page )2(\\)\\*</w:t>)");
+            java.util.regex.Matcher m = p.matcher(xml);
+            if (m.find()) {
+                String run = m.group(0);
+                int runStart = xml.lastIndexOf("<w:r>", m.start());
+                int runEnd = xml.indexOf("</w:r>", m.end());
+                if (runStart >= 0 && runEnd >= 0) {
+                    String runPrefix = xml.substring(runStart, m.start());
+                    String textBefore = run.substring(0, run.length() - "2)*</w:t>".length());
+                    String suffix = "<w:r><w:rPr><w:sz w:val=\"17\"/></w:rPr><w:t>)*</w:t></w:r>";
+                    String replacement = runPrefix + textBefore + "</w:t></w:r>" + field + suffix;
+                    xml = xml.substring(0, runStart) + replacement + xml.substring(runEnd + 6);
+                }
+            }
+            return xml;
+        });
+        enableWordFieldUpdates(docx);
+    }
+
+    private static int findTermsAndConditionsPage(Path pdf) throws IOException {
+        try (PDDocument document = Loader.loadPDF(pdf.toFile())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            for (int page = 1; page <= document.getNumberOfPages(); page++) {
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                if (stripper.getText(document).contains("TRANSPORTATION WAYBILL TERMS & CONDITIONS")) return page;
+            }
+        }
+        return -1;
+    }
+
+    private static void setTermsPageLiteral(Path docx, int page) throws IOException {
+        rewriteDocxXml(docx, xml -> {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("(<w:t[^>]*>[^<]*Subject to [^<]*Page )2(\\)\\*</w:t>)");
+            java.util.regex.Matcher m = p.matcher(xml);
+            if (!m.find()) return xml;
+            return m.replaceFirst(java.util.regex.Matcher.quoteReplacement(m.group(1) + page + m.group(2)));
+        });
+    }
+
+    private static void enableWordFieldUpdates(Path docx) throws IOException {
+        rewriteDocxEntry(docx, "word/settings.xml", xml -> {
+            if (xml.contains("<w:updateFields")) return xml;
+            int root = xml.indexOf("<w:settings");
+            int end = root < 0 ? -1 : xml.indexOf(">", root);
+            if (end < 0) return xml;
+            return xml.substring(0, end + 1) + "<w:updateFields w:val=\"true\"/>" + xml.substring(end + 1);
+        });
+    }
+
+    private static void rewriteDocxXml(Path docx, java.util.function.UnaryOperator<String> transformer) throws IOException {
+        rewriteDocxEntry(docx, "word/document.xml", transformer);
+    }
+
+    private static void rewriteDocxEntry(Path docx, String targetEntry, java.util.function.UnaryOperator<String> transformer) throws IOException {
+        Path temp = Files.createTempFile(docx.toAbsolutePath().getParent(), "aks-waybill-xml-", ".docx");
+        try (InputStream in = Files.newInputStream(docx); ZipInputStream zipIn = new ZipInputStream(in); OutputStream out = Files.newOutputStream(temp); ZipOutputStream zipOut = new ZipOutputStream(out)) {
+            ZipEntry entry;
+            while ((entry = zipIn.getNextEntry()) != null) {
+                ZipEntry replacement = new ZipEntry(entry.getName());
+                replacement.setTime(entry.getTime());
+                zipOut.putNextEntry(replacement);
+                if (targetEntry.equals(entry.getName())) {
+                    String xml = new String(zipIn.readAllBytes(), StandardCharsets.UTF_8);
+                    zipOut.write(transformer.apply(xml).getBytes(StandardCharsets.UTF_8));
+                } else {
+                    zipIn.transferTo(zipOut);
+                }
+                zipOut.closeEntry();
+                zipIn.closeEntry();
+            }
+        }
+        Files.move(temp, docx, StandardCopyOption.REPLACE_EXISTING);
     }
 
     private static void populateFooter(XWPFDocument document, ReportProfileService.ReportProfile profile) {

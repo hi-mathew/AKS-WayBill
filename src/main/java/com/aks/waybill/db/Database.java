@@ -71,7 +71,8 @@ public final class Database {
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)");
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)");
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)");
-                s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+                s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, hazardous_materials_reference INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+                ensureHazardousTermsReferenceColumn(c);
                 seedTermsConditions(c);
                 normalizeTermsConditionOrder(c);
             }
@@ -156,9 +157,26 @@ public final class Database {
                 {"10","Governing Law & Jurisdiction","This contract shall be governed by and construed in accordance with the laws of the jurisdiction where the shipment originates. Any legal disputes arising hereunder shall be subject to the exclusive jurisdiction of the competent courts in that territory."}
         };
         String now = java.time.LocalDateTime.now().toString();
-        try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)")) {
-            for (int i=0;i<clauses.length;i++) { p.setInt(1,Integer.parseInt(clauses[i][0])); p.setString(2,clauses[i][1]); p.setString(3,clauses[i][2]); p.setInt(4,i+1); p.setString(5,now); p.setString(6,now); p.addBatch(); }
+        try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?)")) {
+            for (int i=0;i<clauses.length;i++) { p.setInt(1,Integer.parseInt(clauses[i][0])); p.setString(2,clauses[i][1]); p.setString(3,clauses[i][2]); p.setInt(4,i+1); p.setInt(5,Integer.parseInt(clauses[i][0]) == 4 ? 1 : 0); p.setString(6,now); p.setString(7,now); p.addBatch(); }
             p.executeBatch();
+        }
+    }
+
+    private static void ensureHazardousTermsReferenceColumn(Connection c) throws SQLException {
+        boolean exists = false;
+        try (PreparedStatement p = c.prepareStatement("PRAGMA table_info(terms_condition)"); ResultSet r = p.executeQuery()) {
+            while (r.next()) {
+                if ("hazardous_materials_reference".equalsIgnoreCase(r.getString("name"))) { exists = true; break; }
+            }
+        }
+        if (!exists) {
+            try (Statement s = c.createStatement()) {
+                s.execute("ALTER TABLE terms_condition ADD COLUMN hazardous_materials_reference INTEGER NOT NULL DEFAULT 0");
+                // Preserve the existing built-in behaviour for databases upgraded from v1.4.0.
+                s.execute("UPDATE terms_condition SET hazardous_materials_reference=1 WHERE clause_number=4");
+            }
+            WaspLogger.info("Added hazardous-material Terms & Conditions reference configuration.");
         }
     }
 

@@ -100,7 +100,7 @@ public final class SettingsView extends AppView {
     private VBox termsCard() {
         VBox card=card();
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
-        Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Mark the clause(s) that should be referenced by the Hazardous Materials declaration. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
         TableView<TermsConditionService.Clause> table=new TableView<>();
         fitTableHeight(table, 0, 10, 38);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
@@ -117,10 +117,14 @@ public final class SettingsView extends AppView {
         text.setMinWidth(300);
         text.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().text()));
 
+        TableColumn<TermsConditionService.Clause,String> hazardousRef=new TableColumn<>("Hazardous Ref.");
+        hazardousRef.setMinWidth(105); hazardousRef.setPrefWidth(120); hazardousRef.setMaxWidth(135);
+        hazardousRef.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().hazardousMaterialsReference()?"Yes":"No"));
+
         TableColumn<TermsConditionService.Clause,String> active=new TableColumn<>("Status");
         active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
-        table.getColumns().setAll(no,clause,text,active);
+        table.getColumns().setAll(no,clause,text,hazardousRef,active);
 
         Runnable reload=()->{ table.getItems().setAll(TermsConditionService.findAll()); fitTableHeight(table, table.getItems().size(), 10, 38); };
         reload.run();
@@ -174,12 +178,13 @@ public final class SettingsView extends AppView {
     private void editTermsClause(TableView<TermsConditionService.Clause> table, TermsConditionService.Clause existing, Runnable reload) {
         Dialog<ButtonType> dialog=new Dialog<>(); dialog.setTitle(existing==null?"Add Terms & Conditions Clause":"Edit Terms & Conditions Clause");
         TextField title=new TextField(existing==null?"":existing.title()); TextArea text=new TextArea(existing==null?"":existing.text()); CheckBox active=new CheckBox("Active"); active.setSelected(existing==null||existing.active());
+        CheckBox hazardousReference=new CheckBox("Reference this clause from the Hazardous Materials declaration"); hazardousReference.setSelected(existing != null && existing.hazardousMaterialsReference());
         InputLimits.maxLength(title,300); InputLimits.maxLength(text,3000); text.setWrapText(true); text.setPrefRowCount(7);
         Label numberValue = new Label(existing == null ? "Assigned automatically when saved" : "Clause " + existing.clauseNumber());
         numberValue.getStyleClass().add("settings-note");
-        VBox form=new VBox(8,new Label("Clause Number"),numberValue,new Label("Clause Title"),title,new Label("Clause Text"),text,active); form.setPrefWidth(650); dialog.getDialogPane().setContent(form);
+        VBox form=new VBox(8,new Label("Clause Number"),numberValue,new Label("Clause Title"),title,new Label("Clause Text"),text,hazardousReference,active); form.setPrefWidth(650); dialog.getDialogPane().setContent(form);
         ButtonType save=new ButtonType(existing==null?"Add":"Save",ButtonBar.ButtonData.OK_DONE); dialog.getDialogPane().getButtonTypes().addAll(save,ButtonType.CANCEL);
-        dialog.setResultConverter(b->{if(b!=save)return null;try{if(existing==null)TermsConditionService.create(title.getText(),text.getText(),active.isSelected());else TermsConditionService.update(existing.id(),title.getText(),text.getText(),existing.displayOrder(),active.isSelected());reload.run();return b;}catch(Exception ex){showSimpleError(ex.getMessage());return null;}}); dialog.showAndWait();
+        dialog.setResultConverter(b->{if(b!=save)return null;try{if(existing==null)TermsConditionService.create(title.getText(),text.getText(),active.isSelected());else TermsConditionService.update(existing.id(),title.getText(),text.getText(),existing.displayOrder(),active.isSelected(),hazardousReference.isSelected());reload.run();return b;}catch(Exception ex){showSimpleError(ex.getMessage());return null;}}); dialog.showAndWait();
     }
 
     private void showSimpleError(String message){new Alert(Alert.AlertType.ERROR,message==null?"Operation failed.":message,ButtonType.OK).showAndWait();}

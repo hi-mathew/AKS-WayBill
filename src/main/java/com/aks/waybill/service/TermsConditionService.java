@@ -13,7 +13,7 @@ import java.util.List;
 public final class TermsConditionService {
     private TermsConditionService() {}
 
-    public record Clause(long id, int clauseNumber, String title, String text, int displayOrder, boolean active) {}
+    public record Clause(long id, int clauseNumber, String title, String text, int displayOrder, boolean active, boolean hazardousMaterialsReference) {}
 
     public static List<Clause> findAll() {
         return find(false);
@@ -24,7 +24,7 @@ public final class TermsConditionService {
     }
 
     private static List<Clause> find(boolean activeOnly) {
-        String sql = "SELECT id,clause_number,clause_title,clause_text,display_order,active FROM terms_condition "
+        String sql = "SELECT id,clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference FROM terms_condition "
                 + (activeOnly ? "WHERE active=1 " : "") + "ORDER BY display_order,id";
         List<Clause> result = new ArrayList<>();
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql); ResultSet r = p.executeQuery()) {
@@ -39,28 +39,28 @@ public final class TermsConditionService {
         validate(title, text);
         int nextOrder = findAll().stream().mapToInt(Clause::displayOrder).max().orElse(0) + 1;
         int nextNumber = findAll().stream().mapToInt(Clause::clauseNumber).max().orElse(0) + 1;
-        return save(0, nextNumber, title, text, nextOrder, active);
+        return save(0, nextNumber, title, text, nextOrder, active, false);
     }
 
-    public static Clause update(long id, String title, String text, int displayOrder, boolean active) {
+    public static Clause update(long id, String title, String text, int displayOrder, boolean active, boolean hazardousMaterialsReference) {
         if (id <= 0) throw new IllegalArgumentException("Valid clause is required.");
         Clause existing = findById(id);
         if (existing == null) throw new IllegalArgumentException("The selected clause no longer exists.");
-        return save(id, existing.clauseNumber(), title, text, displayOrder, active);
+        return save(id, existing.clauseNumber(), title, text, displayOrder, active, hazardousMaterialsReference);
     }
 
-    private static Clause save(long id, int clauseNumber, String title, String text, int displayOrder, boolean active) {
+    private static Clause save(long id, int clauseNumber, String title, String text, int displayOrder, boolean active, boolean hazardousMaterialsReference) {
         validate(title, text);
         String now = LocalDateTime.now().toString();
         try (Connection c = Database.getConnection()) {
             if (id == 0) {
-                try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
-                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setString(6, now); p.setString(7, now); p.executeUpdate();
+                try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setInt(6, hazardousMaterialsReference ? 1 : 0); p.setString(7, now); p.setString(8, now); p.executeUpdate();
                     try (ResultSet r = p.getGeneratedKeys()) { if (!r.next()) throw new SQLException("Unable to determine clause ID."); id = r.getLong(1); }
                 }
             } else {
-                try (PreparedStatement p = c.prepareStatement("UPDATE terms_condition SET clause_number=?,clause_title=?,clause_text=?,display_order=?,active=?,updated_at=? WHERE id=?")) {
-                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setString(6, now); p.setLong(7, id);
+                try (PreparedStatement p = c.prepareStatement("UPDATE terms_condition SET clause_number=?,clause_title=?,clause_text=?,display_order=?,active=?,hazardous_materials_reference=?,updated_at=? WHERE id=?")) {
+                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setInt(6, hazardousMaterialsReference ? 1 : 0); p.setString(7, now); p.setLong(8, id);
                     if (p.executeUpdate() == 0) throw new IllegalArgumentException("The selected clause no longer exists.");
                 }
             }
@@ -72,7 +72,7 @@ public final class TermsConditionService {
     }
 
     public static Clause findById(long id) {
-        try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("SELECT id,clause_number,clause_title,clause_text,display_order,active FROM terms_condition WHERE id=?")) {
+        try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement("SELECT id,clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference FROM terms_condition WHERE id=?")) {
             p.setLong(1, id);
             try (ResultSet r = p.executeQuery()) { return r.next() ? read(r) : null; }
         } catch (SQLException e) { WaspLogger.error("Unable to load Terms & Conditions clause", e); throw new IllegalStateException("Unable to load Terms & Conditions clause", e); }
@@ -128,6 +128,20 @@ public final class TermsConditionService {
         }
     }
 
-    private static Clause read(ResultSet r) throws SQLException { return new Clause(r.getLong(1),r.getInt(2),r.getString(3),r.getString(4),r.getInt(5),r.getInt(6)==1); }
+    public static List<Clause> findHazardousMaterialReferences() { return find(true, true); }
+
+    private static List<Clause> find(boolean activeOnly, boolean hazardousOnly) {
+        String sql = "SELECT id,clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference FROM terms_condition "
+                + (activeOnly ? "WHERE active=1 " : "")
+                + (hazardousOnly ? (activeOnly ? "AND " : "WHERE ") + "hazardous_materials_reference=1 " : "")
+                + "ORDER BY display_order,id";
+        List<Clause> result = new ArrayList<>();
+        try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql); ResultSet r = p.executeQuery()) {
+            while (r.next()) result.add(read(r));
+            return result;
+        } catch (SQLException e) { WaspLogger.error("Unable to load hazardous-material Terms & Conditions references", e); throw new IllegalStateException("Unable to load hazardous-material Terms & Conditions references", e); }
+    }
+
+    private static Clause read(ResultSet r) throws SQLException { return new Clause(r.getLong(1),r.getInt(2),r.getString(3),r.getString(4),r.getInt(5),r.getInt(6)==1,r.getInt(7)==1); }
     private static void validate(String title,String text){if(title==null||title.isBlank())throw new IllegalArgumentException("Clause title is required.");if(text==null||text.isBlank())throw new IllegalArgumentException("Clause text is required.");if(title.length()>300)throw new IllegalArgumentException("Clause title cannot exceed 300 characters.");if(text.length()>3000)throw new IllegalArgumentException("Clause text cannot exceed 3000 characters.");}
 }
