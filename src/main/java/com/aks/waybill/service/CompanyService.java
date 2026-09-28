@@ -57,6 +57,10 @@ public final class CompanyService {
     }
 
     public static CompanyPage findPage(CompanyType type, String search, int page, int pageSize) {
+        return findPage(type, search, page, pageSize, "companyName", true);
+    }
+
+    public static CompanyPage findPage(CompanyType type, String search, int page, int pageSize, String sortKey, boolean ascending) {
         int safePageSize = Math.max(1, Math.min(100, pageSize));
         int safePage = Math.max(0, page);
         String term = search == null ? "" : search.trim();
@@ -75,8 +79,17 @@ public final class CompanyService {
             }
             int totalPages = (int) Math.max(1, (total + safePageSize - 1) / safePageSize);
             int normalizedPage = Math.min(safePage, totalPages - 1);
+            String sortColumn = switch (sortKey == null ? "companyName" : sortKey) {
+                case "contact" -> "COALESCE(contact_person,'')";
+                case "phone" -> "COALESCE(phone_number,'')";
+                case "email" -> "COALESCE(email_address,'')";
+                case "address" -> "COALESCE(address,'')";
+                case "status" -> "active";
+                default -> "company_name";
+            };
+            String direction = ascending ? " ASC" : " DESC";
             String sql = "SELECT id, company_name, contact_person, address, phone_number, email_address, active FROM " + table + where
-                    + " ORDER BY company_name COLLATE NOCASE, id LIMIT ? OFFSET ?";
+                    + " ORDER BY " + sortColumn + direction + ", id" + (ascending ? " ASC" : " DESC") + " LIMIT ? OFFSET ?";
             List<CompanyRecord> rows = new ArrayList<>();
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 int index = 1;

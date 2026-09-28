@@ -38,12 +38,23 @@ public final class AuditLogService {
         }
     }
     public static Page findPage(String search,int page,int pageSize){
+        return findPage(search,page,pageSize,"createdAt",false);
+    }
+    public static Page findPage(String search,int page,int pageSize,String sortKey,boolean ascending){
         int size=Math.max(1,Math.min(100,pageSize)), requested=Math.max(0,page); String term=search==null?"":search.trim();
         String where=term.isBlank()?"":" WHERE COALESCE(u.username,'') LIKE ? COLLATE NOCASE OR a.action LIKE ? COLLATE NOCASE OR COALESCE(a.entity_type,'') LIKE ? COLLATE NOCASE OR COALESCE(a.entity_label,'') LIKE ? COLLATE NOCASE OR COALESCE(w.waybill_number,'') LIKE ? COLLATE NOCASE OR COALESCE(a.details,'') LIKE ? COLLATE NOCASE "; String like="%"+term+"%";
         try(Connection c=Database.getConnection()){
             long total; try(PreparedStatement p=c.prepareStatement("SELECT COUNT(*) FROM audit_log a LEFT JOIN app_user u ON u.id=a.user_id LEFT JOIN waybill w ON a.entity_type='WAYBILL' AND w.id=a.entity_id"+where)){if(!term.isBlank()){for(int i=1;i<=6;i++)p.setString(i,like);}try(ResultSet r=p.executeQuery()){r.next();total=r.getLong(1);}}
             int pages=(int)Math.max(1,(total+size-1)/size), normalized=Math.min(requested,pages-1); List<AuditRecord> rows=new ArrayList<>();
-            String sql="SELECT a.id,COALESCE(u.username,'System'),a.action,COALESCE(a.entity_type,''),a.entity_id,COALESCE(a.entity_label,w.waybill_number,''),COALESCE(a.details,''),a.created_at FROM audit_log a LEFT JOIN app_user u ON u.id=a.user_id LEFT JOIN waybill w ON a.entity_type='WAYBILL' AND w.id=a.entity_id"+where+" ORDER BY a.id DESC LIMIT ? OFFSET ?";
+            String sortColumn=switch(sortKey==null?"createdAt":sortKey){
+                case "user" -> "COALESCE(u.username,'')";
+                case "action" -> "a.action";
+                case "entity" -> "COALESCE(a.entity_label,w.waybill_number,a.entity_type,'')";
+                case "details" -> "COALESCE(a.details,'')";
+                default -> "a.created_at";
+            };
+            String direction=ascending?" ASC":" DESC";
+            String sql="SELECT a.id,COALESCE(u.username,'System'),a.action,COALESCE(a.entity_type,''),a.entity_id,COALESCE(a.entity_label,w.waybill_number,''),COALESCE(a.details,''),a.created_at FROM audit_log a LEFT JOIN app_user u ON u.id=a.user_id LEFT JOIN waybill w ON a.entity_type='WAYBILL' AND w.id=a.entity_id"+where+" ORDER BY "+sortColumn+direction+", a.id"+(ascending?" ASC":" DESC")+" LIMIT ? OFFSET ?";
             try(PreparedStatement p=c.prepareStatement(sql)){int i=1;if(!term.isBlank()){for(int n=0;n<6;n++)p.setString(i++,like);}p.setInt(i++,size);p.setInt(i,normalized*size);try(ResultSet r=p.executeQuery()){while(r.next())rows.add(new AuditRecord(r.getLong(1),r.getString(2),r.getString(3),r.getString(4),readLong(r, 5), r.getString(6), r.getString(7), parseDateTime(r.getString(8))));}}
             return new Page(rows,normalized,size,total);
         }catch(SQLException e){throw new IllegalStateException("Unable to load audit log",e);}

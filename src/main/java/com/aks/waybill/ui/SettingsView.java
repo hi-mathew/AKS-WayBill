@@ -58,6 +58,8 @@ public final class SettingsView extends AppView {
     private int backupCurrentPage = 0;
     private int backupTotalPages = 1;
     private long backupTotalRows = 0;
+    private String backupSortKey = "modified";
+    private boolean backupSortAscending = false;
 
     public SettingsView() {
         super("Settings", "Manage waybill numbering, company information, terms and conditions, pagination, and application data settings.");
@@ -166,6 +168,8 @@ public final class SettingsView extends AppView {
         active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
         termsTable.getColumns().setAll(no,clause,text,hazardousRef,active);
+        // Clause display order is authoritative because it determines the T&C section numbers.
+        no.setSortable(false); clause.setSortable(false); text.setSortable(false); hazardousRef.setSortable(false); active.setSortable(false);
         termsTable.setRowFactory(tv -> {
             TableRow<TermsConditionService.Clause> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -289,6 +293,14 @@ public final class SettingsView extends AppView {
         TableColumn<BackupService.BackupInfo,String> size=new TableColumn<>("Size");
         size.setMinWidth(90); size.setMaxWidth(110); size.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(formatBytes(d.getValue().size())));
         backupTable.getColumns().setAll(name,type,performedBy,date,size);
+        backupTable.setOnSort(event->{
+            if(backupTable.getSortOrder().isEmpty())return;
+            TableColumn<?,?> selected=backupTable.getSortOrder().get(0);
+            backupSortKey=selected==name?"name":selected==type?"type":selected==performedBy?"performedBy":selected==date?"modified":"size";
+            backupSortAscending=selected.getSortType()==TableColumn.SortType.ASCENDING;
+            event.consume();
+            loadBackupPage(0);
+        });
         ScrollPane backupTableScroll = new ScrollPane(backupTable);
         backupTableScroll.setFitToWidth(true); backupTableScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); backupTableScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         backupTableScroll.setMinHeight(72); backupTableScroll.setMaxHeight(Double.MAX_VALUE); backupTableScroll.getStyleClass().add("content-scroll");
@@ -326,7 +338,8 @@ public final class SettingsView extends AppView {
     private void loadBackupPage(int requestedPage){
         if(backupTable==null)return;
         try{
-            List<BackupService.BackupInfo> all=BackupService.listBackups();
+            List<BackupService.BackupInfo> all=new java.util.ArrayList<>(BackupService.listBackups());
+            all.sort(backupComparator());
             int size=Math.max(1,SettingsService.getPageSize());
             backupTotalRows=all.size(); backupTotalPages=(int)Math.max(1,(backupTotalRows+size-1)/size);
             backupCurrentPage=Math.max(0,Math.min(requestedPage,backupTotalPages-1));
@@ -341,6 +354,18 @@ public final class SettingsView extends AppView {
     private void buildPageButtons(HBox box,int current,int total,java.util.function.IntConsumer loader){
         box.getChildren().clear(); int start=Math.max(0,current-2), end=Math.min(total-1,start+4); start=Math.max(0,end-4);
         for(int i=start;i<=end;i++){final int page=i; Button b=new Button(String.valueOf(i+1)); b.getStyleClass().add(i==current?"nav-selected":"secondary-button"); b.setOnAction(e->loader.accept(page)); box.getChildren().add(b);}
+    }
+
+    private java.util.Comparator<BackupService.BackupInfo> backupComparator(){
+        java.util.Comparator<String> text=java.util.Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER);
+        java.util.Comparator<BackupService.BackupInfo> c=switch(backupSortKey){
+            case "type" -> java.util.Comparator.comparing(BackupService.BackupInfo::type,text);
+            case "performedBy" -> java.util.Comparator.comparing(BackupService.BackupInfo::performedBy,text);
+            case "size" -> java.util.Comparator.comparingLong(BackupService.BackupInfo::size);
+            case "name" -> java.util.Comparator.comparing(b->b.path().getFileName().toString(),text);
+            default -> java.util.Comparator.comparing(BackupService.BackupInfo::modified);
+        };
+        return backupSortAscending?c:c.reversed();
     }
 
     private void saveBackupRetention() {

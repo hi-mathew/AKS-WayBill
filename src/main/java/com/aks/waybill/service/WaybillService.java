@@ -84,11 +84,19 @@ public final class WaybillService {
     }
 
     public static WaybillPage findPageForCurrentUser(String search, LocalDate fromDate, LocalDate toDate, String status, int page, int pageSize) {
+        return findPageForCurrentUser(search, fromDate, toDate, status, "date", false, page, pageSize);
+    }
+
+    public static WaybillPage findPageForCurrentUser(String search, LocalDate fromDate, LocalDate toDate, String status, String sortKey, boolean ascending, int page, int pageSize) {
         Long ownerId = SessionContext.isAdmin() ? null : SessionContext.requireUserId();
-        return findPage(search, fromDate, toDate, status, page, pageSize, ownerId);
+        return findPage(search, fromDate, toDate, status, sortKey, ascending, page, pageSize, ownerId);
     }
 
     private static WaybillPage findPage(String search, LocalDate fromDate, LocalDate toDate, String status, int page, int pageSize, Long ownerId) {
+        return findPage(search, fromDate, toDate, status, "date", false, page, pageSize, ownerId);
+    }
+
+    private static WaybillPage findPage(String search, LocalDate fromDate, LocalDate toDate, String status, String sortKey, boolean ascending, int page, int pageSize, Long ownerId) {
         int safePageSize = Math.max(1, Math.min(100, pageSize));
         int safePage = Math.max(0, page);
         String term = search == null ? "" : search.trim();
@@ -106,8 +114,17 @@ public final class WaybillService {
 
         String base = " FROM waybill w " + where;
         String countSql = "SELECT COUNT(*)" + base;
+        String sortColumn = switch (sortKey == null ? "date" : sortKey) {
+            case "number" -> "w.waybill_number";
+            case "shipper" -> "COALESCE(w.shipper_company_name, '')";
+            case "consignee" -> "COALESCE(w.consignee_company_name, '')";
+            case "carrier" -> "COALESCE(w.carrier_name, '')";
+            case "status" -> "w.status";
+            default -> "w.waybill_date";
+        };
+        String direction = ascending ? " ASC" : " DESC";
         String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(w.shipper_company_name, ''), COALESCE(w.consignee_company_name, ''), COALESCE(w.carrier_name, ''), w.status"
-                + base + " ORDER BY w.waybill_date DESC, w.id DESC LIMIT ? OFFSET ?";
+                + base + " ORDER BY " + sortColumn + direction + ", w.id" + (ascending ? " ASC" : " DESC") + " LIMIT ? OFFSET ?";
 
         try (Connection connection = Database.getConnection()) {
             long total = 0;
@@ -128,7 +145,7 @@ public final class WaybillService {
             }
             int totalPages = (int)Math.max(1, (total + safePageSize - 1) / safePageSize);
             int normalizedPage = Math.min(safePage, totalPages - 1);
-            if (normalizedPage != safePage) return findPage(term, fromDate, toDate, status, normalizedPage, safePageSize, ownerId);
+            if (normalizedPage != safePage) return findPage(term, fromDate, toDate, status, sortKey, ascending, normalizedPage, safePageSize, ownerId);
             return new WaybillPage(rows, safePage, safePageSize, total);
         } catch (SQLException e) { WaspLogger.error("Operation failed in WaybillService", e);
             throw new IllegalStateException("Unable to load saved waybills", e);

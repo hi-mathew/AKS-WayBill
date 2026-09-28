@@ -32,7 +32,11 @@ public final class UserManagementView extends AppView {
     private final HBox pageButtons = new HBox(5);
     private int currentPage = 0;
     private int totalPages = 1;
+    private String sortKey = "displayName";
+    private boolean sortAscending = true;
     private long totalRows = 0;
+    private boolean restoringSort = false;
+    private TableColumn<UserService.UserRecord,String> usernameColumn, nameColumn, codeColumn, roleColumn, statusColumn, lastColumn;
 
     public UserManagementView() {
         super("User Management", "Manage application users, roles, user-specific waybill codes and passwords.");
@@ -53,13 +57,33 @@ public final class UserManagementView extends AppView {
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->loadPage(currentPage));
         toolbar.getChildren().addAll(search,find,clear,add,edit,toggle,reset,refresh);
 
-        TableColumn<UserService.UserRecord,String> username=new TableColumn<>("Username"); username.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().username())); username.setPrefWidth(160);
-        TableColumn<UserService.UserRecord,String> name=new TableColumn<>("Display Name"); name.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().displayName())); name.setPrefWidth(220);
-        TableColumn<UserService.UserRecord,String> code=new TableColumn<>("Waybill Code"); code.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().userCode())); code.setPrefWidth(120);
-        TableColumn<UserService.UserRecord,String> role=new TableColumn<>("Role"); role.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().role())); role.setPrefWidth(100);
-        TableColumn<UserService.UserRecord,String> status=new TableColumn<>("Status"); status.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().enabled()?"Active":"Disabled")); status.setPrefWidth(110);
-        TableColumn<UserService.UserRecord,String> last=new TableColumn<>("Last Login"); last.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(format(c.getValue().lastLoginAt()))); last.setPrefWidth(190);
-        table.getColumns().setAll(username,name,code,role,status,last); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPlaceholder(new Label("No users found."));
+        TableColumn<UserService.UserRecord,String> username=new TableColumn<>("Username");
+        usernameColumn = username; username.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().username())); username.setPrefWidth(160);
+        TableColumn<UserService.UserRecord,String> name=new TableColumn<>("Display Name");
+        nameColumn = name; name.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().displayName())); name.setPrefWidth(220);
+        TableColumn<UserService.UserRecord,String> code=new TableColumn<>("Waybill Code");
+        codeColumn = code; code.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().userCode())); code.setPrefWidth(120);
+        TableColumn<UserService.UserRecord,String> role=new TableColumn<>("Role");
+        roleColumn = role; role.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().role())); role.setPrefWidth(100);
+        TableColumn<UserService.UserRecord,String> status=new TableColumn<>("Status");
+        statusColumn = status; status.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(c.getValue().enabled()?"Active":"Disabled")); status.setPrefWidth(110);
+        TableColumn<UserService.UserRecord,String> last=new TableColumn<>("Last Login");
+        lastColumn = last; last.setCellValueFactory(c->new javafx.beans.property.SimpleStringProperty(format(c.getValue().lastLoginAt()))); last.setPrefWidth(190);
+        table.getColumns().setAll(username,name,code,role,status,last);
+        // Keep the current global sort state visible in the column header.
+        name.setSortable(true); username.setSortable(true); code.setSortable(true); role.setSortable(true); status.setSortable(true); last.setSortable(true);
+        name.setSortType(TableColumn.SortType.ASCENDING);
+        table.getSortOrder().setAll(name);
+        table.setOnSort(event -> {
+            if (restoringSort || table.getSortOrder().isEmpty()) return;
+            TableColumn<?, ?> selected = table.getSortOrder().get(0);
+            sortKey = selected == username ? "username" : selected == name ? "displayName" : selected == code ? "userCode"
+                    : selected == role ? "role" : selected == status ? "status" : "lastLogin";
+            sortAscending = selected.getSortType() == TableColumn.SortType.ASCENDING;
+            event.consume();
+            loadPage(0);
+        });
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPlaceholder(new Label("No users found."));
         table.setRowFactory(tv->{TableRow<UserService.UserRecord> row=new TableRow<>();row.setOnMouseClicked(e->{if(e.getClickCount()==2&&!row.isEmpty())openEditor(row.getItem());});return row;});
         table.getSelectionModel().selectedItemProperty().addListener((obs,oldValue,newValue)->updateActionState());
 
@@ -75,15 +99,54 @@ public final class UserManagementView extends AppView {
         try{
             int size=Math.max(1,com.aks.waybill.service.SettingsService.getPageSize());
             String term=search.getText()==null?"":search.getText().trim().toLowerCase();
-            List<UserService.UserRecord> all=UserService.findAll().stream().filter(u->term.isBlank()
+            List<UserService.UserRecord> all=new java.util.ArrayList<>(UserService.findAll().stream().filter(u->term.isBlank()
                     || contains(u.username(),term) || contains(u.displayName(),term) || contains(u.userCode(),term)
-                    || contains(u.role(),term) || contains(u.enabled()?"Active":"Disabled",term)).toList();
+                    || contains(u.role(),term) || contains(u.enabled()?"Active":"Disabled",term)).toList());
+            all.sort(userComparator());
             totalRows=all.size(); totalPages=(int)Math.max(1,(totalRows+size-1)/size); currentPage=Math.max(0,Math.min(requestedPage,totalPages-1));
             int from=(int)((long)currentPage*size),to=Math.min(all.size(),from+size); table.setItems(FXCollections.observableArrayList(all.subList(from,to)));
+            TableColumn<UserService.UserRecord, String> selectedColumn = switch(sortKey){
+                case "username" -> usernameColumn;
+                case "userCode" -> codeColumn;
+                case "role" -> roleColumn;
+                case "status" -> statusColumn;
+                case "lastLogin" -> lastColumn;
+                default -> nameColumn;
+            };
+            if(selectedColumn != null){
+                restoringSort = true;
+                try {
+                    selectedColumn.setSortType(sortAscending ? TableColumn.SortType.ASCENDING : TableColumn.SortType.DESCENDING);
+                    table.getSortOrder().setAll(selectedColumn);
+                } finally {
+                    restoringSort = false;
+                }
+            }
             updateTableHeight(to-from,size); long start=totalRows==0?0:(long)currentPage*size+1; long end=Math.min(totalRows,(long)(currentPage+1)*size);
             resultInfo.setText("Showing "+start+"–"+end+" of "+totalRows); pageInfo.setText("Page "+(currentPage+1)+" of "+totalPages); buildPages(); updateActionState();
             setMessage(totalRows==0?"No users match the current search.":"Users loaded.",false);
         }catch(Exception e){updateTableHeight(0,sizeSafe());updateActionState();setMessage(msg(e),true);}
+    }
+
+    private java.util.Comparator<UserService.UserRecord> userComparator(){
+        java.util.Comparator<String> text=java.util.Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER);
+        java.util.Comparator<UserService.UserRecord> c=switch(sortKey){
+            case "username" -> java.util.Comparator.comparing(UserService.UserRecord::username,text);
+            case "userCode" -> java.util.Comparator.comparing(UserService.UserRecord::userCode,text);
+            case "role" -> java.util.Comparator.comparing(UserService.UserRecord::role,text);
+            case "status" -> java.util.Comparator.comparing(u->u.enabled()?"Active":"Disabled",text);
+            case "lastLogin" -> java.util.Comparator.comparing(u->format(u.lastLoginAt()),text);
+            default -> java.util.Comparator.comparing(UserService.UserRecord::displayName,text);
+        };
+        return sortAscending?c:c.reversed();
+    }
+
+    @SuppressWarnings("unchecked")
+    private TableColumn<UserService.UserRecord,String> findColumn(String text){
+        for(TableColumn<UserService.UserRecord,?> c : table.getColumns()){
+            if(text.equals(c.getText())) return (TableColumn<UserService.UserRecord,String>) c;
+        }
+        return null;
     }
 
     private int sizeSafe(){try{return Math.max(1,com.aks.waybill.service.SettingsService.getPageSize());}catch(Exception e){return 10;}}

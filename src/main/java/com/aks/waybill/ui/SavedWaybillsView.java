@@ -41,6 +41,8 @@ public final class SavedWaybillsView extends AppView {
     private final HBox pageButtons = new HBox(5);
     private int currentPage = 0;
     private int totalPages = 1;
+    private String sortKey = "date";
+    private boolean sortAscending = false;
 
     public SavedWaybillsView() { this(() -> {}, id -> {}, id -> {}); }
 
@@ -161,6 +163,15 @@ public final class SavedWaybillsView extends AppView {
         });
 
         table.getColumns().setAll(number, date, shipper, consignee, carrier, status, actions);
+        table.setOnSort(event -> {
+            if (table.getSortOrder().isEmpty()) return;
+            TableColumn<?, ?> selected = table.getSortOrder().get(0);
+            sortKey = selected == number ? "number" : selected == date ? "date" : selected == shipper ? "shipper"
+                    : selected == consignee ? "consignee" : selected == carrier ? "carrier" : selected == status ? "status" : "date";
+            sortAscending = selected.getSortType() == TableColumn.SortType.ASCENDING;
+            event.consume();
+            loadPage(0);
+        });
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPlaceholder(new Label("No saved waybills match the current search."));
         table.setFixedCellSize(42);
@@ -211,7 +222,7 @@ public final class SavedWaybillsView extends AppView {
     private void loadPage(int page) {
         try {
             String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
-            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), selectedStatus, Math.max(0, page), pageSize);
+            WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), selectedStatus, sortKey, sortAscending, Math.max(0, page), pageSize);
             currentPage = result.page(); totalPages = result.totalPages(); table.getItems().setAll(result.rows());
             fitTableHeight(table, result.rows().size(), pageSize, 42);
             long start = result.totalRows() == 0 ? 0 : (long) currentPage * pageSize + 1;

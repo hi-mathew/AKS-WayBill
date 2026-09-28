@@ -32,6 +32,15 @@ public final class CompaniesView extends AppView {
         private final Label message = new Label();
         private int currentPage;
         private long totalRows;
+        private String sortKey = "companyName";
+        private boolean sortAscending = true;
+        private boolean restoringSort = false;
+        private TableColumn<CompanyService.CompanyRecord, String> companyNameCol;
+        private TableColumn<CompanyService.CompanyRecord, String> contactCol;
+        private TableColumn<CompanyService.CompanyRecord, String> phoneCol;
+        private TableColumn<CompanyService.CompanyRecord, String> emailCol;
+        private TableColumn<CompanyService.CompanyRecord, String> addressCol;
+        private TableColumn<CompanyService.CompanyRecord, String> statusCol;
 
         CompanyMasterTab(CompanyService.CompanyType type) {
             this.type = type; setSpacing(16); setPadding(new Insets(0, 0, 20, 0)); build(); loadPage(0);
@@ -49,7 +58,27 @@ public final class CompaniesView extends AppView {
             toolbar.getChildren().addAll(searchField, search, clear, add, edit, toggle, delete);
 
             table.setPlaceholder(new Label("No companies found.")); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); fitTableHeight(table, 0, pageSize, 42);
-            table.getColumns().setAll(column("Company Name", 0, 220), column("Contact Person", 1, 160), column("Phone", 2, 130), column("Email", 3, 190), column("Address", 4, 260), statusColumn());
+            companyNameCol = column("Company Name", 0, 220);
+            contactCol = column("Contact Person", 1, 160);
+            phoneCol = column("Phone", 2, 130);
+            emailCol = column("Email", 3, 190);
+            addressCol = column("Address", 4, 260);
+            statusCol = statusColumn();
+            table.getColumns().setAll(companyNameCol, contactCol, phoneCol, emailCol, addressCol, statusCol);
+            // Keep sorting visibly available on the Companies grid.
+            companyNameCol.setSortable(true); contactCol.setSortable(true); phoneCol.setSortable(true);
+            emailCol.setSortable(true); addressCol.setSortable(true); statusCol.setSortable(true);
+            companyNameCol.setSortType(TableColumn.SortType.ASCENDING);
+            table.getSortOrder().setAll(companyNameCol);
+            table.setOnSort(event -> {
+                if (restoringSort || table.getSortOrder().isEmpty()) return;
+                TableColumn<?, ?> selected = table.getSortOrder().get(0);
+                sortKey = selected == companyNameCol ? "companyName" : selected == contactCol ? "contact" : selected == phoneCol ? "phone"
+                        : selected == emailCol ? "email" : selected == addressCol ? "address" : "status";
+                sortAscending = selected.getSortType() == TableColumn.SortType.ASCENDING;
+                event.consume();
+                loadPage(0);
+            });
             table.setRowFactory(tv -> { TableRow<CompanyService.CompanyRecord> row = new TableRow<>(); row.setOnMouseClicked(event -> { if (event.getClickCount() == 2 && !row.isEmpty()) openCompanyDialog(row.getItem()); }); return row; });
             HBox pager = new HBox(10); pager.setAlignment(Pos.CENTER_RIGHT);
             Button first = button("« First", "secondary-button"), previous = button("‹ Previous", "secondary-button"), next = button("Next ›", "secondary-button"), last = button("Last »", "secondary-button");
@@ -64,9 +93,37 @@ public final class CompaniesView extends AppView {
         private TableColumn<CompanyService.CompanyRecord, String> statusColumn() { TableColumn<CompanyService.CompanyRecord, String> c = new TableColumn<>("Status"); c.setPrefWidth(90); c.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue().active() ? "Active" : "Inactive")); return c; }
 
         private void loadPage(int requestedPage) {
-            try { CompanyService.CompanyPage page = CompanyService.findPage(type, searchField.getText(), requestedPage, pageSize); currentPage = page.page(); totalRows = page.totalRows(); table.setItems(FXCollections.observableArrayList(page.rows())); fitTableHeight(table, page.rows().size(), pageSize, 42); pageInfo.setText("Page " + (currentPage + 1) + " of " + totalPages() + "   •   " + totalRows + " companies"); clearMessage(); }
+            try {
+                CompanyService.CompanyPage page = CompanyService.findPage(type, searchField.getText(), requestedPage, pageSize, sortKey, sortAscending);
+                currentPage = page.page();
+                totalRows = page.totalRows();
+                table.setItems(FXCollections.observableArrayList(page.rows()));
+                restoreSortIndicator();
+                fitTableHeight(table, page.rows().size(), pageSize, 42);
+                pageInfo.setText("Page " + (currentPage + 1) + " of " + totalPages() + "   •   " + totalRows + " companies");
+                clearMessage();
+            }
             catch (RuntimeException ex) { showError(ex.getMessage() == null ? "Unable to load companies." : ex.getMessage()); }
         }
+        private void restoreSortIndicator() {
+            TableColumn<CompanyService.CompanyRecord, String> selected = switch (sortKey) {
+                case "contact" -> contactCol;
+                case "phone" -> phoneCol;
+                case "email" -> emailCol;
+                case "address" -> addressCol;
+                case "status" -> statusCol;
+                default -> companyNameCol;
+            };
+            if (selected == null) return;
+            restoringSort = true;
+            try {
+                selected.setSortType(sortAscending ? TableColumn.SortType.ASCENDING : TableColumn.SortType.DESCENDING);
+                table.getSortOrder().setAll(selected);
+            } finally {
+                restoringSort = false;
+            }
+        }
+
         private int totalPages() { return (int) Math.max(1, (totalRows + pageSize - 1) / pageSize); }
         private void editSelected() { CompanyService.CompanyRecord selected = table.getSelectionModel().getSelectedItem(); if (selected == null) { showError("Select a company first."); return; } openCompanyDialog(selected); }
         private void toggleSelected() { CompanyService.CompanyRecord selected = table.getSelectionModel().getSelectedItem(); if (selected == null) { showError("Select a company first."); return; } try { CompanyService.setActive(type, selected.id(), !selected.active()); loadPage(currentPage); } catch (RuntimeException ex) { showError(ex.getMessage()); } }

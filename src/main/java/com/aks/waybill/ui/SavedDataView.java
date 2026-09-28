@@ -38,8 +38,15 @@ public final class SavedDataView extends AppView {
         private final Label pageInfo = new Label();
         private final HBox pageButtons = new HBox(5);
         private int currentPage = 0;
+        private String sortKey = "name";
+        private boolean sortAscending = true;
         private int totalPages = 1;
         private long totalRows = 0;
+        private boolean restoringSort = false;
+        private TableColumn<Object,String> nameColumn;
+        private TableColumn<Object,String> driverColumn;
+        private TableColumn<Object,String> vehicleColumn;
+        private TableColumn<Object,String> statusColumn;
 
         MasterTab(boolean carrierMode) {
             this.carrierMode = carrierMode; setSpacing(14); setPadding(new Insets(0,0,20,0)); build(); loadPage(0);
@@ -55,16 +62,36 @@ public final class SavedDataView extends AppView {
             Button delete=new Button("Delete"); delete.getStyleClass().add("secondary-button"); delete.setVisible(SessionContext.isAdmin()); delete.setManaged(SessionContext.isAdmin()); delete.setOnAction(e->deleteSelected());
             toolbar.getChildren().addAll(search,find,clear,add,edit,delete);
 
-            TableColumn<Object,String> name=new TableColumn<>(carrierMode?"Carrier Name":"Location Name"); name.setPrefWidth(carrierMode?300:500);
+            TableColumn<Object,String> name=new TableColumn<>(carrierMode?"Carrier Name":"Location Name");
+            nameColumn = name; name.setPrefWidth(carrierMode?300:500);
             name.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(carrierMode?((SavedDataService.CarrierRecord)cell.getValue()).name():((SavedDataService.LocationRecord)cell.getValue()).name()));
+            TableColumn<Object,String> driver=null, vehicle=null;
             table.getColumns().clear(); table.getColumns().add(name);
             if(carrierMode){
-                TableColumn<Object,String> driver=new TableColumn<>("Driver Name"); driver.setPrefWidth(240); driver.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(((SavedDataService.CarrierRecord)cell.getValue()).driverName()));
-                TableColumn<Object,String> vehicle=new TableColumn<>("Vehicle / Trailer No."); vehicle.setPrefWidth(240); vehicle.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(((SavedDataService.CarrierRecord)cell.getValue()).vehicleTrailerNo()));
+                driver=new TableColumn<>("Driver Name");
+                driverColumn = driver; driver.setPrefWidth(240); driver.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(((SavedDataService.CarrierRecord)cell.getValue()).driverName()));
+                vehicle=new TableColumn<>("Vehicle / Trailer No.");
+                vehicleColumn = vehicle; vehicle.setPrefWidth(240); vehicle.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(((SavedDataService.CarrierRecord)cell.getValue()).vehicleTrailerNo()));
                 table.getColumns().addAll(driver,vehicle);
             }
-            TableColumn<Object,String> status=new TableColumn<>("Status"); status.setPrefWidth(120); status.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(carrierMode?(((SavedDataService.CarrierRecord)cell.getValue()).active()?"Active":"Inactive"):(((SavedDataService.LocationRecord)cell.getValue()).active()?"Active":"Inactive")));
-            table.getColumns().add(status); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPlaceholder(new Label(carrierMode?"No saved carriers found.":"No saved locations found."));
+            TableColumn<Object,String> status=new TableColumn<>("Status");
+            statusColumn = status; status.setPrefWidth(120); status.setCellValueFactory(cell->new javafx.beans.property.SimpleStringProperty(carrierMode?(((SavedDataService.CarrierRecord)cell.getValue()).active()?"Active":"Inactive"):(((SavedDataService.LocationRecord)cell.getValue()).active()?"Active":"Inactive")));
+            table.getColumns().add(status);
+            // Keep sorting available and visibly indicated on every master-data grid.
+            name.setSortable(true); status.setSortable(true);
+            if (driver != null) driver.setSortable(true);
+            if (vehicle != null) vehicle.setSortable(true);
+            name.setSortType(TableColumn.SortType.ASCENDING);
+            table.getSortOrder().setAll(name);
+            table.setOnSort(event -> {
+                if (restoringSort || table.getSortOrder().isEmpty()) return;
+                TableColumn<?, ?> selected = table.getSortOrder().get(0);
+                sortKey = selected == nameColumn ? "name" : (carrierMode && selected == driverColumn) ? "driver" : (carrierMode && selected == vehicleColumn) ? "vehicle" : "status";
+                sortAscending = selected.getSortType() == TableColumn.SortType.ASCENDING;
+                event.consume();
+                loadPage(0);
+            });
+            table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPlaceholder(new Label(carrierMode?"No saved carriers found.":"No saved locations found."));
             table.setRowFactory(tv->{TableRow<Object> row=new TableRow<>();row.setOnMouseClicked(event->{if(event.getClickCount()==2&&!row.isEmpty())openDialog(row.getItem());});return row;});
 
             resultInfo.getStyleClass().add("card-description"); pageInfo.getStyleClass().add("card-description"); pageButtons.setAlignment(Pos.CENTER);
@@ -81,15 +108,38 @@ public final class SavedDataView extends AppView {
             try{
                 int size=Math.max(1,com.aks.waybill.service.SettingsService.getPageSize());
                 if(carrierMode){
-                    List<SavedDataService.CarrierRecord> all=SavedDataService.findCarriers(search.getText(),false); totalRows=all.size(); totalPages=(int)Math.max(1,(totalRows+size-1)/size); currentPage=Math.max(0,Math.min(requestedPage,totalPages-1));
+                    List<SavedDataService.CarrierRecord> all=new java.util.ArrayList<>(SavedDataService.findCarriers(search.getText(),false));
+                    all.sort(carrierComparator());
+                    totalRows=all.size(); totalPages=(int)Math.max(1,(totalRows+size-1)/size); currentPage=Math.max(0,Math.min(requestedPage,totalPages-1));
                     int from=(int)((long)currentPage*size),to=Math.min(all.size(),from+size); table.setItems(FXCollections.observableArrayList(all.subList(from,to).stream().map(x->(Object)x).toList()));
+                    restoreSortIndicator();
                 }else{
-                    List<SavedDataService.LocationRecord> all=SavedDataService.findLocations(search.getText(),false); totalRows=all.size(); totalPages=(int)Math.max(1,(totalRows+size-1)/size); currentPage=Math.max(0,Math.min(requestedPage,totalPages-1));
+                    List<SavedDataService.LocationRecord> all=new java.util.ArrayList<>(SavedDataService.findLocations(search.getText(),false));
+                    all.sort(locationComparator());
+                    totalRows=all.size(); totalPages=(int)Math.max(1,(totalRows+size-1)/size); currentPage=Math.max(0,Math.min(requestedPage,totalPages-1));
                     int from=(int)((long)currentPage*size),to=Math.min(all.size(),from+size); table.setItems(FXCollections.observableArrayList(all.subList(from,to).stream().map(x->(Object)x).toList()));
+                    restoreSortIndicator();
                 }
                 fitTableHeight(table,table.getItems().size(),size,42); long start=totalRows==0?0:(long)currentPage*size+1; long end=Math.min(totalRows,(long)(currentPage+1)*size);
                 resultInfo.setText("Showing "+start+"–"+end+" of "+totalRows); pageInfo.setText("Page "+(currentPage+1)+" of "+totalPages); buildPages(); message.setText("");
             }catch(RuntimeException ex){message.setText(ex.getMessage());}
+        }
+
+        private void restoreSortIndicator(){
+            TableColumn<Object,String> selected = switch(sortKey){
+                case "driver" -> driverColumn;
+                case "vehicle" -> vehicleColumn;
+                case "status" -> statusColumn;
+                default -> nameColumn;
+            };
+            if(selected == null) return;
+            restoringSort = true;
+            try {
+                selected.setSortType(sortAscending ? TableColumn.SortType.ASCENDING : TableColumn.SortType.DESCENDING);
+                table.getSortOrder().setAll(selected);
+            } finally {
+                restoringSort = false;
+            }
         }
 
         private void buildPages(){
@@ -98,6 +148,22 @@ public final class SavedDataView extends AppView {
         }
 
         private void editSelected(){Object selected=table.getSelectionModel().getSelectedItem();if(selected==null){message.setText("Select a record first.");return;}openDialog(selected);}
+        private java.util.Comparator<SavedDataService.CarrierRecord> carrierComparator(){
+            java.util.Comparator<String> text=java.util.Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER);
+            java.util.Comparator<SavedDataService.CarrierRecord> c=switch(sortKey){
+                case "driver" -> java.util.Comparator.comparing(SavedDataService.CarrierRecord::driverName,text);
+                case "vehicle" -> java.util.Comparator.comparing(SavedDataService.CarrierRecord::vehicleTrailerNo,text);
+                case "status" -> java.util.Comparator.comparing(r->r.active()?"Active":"Inactive",text);
+                default -> java.util.Comparator.comparing(SavedDataService.CarrierRecord::name,text);
+            };
+            return sortAscending?c:c.reversed();
+        }
+        private java.util.Comparator<SavedDataService.LocationRecord> locationComparator(){
+            java.util.Comparator<String> text=java.util.Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER);
+            java.util.Comparator<SavedDataService.LocationRecord> c=sortKey.equals("status")?java.util.Comparator.comparing(r->r.active()?"Active":"Inactive",text):java.util.Comparator.comparing(SavedDataService.LocationRecord::name,text);
+            return sortAscending?c:c.reversed();
+        }
+
         private void deleteSelected(){Object selected=table.getSelectionModel().getSelectedItem();if(selected==null){message.setText("Select a record first.");return;}String name=carrierMode?((SavedDataService.CarrierRecord)selected).name():((SavedDataService.LocationRecord)selected).name();Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete saved "+(carrierMode?"carrier":"location")+" \""+name+"\"? This does not alter historical waybill values.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Saved Data");if(a.showAndWait().orElse(ButtonType.CANCEL)!=ButtonType.OK)return;try{if(carrierMode)SavedDataService.deleteCarrier(((SavedDataService.CarrierRecord)selected).id());else SavedDataService.deleteLocation(((SavedDataService.LocationRecord)selected).id());loadPage(currentPage);}catch(RuntimeException ex){message.setText(ex.getMessage());}}
 
         private void openDialog(Object existing){
