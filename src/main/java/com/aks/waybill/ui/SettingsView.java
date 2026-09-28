@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /** Application and issuing-company report settings. */
 public final class SettingsView extends AppView {
@@ -41,6 +42,22 @@ public final class SettingsView extends AppView {
     private final Label profileMessage = new Label();
     private final Label paginationMessage = new Label();
     private final Label preview = new Label();
+
+    private TableView<TermsConditionService.Clause> termsTable;
+    private final Label termsResultInfo = new Label();
+    private final Label termsPageInfo = new Label();
+    private final HBox termsPageButtons = new HBox(5);
+    private int termsCurrentPage = 0;
+    private int termsTotalPages = 1;
+    private long termsTotalRows = 0;
+
+    private TableView<BackupService.BackupInfo> backupTable;
+    private final Label backupResultInfo = new Label();
+    private final Label backupPageInfo = new Label();
+    private final HBox backupPageButtons = new HBox(5);
+    private int backupCurrentPage = 0;
+    private int backupTotalPages = 1;
+    private long backupTotalRows = 0;
 
     public SettingsView() {
         super("Settings", "Manage waybill numbering, company information, terms and conditions, pagination, and application data settings.");
@@ -128,58 +145,80 @@ public final class SettingsView extends AppView {
         VBox card=card();
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
         Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Mark the clause(s) that should be referenced by the Hazardous Materials declaration. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
-        TableView<TermsConditionService.Clause> table=new TableView<>();
-        fitTableHeight(table, 0, 10, 38);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        termsTable=new TableView<>();
+        termsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        termsTable.setPlaceholder(new Label("No Terms & Conditions clauses found."));
 
         TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No.");
         no.setMinWidth(55); no.setPrefWidth(65); no.setMaxWidth(75);
         no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().clauseNumber())));
-
         TableColumn<TermsConditionService.Clause,String> clause=new TableColumn<>("Clause");
         clause.setMinWidth(160); clause.setPrefWidth(190);
         clause.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().title()));
-
         TableColumn<TermsConditionService.Clause,String> text=new TableColumn<>("Text");
         text.setMinWidth(300);
         text.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().text()));
-
         TableColumn<TermsConditionService.Clause,String> hazardousRef=new TableColumn<>("Hazardous Ref.");
         hazardousRef.setMinWidth(105); hazardousRef.setPrefWidth(120); hazardousRef.setMaxWidth(135);
         hazardousRef.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().hazardousMaterialsReference()?"Yes":"No"));
-
         TableColumn<TermsConditionService.Clause,String> active=new TableColumn<>("Status");
         active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
-        table.getColumns().setAll(no,clause,text,hazardousRef,active);
-
-        Runnable reload=()->{ table.getItems().setAll(TermsConditionService.findAll()); fitTableHeight(table, table.getItems().size(), 10, 38); };
-        VBox.setVgrow(table, Priority.ALWAYS);
-        reload.run();
-
-        table.setRowFactory(tv -> {
+        termsTable.getColumns().setAll(no,clause,text,hazardousRef,active);
+        termsTable.setRowFactory(tv -> {
             TableRow<TermsConditionService.Clause> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2 && !row.isEmpty()) {
-                    editTermsClause(table, row.getItem(), reload);
-                }
+                if (event.getClickCount() == 2 && !row.isEmpty()) editTermsClause(termsTable, row.getItem(), this::reloadTermsPage);
             });
             return row;
         });
+        ScrollPane termsTableScroll = new ScrollPane(termsTable);
+        termsTableScroll.setFitToWidth(true); termsTableScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); termsTableScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        termsTableScroll.setMinHeight(72); termsTableScroll.setMaxHeight(Double.MAX_VALUE); termsTableScroll.getStyleClass().add("content-scroll");
+        VBox.setVgrow(termsTableScroll, Priority.ALWAYS);
 
-        Button add=primary("Add Clause");
-        add.setOnAction(e->editTermsClause(table,null,reload));
-        Button edit=secondary("Edit");
-        edit.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(table,x,reload);});
-        Button up=secondary("Move Up");
-        up.setOnAction(e->moveClause(table,true,reload));
-        Button down=secondary("Move Down");
-        down.setOnAction(e->moveClause(table,false,reload));
-        Button delete=secondary("Delete");
-        delete.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reload.run();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
+        termsResultInfo.getStyleClass().add("card-description");
+        termsPageInfo.getStyleClass().add("card-description");
+        termsPageButtons.setAlignment(Pos.CENTER);
+        Button termsPrevious=secondary("‹"); termsPrevious.setOnAction(e->reloadTermsPage(termsCurrentPage-1));
+        Button termsNext=secondary("›"); termsNext.setOnAction(e->reloadTermsPage(termsCurrentPage+1));
+        Region termsSpacer=new Region(); HBox.setHgrow(termsSpacer,Priority.ALWAYS);
+        HBox termsBottom=new HBox(10,termsResultInfo,termsSpacer,termsPageInfo); termsBottom.setAlignment(Pos.CENTER_LEFT);
+        HBox termsPaging=new HBox(12,termsPrevious,termsPageButtons,termsNext); termsPaging.setAlignment(Pos.CENTER);
+
+        Button add=primary("Add Clause"); add.setOnAction(e->editTermsClause(termsTable,null,this::reloadTermsPage));
+        Button edit=secondary("Edit"); edit.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(termsTable,x,this::reloadTermsPage);});
+        Button up=secondary("Move Up"); up.setOnAction(e->moveClause(termsTable,true,this::reloadTermsPage));
+        Button down=secondary("Move Down"); down.setOnAction(e->moveClause(termsTable,false,this::reloadTermsPage));
+        Button delete=secondary("Delete"); delete.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reloadTermsPage();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
         HBox buttons=new HBox(8,add,edit,up,down,delete); buttons.setAlignment(Pos.CENTER_RIGHT);
         card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
-        card.getChildren().addAll(title,desc,table,buttons); return card;
+        card.getChildren().addAll(title,desc,termsTableScroll,buttons,termsBottom,termsPaging);
+        reloadTermsPage();
+        return card;
+    }
+
+    private void reloadTermsPage(){ reloadTermsPage(termsCurrentPage); }
+
+    private void reloadTermsPage(int requestedPage) {
+        if (termsTable == null) return;
+        try {
+            List<TermsConditionService.Clause> all=TermsConditionService.findAll();
+            int size=Math.max(1,SettingsService.getPageSize());
+            termsTotalRows=all.size();
+            termsTotalPages=(int)Math.max(1,(termsTotalRows+size-1)/size);
+            termsCurrentPage=Math.max(0,Math.min(requestedPage,termsTotalPages-1));
+            int from=(int)((long)termsCurrentPage*size);
+            int to=Math.min(all.size(),from+size);
+            termsTable.getItems().setAll(all.subList(from,to));
+            fitTableHeight(termsTable,to-from,size,38);
+            long start=termsTotalRows==0?0:(long)termsCurrentPage*size+1;
+            long end=Math.min(termsTotalRows,(long)(termsCurrentPage+1)*size);
+            termsResultInfo.setText("Showing "+start+"–"+end+" of "+termsTotalRows);
+            termsPageInfo.setText("Page "+(termsCurrentPage+1)+" of "+termsTotalPages);
+            buildPageButtons(termsPageButtons,termsCurrentPage,termsTotalPages,this::reloadTermsPage);
+        } catch(RuntimeException ex){ showSimpleError(ex.getMessage()); }
     }
 
     private void moveClause(TableView<TermsConditionService.Clause> table, boolean up, Runnable reload) {
@@ -229,7 +268,6 @@ public final class SettingsView extends AppView {
         card.getChildren().addAll(title,desc,row,paginationMessage); return card;
     }
 
-    private TableView<BackupService.BackupInfo> backupTable;
     private Button backupNowButton;
 
     private VBox backupCard() {
@@ -240,37 +278,29 @@ public final class SettingsView extends AppView {
         backupTable=new TableView<>();
         backupTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         backupTable.setPlaceholder(new Label("No backups have been created yet."));
-        fitTableHeight(backupTable, 0, 6, 38);
-        VBox.setVgrow(backupTable, Priority.ALWAYS);
-
         TableColumn<BackupService.BackupInfo,String> name=new TableColumn<>("Backup File");
         name.setMinWidth(300); name.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().path().getFileName().toString()));
         TableColumn<BackupService.BackupInfo,String> type=new TableColumn<>("Type");
         type.setMinWidth(120); type.setMaxWidth(150); type.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().type()));
         TableColumn<BackupService.BackupInfo,String> performedBy=new TableColumn<>("Performed By");
-        performedBy.setMinWidth(120); performedBy.setMaxWidth(150);
-        performedBy.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().performedBy()));
+        performedBy.setMinWidth(120); performedBy.setMaxWidth(150); performedBy.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().performedBy()));
         TableColumn<BackupService.BackupInfo,String> date=new TableColumn<>("Created / Modified");
-        date.setMinWidth(170); date.setMaxWidth(200);
-        date.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(
-                DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(d.getValue().modified())));
+        date.setMinWidth(170); date.setMaxWidth(200); date.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(d.getValue().modified())));
         TableColumn<BackupService.BackupInfo,String> size=new TableColumn<>("Size");
         size.setMinWidth(90); size.setMaxWidth(110); size.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(formatBytes(d.getValue().size())));
         backupTable.getColumns().setAll(name,type,performedBy,date,size);
-        refreshBackups();
+        ScrollPane backupTableScroll = new ScrollPane(backupTable);
+        backupTableScroll.setFitToWidth(true); backupTableScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); backupTableScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        backupTableScroll.setMinHeight(72); backupTableScroll.setMaxHeight(Double.MAX_VALUE); backupTableScroll.getStyleClass().add("content-scroll");
+        VBox.setVgrow(backupTableScroll, Priority.ALWAYS);
 
         backupRetentionEnabled.setSelected(SettingsService.isBackupRetentionEnabled());
-        backupRetentionCount.getItems().setAll(5, 10, 20, 50, 100);
-        backupRetentionCount.setValue(SettingsService.getBackupRetentionCount());
-        backupRetentionCount.setPrefWidth(110);
-        backupRetentionCount.setDisable(!backupRetentionEnabled.isSelected());
-        backupRetentionEnabled.selectedProperty().addListener((obs, oldValue, newValue) -> backupRetentionCount.setDisable(!newValue));
+        backupRetentionCount.getItems().setAll(5,10,20,50,100); backupRetentionCount.setValue(SettingsService.getBackupRetentionCount());
+        backupRetentionCount.setPrefWidth(110); backupRetentionCount.setDisable(!backupRetentionEnabled.isSelected());
+        backupRetentionEnabled.selectedProperty().addListener((obs,oldValue,newValue)->backupRetentionCount.setDisable(!newValue));
         backupRetentionMessage.getStyleClass().add("settings-message");
-        Button saveRetention=secondary("Save Retention Settings");
-        saveRetention.setOnAction(e -> saveBackupRetention());
-        HBox retentionRow=new HBox(12, backupRetentionEnabled, new Label("Keep latest"), backupRetentionCount, new Label("regular backups"), saveRetention);
-        retentionRow.setAlignment(Pos.CENTER_LEFT);
-        retentionRow.setPadding(new Insets(4,0,4,0));
+        Button saveRetention=secondary("Save Retention Settings"); saveRetention.setOnAction(e->saveBackupRetention());
+        HBox retentionRow=new HBox(12,backupRetentionEnabled,new Label("Keep latest"),backupRetentionCount,new Label("regular backups"),saveRetention); retentionRow.setAlignment(Pos.CENTER_LEFT); retentionRow.setPadding(new Insets(4,0,4,0));
 
         Button backup=primary("Backup Now"); backupNowButton=backup; backup.setOnAction(e->backupDatabase());
         Button restore=secondary("Restore Selected"); restore.setOnAction(e->restoreSelectedBackup());
@@ -279,8 +309,38 @@ public final class SettingsView extends AppView {
         Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
         HBox buttons=new HBox(8,backup,restore,delete,export,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
+
+        backupResultInfo.getStyleClass().add("card-description"); backupPageInfo.getStyleClass().add("card-description"); backupPageButtons.setAlignment(Pos.CENTER);
+        Button backupPrevious=secondary("‹"); backupPrevious.setOnAction(e->loadBackupPage(backupCurrentPage-1));
+        Button backupNext=secondary("›"); backupNext.setOnAction(e->loadBackupPage(backupCurrentPage+1));
+        Region backupSpacer=new Region(); HBox.setHgrow(backupSpacer,Priority.ALWAYS);
+        HBox backupBottom=new HBox(10,backupResultInfo,backupSpacer,backupPageInfo); backupBottom.setAlignment(Pos.CENTER_LEFT);
+        HBox backupPaging=new HBox(12,backupPrevious,backupPageButtons,backupNext); backupPaging.setAlignment(Pos.CENTER);
+
         card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
-        card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTable,buttons); return card;
+        card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTableScroll,buttons,backupBottom,backupPaging);
+        loadBackupPage(0);
+        return card;
+    }
+
+    private void loadBackupPage(int requestedPage){
+        if(backupTable==null)return;
+        try{
+            List<BackupService.BackupInfo> all=BackupService.listBackups();
+            int size=Math.max(1,SettingsService.getPageSize());
+            backupTotalRows=all.size(); backupTotalPages=(int)Math.max(1,(backupTotalRows+size-1)/size);
+            backupCurrentPage=Math.max(0,Math.min(requestedPage,backupTotalPages-1));
+            int from=(int)((long)backupCurrentPage*size); int to=Math.min(all.size(),from+size);
+            backupTable.getItems().setAll(all.subList(from,to)); fitTableHeight(backupTable,to-from,size,38);
+            long start=backupTotalRows==0?0:(long)backupCurrentPage*size+1; long end=Math.min(backupTotalRows,(long)(backupCurrentPage+1)*size);
+            backupResultInfo.setText("Showing "+start+"–"+end+" of "+backupTotalRows); backupPageInfo.setText("Page "+(backupCurrentPage+1)+" of "+backupTotalPages);
+            buildPageButtons(backupPageButtons,backupCurrentPage,backupTotalPages,this::loadBackupPage);
+        }catch(Exception ex){showSimpleError(ex.getMessage());}
+    }
+
+    private void buildPageButtons(HBox box,int current,int total,java.util.function.IntConsumer loader){
+        box.getChildren().clear(); int start=Math.max(0,current-2), end=Math.min(total-1,start+4); start=Math.max(0,end-4);
+        for(int i=start;i<=end;i++){final int page=i; Button b=new Button(String.valueOf(i+1)); b.getStyleClass().add(i==current?"nav-selected":"secondary-button"); b.setOnAction(e->loader.accept(page)); box.getChildren().add(b);}
     }
 
     private void saveBackupRetention() {
@@ -298,13 +358,7 @@ public final class SettingsView extends AppView {
         }
     }
 
-    private void refreshBackups(){
-        if(backupTable==null) return;
-        try{
-            backupTable.getItems().setAll(BackupService.listBackups());
-            fitTableHeight(backupTable, backupTable.getItems().size(), 6, 38);
-        }catch(Exception ex){showSimpleError(ex.getMessage());}
-    }
+    private void refreshBackups(){ loadBackupPage(backupCurrentPage); }
 
     private void backupDatabase() {
         Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
