@@ -10,6 +10,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
+import javafx.scene.Node;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import java.io.File;
@@ -49,20 +50,42 @@ public final class SettingsView extends AppView {
         tabs.getStyleClass().add("wasp-master-tabs");
 
         Tab numbering = new Tab("Waybill Numbering");
-        numbering.setContent(numberingCard());
+        numbering.setContent(wrapSettingsContent(numberingCard()));
         Tab profile = new Tab("Company Profile");
-        profile.setContent(profileCard());
+        profile.setContent(wrapSettingsContent(profileCard()));
         Tab terms = new Tab("Terms & Conditions");
-        terms.setContent(termsCard());
+        terms.setContent(wrapSettingsContent(termsCard()));
         Tab pagination = new Tab("Pagination");
-        pagination.setContent(paginationCard());
+        pagination.setContent(wrapSettingsContent(paginationCard()));
         Tab backup = new Tab("Backup & Restore");
-        backup.setContent(backupCard());
+        backup.setContent(wrapSettingsContent(backupCard()));
 
         tabs.getTabs().addAll(numbering, profile, terms, pagination, backup);
+
+        // Keep the Settings heading, description and tab headers fixed.
+        // Each selected tab owns its own vertical ScrollPane, so normal
+        // resolution remains scrollbar-free while shorter windows can scroll
+        // only the tab content that actually exceeds the available height.
         VBox.setVgrow(tabs, Priority.ALWAYS);
+        tabs.setMinHeight(0);
+        tabs.setMaxHeight(Double.MAX_VALUE);
         getChildren().add(tabs);
+
         loadAll();
+    }
+
+    private static ScrollPane wrapSettingsContent(Node content) {
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setFitToHeight(false);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPannable(false);
+        scroll.setFocusTraversable(false);
+        scroll.setMinHeight(0);
+        scroll.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        scroll.getStyleClass().add("content-scroll");
+        return scroll;
     }
 
     private VBox numberingCard() {
