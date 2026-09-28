@@ -76,6 +76,9 @@ public final class SavedDataView extends AppView {
                     carrierMode ? (((SavedDataService.CarrierRecord)cell.getValue()).active() ? "Active" : "Inactive") : (((SavedDataService.LocationRecord)cell.getValue()).active() ? "Active" : "Inactive")));
             table.getColumns().add(status);
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+            VBox.setVgrow(table, Priority.ALWAYS);
+            table.setMinHeight(72);
+            table.setMaxHeight(Double.MAX_VALUE);
             table.setRowFactory(tv -> {
                 TableRow<Object> row = new TableRow<>();
                 row.setOnMouseClicked(event -> {

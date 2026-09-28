@@ -52,7 +52,9 @@ public final class UserManagementView extends AppView {
         table.setPlaceholder(new Label("No users found."));
         table.setMinHeight(TABLE_EMPTY_HEIGHT);
         table.setPrefHeight(TABLE_EMPTY_HEIGHT);
-        VBox.setVgrow(table,Priority.NEVER);
+        VBox.setVgrow(table,Priority.ALWAYS);
+        table.setMinHeight(TABLE_EMPTY_HEIGHT);
+        table.setMaxHeight(Double.MAX_VALUE);
         table.setRowFactory(tv->{
             TableRow<UserService.UserRecord> row=new TableRow<>();
             row.setOnMouseClicked(e->{
@@ -87,8 +89,9 @@ public final class UserManagementView extends AppView {
                 ? TABLE_EMPTY_HEIGHT
                 : TABLE_HEADER_HEIGHT + (rows * TABLE_ROW_HEIGHT) + 2;
         table.setPrefHeight(height);
-        table.setMinHeight(height);
-        table.setMaxHeight(height);
+        table.setMinHeight(TABLE_EMPTY_HEIGHT);
+        table.setMaxHeight(Double.MAX_VALUE);
+        VBox.setVgrow(table,Priority.ALWAYS);
     }
 
     private void updateActionState() {

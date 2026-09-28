@@ -49,7 +49,9 @@ public final class SavedWaybillsView extends AppView {
         this.onBack = onBack == null ? () -> {} : onBack;
         this.onView = onView == null ? id -> {} : onView;
         this.onEdit = onEdit == null ? id -> {} : onEdit;
-        getChildren().add(buildContent());
+        VBox content = buildContent();
+        getChildren().add(content);
+        VBox.setVgrow(content, Priority.ALWAYS);
         loadPage(0);
     }
 

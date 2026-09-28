@@ -50,6 +50,9 @@ public final class CompaniesView extends AppView {
 
             table.setPlaceholder(new Label("No companies found.")); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); fitTableHeight(table, 0, pageSize, 42);
             table.getColumns().setAll(column("Company Name", 0, 220), column("Contact Person", 1, 160), column("Phone", 2, 130), column("Email", 3, 190), column("Address", 4, 260), statusColumn());
+            VBox.setVgrow(table, Priority.ALWAYS);
+            table.setMinHeight(72);
+            table.setMaxHeight(Double.MAX_VALUE);
             table.setRowFactory(tv -> { TableRow<CompanyService.CompanyRecord> row = new TableRow<>(); row.setOnMouseClicked(event -> { if (event.getClickCount() == 2 && !row.isEmpty()) openCompanyDialog(row.getItem()); }); return row; });
             HBox pager = new HBox(10); pager.setAlignment(Pos.CENTER_RIGHT);
             Button first = button("« First", "secondary-button"), previous = button("‹ Previous", "secondary-button"), next = button("Next ›", "secondary-button"), last = button("Last »", "secondary-button");

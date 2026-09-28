@@ -41,21 +41,15 @@ public class AppView extends VBox {
         double headerHeight = 34.0;
         double height = headerHeight + (visibleRows * cellHeight) + 10.0;
         table.setFixedCellSize(cellHeight);
-        table.setMinHeight(height);
+        // Let the parent layout grow the table when there is spare room, but
+        // allow it to shrink below its preferred row count when the window is
+        // smaller. In that case TableView itself provides the record scrollbar.
+        // This keeps action/paging controls outside the scrolling record area.
+        table.setMinHeight(Math.max(72.0, headerHeight + cellHeight + 4.0));
         table.setPrefHeight(height);
-        table.setMaxHeight(height);
-
-        // For paginated/non-paginated lists where all records fit, explicitly
-        // suppress the vertical scrollbar. If the list exceeds maxVisibleRows,
-        // the normal scrollbar remains available.
-        if (itemCount <= maxVisibleRows) {
-            if (!table.getStyleClass().contains("fit-no-scroll")) {
-                table.getStyleClass().add("fit-no-scroll");
-            }
-        } else {
-            table.getStyleClass().remove("fit-no-scroll");
-        }
-        VBox.setVgrow(table, javafx.scene.layout.Priority.NEVER);
+        table.setMaxHeight(Double.MAX_VALUE);
+        table.getStyleClass().remove("fit-no-scroll");
+        VBox.setVgrow(table, javafx.scene.layout.Priority.ALWAYS);
     }
 
 }

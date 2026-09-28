@@ -54,11 +54,15 @@ public final class SettingsView extends AppView {
         Tab profile = new Tab("Company Profile");
         profile.setContent(wrapSettingsContent(profileCard()));
         Tab terms = new Tab("Terms & Conditions");
-        terms.setContent(wrapSettingsContent(termsCard()));
+        VBox termsContent = termsCard();
+        VBox.setVgrow(termsContent, Priority.ALWAYS);
+        terms.setContent(termsContent);
         Tab pagination = new Tab("Pagination");
         pagination.setContent(wrapSettingsContent(paginationCard()));
         Tab backup = new Tab("Backup & Restore");
-        backup.setContent(wrapSettingsContent(backupCard()));
+        VBox backupContent = backupCard();
+        VBox.setVgrow(backupContent, Priority.ALWAYS);
+        backup.setContent(backupContent);
 
         tabs.getTabs().addAll(numbering, profile, terms, pagination, backup);
 
@@ -150,6 +154,7 @@ public final class SettingsView extends AppView {
         table.getColumns().setAll(no,clause,text,hazardousRef,active);
 
         Runnable reload=()->{ table.getItems().setAll(TermsConditionService.findAll()); fitTableHeight(table, table.getItems().size(), 10, 38); };
+        VBox.setVgrow(table, Priority.ALWAYS);
         reload.run();
 
         table.setRowFactory(tv -> {
@@ -173,6 +178,7 @@ public final class SettingsView extends AppView {
         Button delete=secondary("Delete");
         delete.setOnAction(e->{var x=table.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reload.run();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
         HBox buttons=new HBox(8,add,edit,up,down,delete); buttons.setAlignment(Pos.CENTER_RIGHT);
+        card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
         card.getChildren().addAll(title,desc,table,buttons); return card;
     }
 
@@ -235,6 +241,7 @@ public final class SettingsView extends AppView {
         backupTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         backupTable.setPlaceholder(new Label("No backups have been created yet."));
         fitTableHeight(backupTable, 0, 6, 38);
+        VBox.setVgrow(backupTable, Priority.ALWAYS);
 
         TableColumn<BackupService.BackupInfo,String> name=new TableColumn<>("Backup File");
         name.setMinWidth(300); name.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().path().getFileName().toString()));
@@ -272,6 +279,7 @@ public final class SettingsView extends AppView {
         Button open=secondary("Open Backup Folder"); open.setOnAction(e->openBackupFolder());
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
         HBox buttons=new HBox(8,backup,restore,delete,export,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
+        card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
         card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTable,buttons); return card;
     }
 
