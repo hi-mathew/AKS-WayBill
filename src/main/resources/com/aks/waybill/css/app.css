@@ -720,3 +720,25 @@
 .saved-data-company-view .wasp-company-tabs {
     -fx-background-color: transparent;
 }
+
+/* W.A.S.P. waybill item-entry grid: stable row geometry and clearly visible cell separators. */
+.waybill-items-table .table-cell {
+    -fx-border-color: transparent #d5dde5 #d5dde5 transparent;
+    -fx-border-width: 0 1px 1px 0;
+    -fx-background-color: transparent;
+}
+.waybill-items-table .table-row-cell:filled:selected,
+.waybill-items-table .table-row-cell:filled:selected .table-cell {
+    -fx-background-color: #eaf3f8;
+    -fx-border-color: transparent #b9c7d2 #b9c7d2 transparent;
+    -fx-text-fill: #111827;
+}
+.waybill-items-table .table-cell .text-field {
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
+    -fx-max-height: 28px;
+    -fx-padding: 3px 7px;
+    -fx-border-color: #8eacc1;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}

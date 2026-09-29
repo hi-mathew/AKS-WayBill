@@ -11,6 +11,7 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
@@ -395,6 +396,9 @@ public class WaybillFormView extends AppView {
         no.setCellValueFactory(data -> new SimpleStringProperty(String.valueOf(itemsTable.getItems().indexOf(data.getValue()) + 1)));
         no.setEditable(false);
 
+        itemsTable.getStyleClass().add("waybill-items-table");
+        itemsTable.setFixedCellSize(36);
+
         itemsTable.getColumns().setAll(
                 no,
                 editableColumn("Description of Goods", 0, 250, false, InputLimits.ITEM_DESCRIPTION),
@@ -409,6 +413,7 @@ public class WaybillFormView extends AppView {
         itemsTable.setMaxHeight(300);
         itemsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         itemsTable.setPlaceholder(new Label("No items. Click Add Item to add cargo details."));
+        configureSingleClickItemEditing();
         itemsTable.getItems().addListener((javafx.collections.ListChangeListener<ItemRow>) change -> updateItemsTableHeight());
         updateItemsTableHeight();
         card.getChildren().addAll(header, itemsTable);
@@ -1413,6 +1418,39 @@ public class WaybillFormView extends AppView {
     private static GridPane grid2() { GridPane grid = new GridPane(); grid.setHgap(18); grid.setVgap(10); ColumnConstraints left = new ColumnConstraints(); left.setPercentWidth(50); left.setHgrow(Priority.ALWAYS); ColumnConstraints right = new ColumnConstraints(); right.setPercentWidth(50); right.setHgrow(Priority.ALWAYS); grid.getColumnConstraints().addAll(left, right); return grid; }
     private static void addField(GridPane grid, int col, int row, String labelText, Region control) { VBox box = labeledControl(labelText, control); GridPane.setHgrow(box, Priority.ALWAYS); grid.add(box, col, row); }
 
+    private void configureSingleClickItemEditing() {
+        itemsTable.setOnMouseClicked(event -> {
+            if (event.getButton() != javafx.scene.input.MouseButton.PRIMARY || event.getClickCount() > 1) return;
+            TableCell<?, ?> cell = findTableCell(event.getTarget());
+            if (cell == null || cell.isEmpty()) return;
+
+            int row = cell.getIndex();
+            int column = itemsTable.getColumns().indexOf(cell.getTableColumn());
+            if (row < 0 || column <= 0 || column >= itemsTable.getColumns().size() || !itemsTable.isEditable()) return;
+
+            if (itemsTable.getEditingCell() != null) return;
+            beginItemEdit(row, column);
+        });
+    }
+
+    private void beginItemEdit(int row, int column) {
+        if (row < 0 || row >= itemsTable.getItems().size() || column <= 0 || column >= itemsTable.getColumns().size()) return;
+        TableColumn<ItemRow, ?> targetColumn = itemsTable.getColumns().get(column);
+        itemsTable.getSelectionModel().select(row, targetColumn);
+        itemsTable.scrollTo(row);
+        itemsTable.edit(row, targetColumn);
+    }
+
+    private static TableCell<?, ?> findTableCell(Object target) {
+        if (!(target instanceof Node node)) return null;
+        Node current = node;
+        while (current != null) {
+            if (current instanceof TableCell<?, ?> cell) return cell;
+            current = current.getParent();
+        }
+        return null;
+    }
+
     private void commitActiveItemEdit() {
         if (itemsTable.getEditingCell() == null) return;
         // Trigger the normal TableView edit transition. PersistentTextCell.cancelEdit()
@@ -1466,6 +1504,9 @@ public class WaybillFormView extends AppView {
         private void createEditor() {
             editor = new TextField();
             editor.setMaxWidth(Double.MAX_VALUE);
+            editor.setMinHeight(28);
+            editor.setPrefHeight(28);
+            editor.setMaxHeight(28);
             if (numeric) InputLimits.numeric(editor, maxLength, 3);
             else InputLimits.maxLength(editor, maxLength);
             editor.setOnAction(event -> commitEditorValue());
@@ -1473,6 +1514,35 @@ public class WaybillFormView extends AppView {
                 if (event.getCode() == KeyCode.ESCAPE) {
                     cancelWithoutCommit = true;
                     cancelEdit();
+                    event.consume();
+                    return;
+                }
+
+                if (event.getCode() == KeyCode.TAB) {
+                    int row = getIndex();
+                    int column = getTableView().getColumns().indexOf(getTableColumn());
+                    int nextRow = row;
+                    int nextColumn = column + (event.isShiftDown() ? -1 : 1);
+                    if (event.isShiftDown() && nextColumn <= 0) {
+                        nextRow--;
+                        nextColumn = getTableView().getColumns().size() - 1;
+                    } else if (!event.isShiftDown() && nextColumn >= getTableView().getColumns().size()) {
+                        nextRow++;
+                        nextColumn = 1;
+                    }
+
+                    commitEditorValue();
+                    if (nextRow >= 0 && nextRow < getTableView().getItems().size() && nextColumn > 0) {
+                        int targetRow = nextRow;
+                        int targetColumn = nextColumn;
+                        Platform.runLater(() -> {
+                            @SuppressWarnings("unchecked")
+                            TableColumn<ItemRow, ?> target = (TableColumn<ItemRow, ?>) getTableView().getColumns().get(targetColumn);
+                            getTableView().getSelectionModel().select(targetRow, target);
+                            getTableView().scrollTo(targetRow);
+                            getTableView().edit(targetRow, target);
+                        });
+                    }
                     event.consume();
                 }
             });
