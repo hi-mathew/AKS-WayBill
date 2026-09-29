@@ -38,3 +38,8 @@
 - Press Enter in the last column of the last item row to add a new item row and focus Description of Goods.
 - Press Tab from the last column of the last item row to move focus to Special Instructions / Handling instead of trapping focus in the grid.
 - Existing single-click editing, fixed row height, grid borders, and keyboard navigation are retained.
+
+## v1.4.0 – Word final-page rendering fix
+- Hardened Word report finalization by removing stale rendered-page-break metadata and ensuring the required trailing paragraph after the Terms & Conditions table is present at minimal height.
+- Final Word normalization now runs after all Word report post-processing so later document rewrites cannot reintroduce the blank-page artifacts.
+- Retained the 35 px list-screen search/filter controls and Remove Selected item confirmation.

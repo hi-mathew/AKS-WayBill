@@ -74,6 +74,12 @@ public final class WaybillReportService {
             // consistent for the same report.
             resolveTermsPageForWord(temporary);
 
+            // Final DOCX normalization must run after all report post-processing.
+            // Word can reintroduce rendered-page-break metadata while the temporary
+            // PDF preview is created, so normalize the actual output immediately
+            // before it is moved into place.
+            normalizeWordDocumentTail(temporary);
+
             Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
             WaspLogger.info("Word report generated. waybillNumber=" + waybill.waybillNumber() + ", items=" + (waybill.items() == null ? 0 : waybill.items().size()) + ", output=" + output);
         } finally {
@@ -699,6 +705,50 @@ public final class WaybillReportService {
             }
         }
         return -1;
+    }
+
+
+    /**
+     * Removes Word layout artifacts that can create an otherwise blank final page
+     * and guarantees the required paragraph after a document-ending table is
+     * present at a minimal height. This is intentionally performed as the final
+     * DOCX operation so no later rewrite can reintroduce the artifacts.
+     */
+    private static void normalizeWordDocumentTail(Path docx) throws IOException {
+        rewriteDocxEntry(docx, "word/document.xml", xml -> {
+            // Remove rendered-layout page-break markers and explicit paragraph
+            // page-break properties from the generated document. These are not
+            // semantic content and can cause Microsoft Word to show a blank page
+            // after the final Terms & Conditions table.
+            xml = xml.replaceAll("<w:lastRenderedPageBreak\\b[^>]*/>", "")
+                     .replaceAll("<w:lastRenderedPageBreak\\b[^>]*></w:lastRenderedPageBreak>", "")
+                     .replaceAll("<w:pageBreakBefore(?:\\s[^>]*)?/>", "")
+                     .replaceAll("<w:br\\b[^>]*w:type=\"page\"[^>]*/>", "");
+
+            int sectStart = xml.lastIndexOf("<w:sectPr");
+            int bodyEnd = xml.lastIndexOf("</w:body>");
+            if (sectStart < 0 || bodyEnd < 0 || sectStart >= bodyEnd) return xml;
+
+            int lastTable = xml.lastIndexOf("</w:tbl>", sectStart);
+            if (lastTable < 0) return xml;
+
+            String between = xml.substring(lastTable + "</w:tbl>".length(), sectStart);
+            // If the template already has an empty trailing paragraph, compact it.
+            if (between.matches("\\s*<w:p(?:\\s[^>]*)?>.*</w:p>\\s*")) {
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("<w:p(?:\\s[^>]*)?>(.*?)</w:p>", java.util.regex.Pattern.DOTALL);
+                java.util.regex.Matcher m = p.matcher(between);
+                if (m.find() && !m.group(1).contains("<w:t>")) {
+                    String compact = "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"1\" w:lineRule=\"exact\"/></w:pPr>"
+                            + "<w:r><w:rPr><w:sz w:val=\"1\"/><w:szCs w:val=\"1\"/></w:rPr><w:t></w:t></w:r></w:p>";
+                    return xml.substring(0, lastTable + "</w:tbl>".length()) + compact + xml.substring(sectStart);
+                }
+                return xml;
+            }
+
+            String compact = "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"1\" w:lineRule=\"exact\"/></w:pPr>"
+                    + "<w:r><w:rPr><w:sz w:val=\"1\"/><w:szCs w:val=\"1\"/></w:rPr><w:t></w:t></w:r></w:p>";
+            return xml.substring(0, lastTable + "</w:tbl>".length()) + compact + xml.substring(sectStart);
+        });
     }
 
     private static void setTermsPageLiteral(Path docx, int page) throws IOException {

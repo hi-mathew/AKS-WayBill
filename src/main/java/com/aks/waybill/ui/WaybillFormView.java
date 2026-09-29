@@ -386,20 +386,22 @@ public class WaybillFormView extends AppView {
                 return;
             }
 
-            Alert confirmation = new Alert(
+            Alert confirm = new Alert(
                     Alert.AlertType.CONFIRMATION,
                     "Are you sure you want to remove the selected item from this waybill?",
-                    ButtonType.CANCEL,
-                    ButtonType.OK
+                    ButtonType.OK,
+                    ButtonType.CANCEL
             );
-            confirmation.setTitle("Remove Selected Item");
-            confirmation.setHeaderText("Remove Selected Item?");
+            confirm.setTitle("Remove Selected Item");
+            confirm.setHeaderText("Remove Selected Item?");
 
-            if (confirmation.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                itemsTable.getItems().remove(index);
-                itemsTable.refresh();
-                updateItemsTableHeight();
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
             }
+
+            itemsTable.getItems().remove(index);
+            itemsTable.refresh();
+            updateItemsTableHeight();
         });
 
         header.getChildren().addAll(title, spacer, addItemButton, removeItemButton);
