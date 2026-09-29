@@ -1,3 +1,8 @@
+
+## 1.4.0 - Filter Control Alignment
+- Standardized list-screen filter control height to 35 px.
+- Updated Saved Waybills so the Search field, From/To date pickers, Status selector, Search button and Clear button share the same control height and align consistently.
+- Applied the same 35 px search-field sizing to Saved Data, Companies, Audit Log and User Management to keep list-screen filter areas visually consistent.
 # Changelog
 
 ## W.A.S.P. 1.4.0
@@ -29,10 +34,6 @@
 - Added Audit Log indexing and pagination improvements.
 - Standardized local date/time presentation for user login and audit activity.
 - Added configurable pagination sizes.
-## v1.4.0 – Remove Selected Item Confirmation
-- Added a confirmation dialog before removing the selected item from a waybill.
-- Cancel leaves the selected item unchanged; removal proceeds only after confirmation.
-
 ## v1.4.0 – Item Grid Keyboard Navigation
 - Press Enter in the last column of the last item row to add a new item row and focus Description of Goods.
 - Press Tab from the last column of the last item row to move focus to Special Instructions / Handling instead of trapping focus in the grid.

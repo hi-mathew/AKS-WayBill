@@ -53,7 +53,7 @@ public final class SavedDataView extends AppView {
 
         private void build() {
             HBox toolbar=new HBox(10); toolbar.setAlignment(Pos.CENTER_LEFT);
-            search.setPromptText(carrierMode?"Search saved carrier":"Search saved location"); InputLimits.maxLength(search,400); HBox.setHgrow(search,Priority.ALWAYS); search.setOnAction(e->loadPage(0));
+            search.getStyleClass().add("list-filter-control"); search.setPromptText(carrierMode?"Search saved carrier":"Search saved location"); InputLimits.maxLength(search,400); HBox.setHgrow(search,Priority.ALWAYS); search.setOnAction(e->loadPage(0));
             Button find=new Button("Search"); find.getStyleClass().add("secondary-button"); find.setOnAction(e->loadPage(0));
             Button clear=new Button("Clear"); clear.getStyleClass().add("secondary-button"); clear.setOnAction(e->{search.clear();loadPage(0);});
             Button add=new Button(carrierMode?"＋ Add Carrier":"＋ Add Location"); add.getStyleClass().add("primary-button"); add.setOnAction(e->openDialog(null));

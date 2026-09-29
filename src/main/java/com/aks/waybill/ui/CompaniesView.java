@@ -49,7 +49,7 @@ public final class CompaniesView extends AppView {
 
         private void build() {
             HBox toolbar = new HBox(10); toolbar.setAlignment(Pos.CENTER_LEFT);
-            searchField.setPromptText("Search company, contact, phone or email"); InputLimits.maxLength(searchField, 400); searchField.getStyleClass().add("settings-field"); HBox.setHgrow(searchField, Priority.ALWAYS); searchField.setOnAction(e -> loadPage(0));
+            searchField.getStyleClass().add("list-filter-control"); searchField.setPromptText("Search company, contact, phone or email"); InputLimits.maxLength(searchField, 400); searchField.getStyleClass().add("settings-field"); HBox.setHgrow(searchField, Priority.ALWAYS); searchField.setOnAction(e -> loadPage(0));
             Button search = button("Search", "secondary-button"); search.setOnAction(e -> loadPage(0));
             Button clear = button("Clear", "secondary-button"); clear.setOnAction(e -> { searchField.clear(); loadPage(0); });
             Button add = button("＋ Add Company", "primary-button"); add.setOnAction(e -> openCompanyDialog(null));

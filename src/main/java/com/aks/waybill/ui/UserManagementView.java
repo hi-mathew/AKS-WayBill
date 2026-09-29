@@ -45,7 +45,7 @@ public final class UserManagementView extends AppView {
     private VBox build() {
         VBox root=new VBox(14); root.setPadding(new Insets(4,0,30,0));
         HBox toolbar=new HBox(10); toolbar.setAlignment(Pos.CENTER_LEFT);
-        search.setPromptText("Search username, display name, user code or role"); InputLimits.maxLength(search,400); HBox.setHgrow(search,Priority.ALWAYS); search.setOnAction(e->loadPage(0));
+        search.getStyleClass().add("list-filter-control"); search.setPromptText("Search username, display name, user code or role"); InputLimits.maxLength(search,400); HBox.setHgrow(search,Priority.ALWAYS); search.setOnAction(e->loadPage(0));
         Button find=primary("Search"); find.setOnAction(e->loadPage(0));
         Button clear=secondary("Clear"); clear.setOnAction(e->{search.clear();loadPage(0);});
         Button add=primary("＋ Add User"); add.setOnAction(e->openEditor(null));

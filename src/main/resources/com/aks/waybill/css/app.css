@@ -742,3 +742,32 @@
     -fx-border-radius: 4px;
     -fx-background-radius: 4px;
 }
+
+/* Consistent filter/control sizing across list screens.  Saved Waybills uses
+   this class for all controls in its Search & Filters row so text, dates,
+   status and actions share the same visual height and baseline. */
+.list-filter-control {
+    -fx-pref-height: 35px;
+    -fx-min-height: 35px;
+    -fx-max-height: 35px;
+}
+.list-filter-control.text-field {
+    -fx-padding: 0 10px;
+}
+.list-filter-control.date-picker,
+.list-filter-control.date-picker .text-field,
+.list-filter-control.combo-box {
+    -fx-pref-height: 35px;
+    -fx-min-height: 35px;
+    -fx-max-height: 35px;
+}
+.list-filter-control.date-picker .arrow-button {
+    -fx-pref-height: 35px;
+    -fx-min-height: 35px;
+    -fx-max-height: 35px;
+}
+.list-filter-action {
+    -fx-pref-height: 35px;
+    -fx-min-height: 35px;
+    -fx-max-height: 35px;
+}

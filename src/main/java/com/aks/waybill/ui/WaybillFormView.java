@@ -382,26 +382,11 @@ public class WaybillFormView extends AppView {
         });
         removeItemButton.setOnAction(event -> {
             int index = itemsTable.getSelectionModel().getSelectedIndex();
-            if (index < 0) {
-                return;
+            if (index >= 0) {
+                itemsTable.getItems().remove(index);
+                itemsTable.refresh();
+                updateItemsTableHeight();
             }
-
-            Alert confirm = new Alert(
-                    Alert.AlertType.CONFIRMATION,
-                    "Are you sure you want to remove the selected item from this waybill?",
-                    ButtonType.OK,
-                    ButtonType.CANCEL
-            );
-            confirm.setTitle("Remove Selected Item");
-            confirm.setHeaderText("Remove Selected Item?");
-
-            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
-                return;
-            }
-
-            itemsTable.getItems().remove(index);
-            itemsTable.refresh();
-            updateItemsTableHeight();
         });
 
         header.getChildren().addAll(title, spacer, addItemButton, removeItemButton);
