@@ -52,4 +52,7 @@
 ## v1.4.0 – Cumulative dashboard/report fix
 - Restored the PDF DRAFT watermark vertical offset so the PDF watermark retains the approved downward positioning relative to the Word report.
 - Preserved all prior v1.4.0 fixes, including 35 px list-screen filter controls, Saved Waybills filter alignment, Word final-page handling, Remove Selected item confirmation, item-grid keyboard navigation, and 32 px coloured Dashboard icon badges.
+## Pagination Sliding Window Correction
+- Fixed pagination ellipsis rendering so the local page window merges with the first/last page anchors when they overlap.
+- Clicking a page number now immediately shows adjacent page numbers without an unnecessary ellipsis between pages 2 and 3 (or the corresponding right-side overlap).
 
