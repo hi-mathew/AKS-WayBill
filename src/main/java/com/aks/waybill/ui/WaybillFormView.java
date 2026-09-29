@@ -1459,6 +1459,18 @@ public class WaybillFormView extends AppView {
         itemsTable.edit(-1, null);
     }
 
+    private void addItemAndFocusFirstCell(TableView<ItemRow> table) {
+        if (table == null || !table.isEditable()) return;
+        table.getItems().add(new ItemRow());
+        int row = table.getItems().size() - 1;
+        if (row < 0 || table.getColumns().size() <= 1) return;
+        @SuppressWarnings("unchecked")
+        TableColumn<ItemRow, ?> firstEditableColumn = (TableColumn<ItemRow, ?>) table.getColumns().get(1);
+        table.getSelectionModel().select(row, firstEditableColumn);
+        table.scrollTo(row);
+        table.edit(row, firstEditableColumn);
+    }
+
     private static boolean isNodeInside(Object target, Node ancestor) {
         if (!(target instanceof Node node)) return false;
         Node current = node;
@@ -1469,7 +1481,7 @@ public class WaybillFormView extends AppView {
         return false;
     }
 
-    private static TableColumn<ItemRow, String> editableColumn(String title, int index, double width, boolean numeric, int maxLength) {
+    private TableColumn<ItemRow, String> editableColumn(String title, int index, double width, boolean numeric, int maxLength) {
         TableColumn<ItemRow, String> column = new TableColumn<>(title);
         column.setPrefWidth(width);
         column.setCellValueFactory(data -> data.getValue().property(index));
@@ -1478,7 +1490,7 @@ public class WaybillFormView extends AppView {
         return column;
     }
 
-    private static final class PersistentTextCell extends TableCell<ItemRow, String> {
+    private final class PersistentTextCell extends TableCell<ItemRow, String> {
         private final boolean numeric;
         private final int maxLength;
         private TextField editor;
@@ -1509,7 +1521,14 @@ public class WaybillFormView extends AppView {
             editor.setMaxHeight(28);
             if (numeric) InputLimits.numeric(editor, maxLength, 3);
             else InputLimits.maxLength(editor, maxLength);
-            editor.setOnAction(event -> commitEditorValue());
+            editor.setOnAction(event -> {
+                boolean lastRow = getIndex() == getTableView().getItems().size() - 1;
+                boolean lastColumn = getTableView().getColumns().indexOf(getTableColumn()) == getTableView().getColumns().size() - 1;
+                commitEditorValue();
+                if (lastRow && lastColumn && getTableView().isEditable()) {
+                    Platform.runLater(() -> addItemAndFocusFirstCell(getTableView()));
+                }
+            });
             editor.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, event -> {
                 if (event.getCode() == KeyCode.ESCAPE) {
                     cancelWithoutCommit = true;
@@ -1531,7 +1550,18 @@ public class WaybillFormView extends AppView {
                         nextColumn = 1;
                     }
 
+                    boolean lastRow = row == getTableView().getItems().size() - 1;
+                    boolean lastColumn = column == getTableView().getColumns().size() - 1;
                     commitEditorValue();
+
+                    if (!event.isShiftDown() && lastRow && lastColumn) {
+                        // Let the normal JavaFX focus traversal move to the next
+                        // screen control after the grid (Special Instructions).
+                        // The grid must not trap TAB on its last cell.
+                        Platform.runLater(() -> specialInstructions.requestFocus());
+                        return;
+                    }
+
                     if (nextRow >= 0 && nextRow < getTableView().getItems().size() && nextColumn > 0) {
                         int targetRow = nextRow;
                         int targetColumn = nextColumn;

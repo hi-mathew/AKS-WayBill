@@ -29,3 +29,7 @@
 - Added Audit Log indexing and pagination improvements.
 - Standardized local date/time presentation for user login and audit activity.
 - Added configurable pagination sizes.
+## v1.4.0 – Item Grid Keyboard Navigation
+- Press Enter in the last column of the last item row to add a new item row and focus Description of Goods.
+- Press Tab from the last column of the last item row to move focus to Special Instructions / Handling instead of trapping focus in the grid.
+- Existing single-click editing, fixed row height, grid borders, and keyboard navigation are retained.
