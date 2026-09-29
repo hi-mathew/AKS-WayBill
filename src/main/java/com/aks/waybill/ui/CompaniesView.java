@@ -60,11 +60,7 @@ public final class CompaniesView extends AppView {
 
             table.setPlaceholder(new Label("No companies found."));
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-            table.setFixedCellSize(42);
-            table.setMinHeight(120);
-            table.setPrefHeight(280);
-            table.setMaxHeight(Double.MAX_VALUE);
-            VBox.setVgrow(table, Priority.ALWAYS);
+            fitTableHeight(table, 0, pageSize, 42);
             companyNameCol = column("Company Name", 0, 220);
             contactCol = column("Contact Person", 1, 160);
             phoneCol = column("Phone", 2, 130);
@@ -104,6 +100,7 @@ public final class CompaniesView extends AppView {
                 totalRows = page.totalRows();
                 table.setItems(FXCollections.observableArrayList(page.rows()));
                 restoreSortIndicator();
+                fitTableHeight(table, page.rows().size(), pageSize, 42);
                 pagination.setPageData(currentPage, totalPages(), totalRows, pageSize);
                 clearMessage();
             }

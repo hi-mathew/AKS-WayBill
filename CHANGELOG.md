@@ -56,3 +56,7 @@
 - Fixed pagination ellipsis rendering so the local page window merges with the first/last page anchors when they overlap.
 - Clicking a page number now immediately shows adjacent page numbers without an unnecessary ellipsis between pages 2 and 3 (or the corresponding right-side overlap).
 
+
+## Saved Data grid sizing correction
+- Restored dynamic TableView height sizing for Companies, Carriers and Locations so the grid displays only the populated rows on the current page instead of rendering unnecessary blank rows.
+- Preserved the existing compact Saved Data layout and scrolling behavior for larger result sets.

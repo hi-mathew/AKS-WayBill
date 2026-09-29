@@ -91,11 +91,6 @@ public final class SavedDataView extends AppView {
                 loadPage(0);
             });
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-            table.setFixedCellSize(42);
-            table.setMinHeight(120);
-            table.setPrefHeight(280);
-            table.setMaxHeight(Double.MAX_VALUE);
-            VBox.setVgrow(table, Priority.ALWAYS);
             table.setPlaceholder(new Label(carrierMode?"No saved carriers found.":"No saved locations found."));
             table.setRowFactory(tv->{TableRow<Object> row=new TableRow<>();row.setOnMouseClicked(event->{if(event.getClickCount()==2&&!row.isEmpty())openDialog(row.getItem());});return row;});
 
@@ -119,6 +114,7 @@ public final class SavedDataView extends AppView {
                     int from=(int)((long)currentPage*size),to=Math.min(all.size(),from+size); table.setItems(FXCollections.observableArrayList(all.subList(from,to).stream().map(x->(Object)x).toList()));
                     restoreSortIndicator();
                 }
+                fitTableHeight(table, table.getItems().size(), size, 42);
                 pagination.setPageData(currentPage,totalPages,totalRows,size); message.setText("");
             }catch(RuntimeException ex){message.setText(ex.getMessage());}
         }
