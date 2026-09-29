@@ -29,6 +29,10 @@
 - Added Audit Log indexing and pagination improvements.
 - Standardized local date/time presentation for user login and audit activity.
 - Added configurable pagination sizes.
+## v1.4.0 – Remove Selected Item Confirmation
+- Added a confirmation dialog before removing the selected item from a waybill.
+- Cancel leaves the selected item unchanged; removal proceeds only after confirmation.
+
 ## v1.4.0 – Item Grid Keyboard Navigation
 - Press Enter in the last column of the last item row to add a new item row and focus Description of Goods.
 - Press Tab from the last column of the last item row to move focus to Special Instructions / Handling instead of trapping focus in the grid.
