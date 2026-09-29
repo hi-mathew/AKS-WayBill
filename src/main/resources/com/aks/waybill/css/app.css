@@ -683,3 +683,40 @@
     -fx-font-weight: 700;
     -fx-padding: 9px 3px;
 }
+
+/* Saved Data: reclaim vertical space for the record grids while keeping the
+   hierarchy and pagination controls comfortable on the standard desktop window. */
+.saved-data-view {
+    -fx-spacing: 10px;
+    -fx-padding: 8px 22px 8px 22px;
+}
+.saved-data-company-view {
+    -fx-spacing: 10px;
+    -fx-padding: 4px 0 4px 0;
+}
+.saved-data-view > .page-heading,
+.saved-data-company-view > .page-heading {
+    -fx-font-size: 24px;
+}
+.saved-data-view > .page-subheading,
+.saved-data-company-view > .page-subheading {
+    -fx-font-size: 12px;
+}
+.saved-data-view .wasp-master-tabs,
+.saved-data-company-view .wasp-company-tabs {
+    -fx-tab-min-height: 34px;
+    -fx-tab-max-height: 34px;
+}
+.saved-data-view .wasp-master-tabs .tab,
+.saved-data-company-view .wasp-company-tabs .tab {
+    -fx-padding: 7px 15px 6px 15px;
+}
+.saved-data-view .wasp-master-tabs .tab-content-area {
+    -fx-padding: 10px;
+}
+.saved-data-company-view .wasp-company-tabs .tab-content-area {
+    -fx-padding: 8px 0 0 0;
+}
+.saved-data-company-view .wasp-company-tabs {
+    -fx-background-color: transparent;
+}

@@ -15,6 +15,7 @@ public final class CompaniesView extends AppView {
 
     public CompaniesView() {
         super("Companies", "Shippers / Consignors and Consignees / Receivers are maintained as separate company masters.");
+        getStyleClass().add("saved-data-company-view");
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getStyleClass().add("wasp-company-tabs");
         Tab shippers = new Tab("Shippers / Consignors"); shippers.setContent(new CompanyMasterTab(CompanyService.CompanyType.SHIPPER));
@@ -43,7 +44,7 @@ public final class CompaniesView extends AppView {
         private TableColumn<CompanyService.CompanyRecord, String> statusCol;
 
         CompanyMasterTab(CompanyService.CompanyType type) {
-            this.type = type; setSpacing(16); setPadding(new Insets(0, 0, 20, 0)); build(); loadPage(0);
+            this.type = type; setSpacing(8); setPadding(new Insets(0, 0, 8, 0)); setFillWidth(true); build(); loadPage(0);
         }
 
         private void build() {
@@ -57,7 +58,13 @@ public final class CompaniesView extends AppView {
             Button delete = button("Delete", "secondary-button"); delete.setVisible(com.aks.waybill.security.SessionContext.isAdmin()); delete.setManaged(com.aks.waybill.security.SessionContext.isAdmin()); delete.setOnAction(e -> deleteSelected());
             toolbar.getChildren().addAll(searchField, search, clear, add, edit, toggle, delete);
 
-            table.setPlaceholder(new Label("No companies found.")); table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); fitTableHeight(table, 0, pageSize, 42);
+            table.setPlaceholder(new Label("No companies found."));
+            table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+            table.setFixedCellSize(42);
+            table.setMinHeight(120);
+            table.setPrefHeight(280);
+            table.setMaxHeight(Double.MAX_VALUE);
+            VBox.setVgrow(table, Priority.ALWAYS);
             companyNameCol = column("Company Name", 0, 220);
             contactCol = column("Contact Person", 1, 160);
             phoneCol = column("Phone", 2, 130);
@@ -97,7 +104,6 @@ public final class CompaniesView extends AppView {
                 totalRows = page.totalRows();
                 table.setItems(FXCollections.observableArrayList(page.rows()));
                 restoreSortIndicator();
-                fitTableHeight(table, page.rows().size(), pageSize, 42);
                 pagination.setPageData(currentPage, totalPages(), totalRows, pageSize);
                 clearMessage();
             }
