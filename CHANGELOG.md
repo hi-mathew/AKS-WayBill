@@ -1,3 +1,7 @@
+## 1.4.0 - PDF Draft Watermark Position
+- Adjusted the PDF-only Draft watermark position downward to visually match the approved Word report placement.
+- Kept the Word watermark position unchanged.
+
 
 ## 1.4.0 - Filter Control Alignment
 - Standardized list-screen filter control height to 35 px.
