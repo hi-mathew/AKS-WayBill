@@ -1,7 +1,3 @@
-## 1.4.0 - PDF Draft Watermark Position
-- Adjusted the PDF-only Draft watermark position downward to visually match the approved Word report placement.
-- Kept the Word watermark position unchanged.
-
 
 ## 1.4.0 - Filter Control Alignment
 - Standardized list-screen filter control height to 35 px.
@@ -47,3 +43,13 @@
 - Hardened Word report finalization by removing stale rendered-page-break metadata and ensuring the required trailing paragraph after the Terms & Conditions table is present at minimal height.
 - Final Word normalization now runs after all Word report post-processing so later document rewrites cannot reintroduce the blank-page artifacts.
 - Retained the 35 px list-screen search/filter controls and Remove Selected item confirmation.
+
+- Added restrained coloured icon badges to Dashboard Quick Actions and Administration cards for improved visual hierarchy while preserving the existing enterprise layout.
+
+## Dashboard icon badge refinement
+- Increased Dashboard action icon badges from 25 px to 32 px for improved visibility.
+- Increased icon glyph size slightly while retaining the existing restrained colour palette and card layout.
+## v1.4.0 – Cumulative dashboard/report fix
+- Restored the PDF DRAFT watermark vertical offset so the PDF watermark retains the approved downward positioning relative to the Word report.
+- Preserved all prior v1.4.0 fixes, including 35 px list-screen filter controls, Saved Waybills filter alignment, Word final-page handling, Remove Selected item confirmation, item-grid keyboard navigation, and 32 px coloured Dashboard icon badges.
+

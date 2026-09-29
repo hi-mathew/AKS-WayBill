@@ -599,12 +599,6 @@ public final class WaybillReportService {
                 float centerX = width / 2f;
                 float centerY = height / 2f;
                 float x = centerX - textWidth / 2f;
-                // The PDF watermark is drawn directly in PDF coordinates, while
-                // the Word watermark is positioned by Word's page-relative VML
-                // layout.  A visually centered Word watermark therefore appears
-                // too high when the same nominal center is used for the PDF.
-                // Move the PDF watermark down by a page-proportional amount so
-                // its visual position matches the approved Word report.
                 float y = centerY - textHeight / 3f - (height * 0.18f);
 
                 try (PDPageContentStream content = new PDPageContentStream(

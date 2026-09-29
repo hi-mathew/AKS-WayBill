@@ -476,16 +476,16 @@ public class DashboardView extends BorderPane {
 
         Label quickActionsTitle = label("Quick Actions", "section-heading");
         GridPane actionsRow = threeColumnRow();
-        Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", this::showNewWaybill);
-        Node savedCard = action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", this::showSavedWaybills);
-        Node dataCard = action("Saved Data", "Manage reusable companies, carriers and locations", "▦", this::showSavedData);
+        Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", "action-icon-blue", this::showNewWaybill);
+        Node savedCard = action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", "action-icon-teal", this::showSavedWaybills);
+        Node dataCard = action("Saved Data", "Manage reusable companies, carriers and locations", "▦", "action-icon-purple", this::showSavedData);
         addThree(actionsRow, newCard, savedCard, dataCard);
 
         Label administrationTitle = label("Administration", "section-heading");
         GridPane adminActions = twoColumnRow();
         if (SessionContext.isAdmin()) {
-            Node settingsCard = action("Settings", "Manage report profile and application settings", "⚙", this::showSettings);
-            Node usersCard = action("User Management", "Manage users, roles and waybill codes", "♟", this::showUserManagement);
+            Node settingsCard = action("Settings", "Manage report profile and application settings", "⚙", "action-icon-indigo", this::showSettings);
+            Node usersCard = action("User Management", "Manage users, roles and waybill codes", "♟", "action-icon-teal", this::showUserManagement);
             addTwoEqual(adminActions, settingsCard, usersCard);
         }
 
@@ -664,7 +664,7 @@ public class DashboardView extends BorderPane {
         return box;
     }
 
-    private VBox action(String title, String description, String icon, Runnable command) {
+    private VBox action(String title, String description, String icon, String iconStyle, Runnable command) {
         VBox box = new VBox(4);
         box.setMinWidth(165);
         box.setPrefWidth(198);
@@ -674,10 +674,21 @@ public class DashboardView extends BorderPane {
         box.setMaxHeight(70);
         box.setPadding(new Insets(8, 12, 7, 12));
         box.getStyleClass().add("action-card");
-        Label titleLabel = label(icon + "  " + title, "action-title-line");
+
+        Label iconLabel = new Label(icon);
+        iconLabel.getStyleClass().addAll("action-icon-badge", iconStyle);
+        iconLabel.setMinSize(32, 32);
+        iconLabel.setPrefSize(32, 32);
+        iconLabel.setMaxSize(32, 32);
+        iconLabel.setAlignment(Pos.CENTER);
+
+        Label titleLabel = label(title, "action-title-line");
+        HBox titleRow = new HBox(8, iconLabel, titleLabel);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
         Label descriptionLabel = label(description, "action-description");
         descriptionLabel.setWrapText(true);
-        box.getChildren().addAll(titleLabel, descriptionLabel);
+        box.getChildren().addAll(titleRow, descriptionLabel);
         box.setOnMouseClicked(e -> command.run());
         Tooltip.install(box, new Tooltip(title));
         return box;

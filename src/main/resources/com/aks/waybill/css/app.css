@@ -771,3 +771,27 @@
     -fx-min-height: 35px;
     -fx-max-height: 35px;
 }
+
+/* Dashboard visual refinement: restrained colour accents for action icons. */
+.action-icon-badge {
+    -fx-background-radius: 7px;
+    -fx-font-size: 15px;
+    -fx-font-weight: 800;
+    -fx-padding: 0;
+}
+.action-icon-blue {
+    -fx-background-color: #e4f1fb;
+    -fx-text-fill: #1769aa;
+}
+.action-icon-teal {
+    -fx-background-color: #e4f6f2;
+    -fx-text-fill: #087f73;
+}
+.action-icon-purple {
+    -fx-background-color: #eee9f8;
+    -fx-text-fill: #6b4fa1;
+}
+.action-icon-indigo {
+    -fx-background-color: #e9edfb;
+    -fx-text-fill: #4b5fa8;
+}
