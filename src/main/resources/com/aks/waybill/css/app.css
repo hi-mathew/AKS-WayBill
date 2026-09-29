@@ -646,3 +646,40 @@
     -fx-line-spacing: 0px;
     -fx-padding: 1px 0 0 0;
 }
+
+/* Common pagination control used across all paginated list screens. */
+.pagination-info,
+.pagination-page-info,
+.pagination-go-label {
+    -fx-text-fill: #697586;
+    -fx-font-size: 12px;
+}
+.pagination-page-info {
+    -fx-font-weight: 600;
+}
+.pagination-go-label {
+    -fx-font-weight: 600;
+}
+.pagination-go-field {
+    -fx-background-color: white;
+    -fx-border-color: #d6dde7;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-padding: 8px 8px;
+    -fx-font-size: 12px;
+    -fx-alignment: CENTER;
+}
+.pagination-go-field:focused {
+    -fx-border-color: #1f6ea5;
+    -fx-border-width: 1.5px;
+}
+.pagination-go-error {
+    -fx-border-color: #b42318;
+    -fx-border-width: 1.5px;
+}
+.pagination-ellipsis {
+    -fx-text-fill: #697586;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-padding: 9px 3px;
+}

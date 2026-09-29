@@ -28,7 +28,7 @@ public final class CompaniesView extends AppView {
         private final int pageSize = SettingsService.getPageSize();
         private final TextField searchField = new TextField();
         private final TableView<CompanyService.CompanyRecord> table = new TableView<>();
-        private final Label pageInfo = new Label();
+        private final PaginationControl pagination = new PaginationControl();
         private final Label message = new Label();
         private int currentPage;
         private long totalRows;
@@ -80,10 +80,8 @@ public final class CompaniesView extends AppView {
                 loadPage(0);
             });
             table.setRowFactory(tv -> { TableRow<CompanyService.CompanyRecord> row = new TableRow<>(); row.setOnMouseClicked(event -> { if (event.getClickCount() == 2 && !row.isEmpty()) openCompanyDialog(row.getItem()); }); return row; });
-            HBox pager = new HBox(10); pager.setAlignment(Pos.CENTER_RIGHT);
-            Button first = button("« First", "secondary-button"), previous = button("‹ Previous", "secondary-button"), next = button("Next ›", "secondary-button"), last = button("Last »", "secondary-button");
-            first.setOnAction(e -> loadPage(0)); previous.setOnAction(e -> loadPage(currentPage - 1)); next.setOnAction(e -> loadPage(currentPage + 1)); last.setOnAction(e -> loadPage(totalPages() - 1)); pager.getChildren().addAll(pageInfo, first, previous, next, last);
-            message.getStyleClass().add("form-message"); getChildren().addAll(toolbar, table, message, pager);
+            pagination.setPageLoader(this::loadPage);
+            message.getStyleClass().add("form-message"); getChildren().addAll(toolbar, table, message, pagination);
         }
 
         private TableColumn<CompanyService.CompanyRecord, String> column(String title, int index, double width) {
@@ -100,7 +98,7 @@ public final class CompaniesView extends AppView {
                 table.setItems(FXCollections.observableArrayList(page.rows()));
                 restoreSortIndicator();
                 fitTableHeight(table, page.rows().size(), pageSize, 42);
-                pageInfo.setText("Page " + (currentPage + 1) + " of " + totalPages() + "   •   " + totalRows + " companies");
+                pagination.setPageData(currentPage, totalPages(), totalRows, pageSize);
                 clearMessage();
             }
             catch (RuntimeException ex) { showError(ex.getMessage() == null ? "Unable to load companies." : ex.getMessage()); }

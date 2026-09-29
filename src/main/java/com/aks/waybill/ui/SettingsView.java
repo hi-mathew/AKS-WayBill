@@ -44,17 +44,13 @@ public final class SettingsView extends AppView {
     private final Label preview = new Label();
 
     private TableView<TermsConditionService.Clause> termsTable;
-    private final Label termsResultInfo = new Label();
-    private final Label termsPageInfo = new Label();
-    private final HBox termsPageButtons = new HBox(5);
+    private final PaginationControl termsPagination = new PaginationControl();
     private int termsCurrentPage = 0;
     private int termsTotalPages = 1;
     private long termsTotalRows = 0;
 
     private TableView<BackupService.BackupInfo> backupTable;
-    private final Label backupResultInfo = new Label();
-    private final Label backupPageInfo = new Label();
-    private final HBox backupPageButtons = new HBox(5);
+    private final PaginationControl backupPagination = new PaginationControl();
     private int backupCurrentPage = 0;
     private int backupTotalPages = 1;
     private long backupTotalRows = 0;
@@ -182,14 +178,7 @@ public final class SettingsView extends AppView {
         termsTableScroll.setMinHeight(72); termsTableScroll.setMaxHeight(Double.MAX_VALUE); termsTableScroll.getStyleClass().add("content-scroll");
         VBox.setVgrow(termsTableScroll, Priority.ALWAYS);
 
-        termsResultInfo.getStyleClass().add("card-description");
-        termsPageInfo.getStyleClass().add("card-description");
-        termsPageButtons.setAlignment(Pos.CENTER);
-        Button termsPrevious=secondary("‹"); termsPrevious.setOnAction(e->reloadTermsPage(termsCurrentPage-1));
-        Button termsNext=secondary("›"); termsNext.setOnAction(e->reloadTermsPage(termsCurrentPage+1));
-        Region termsSpacer=new Region(); HBox.setHgrow(termsSpacer,Priority.ALWAYS);
-        HBox termsBottom=new HBox(10,termsResultInfo,termsSpacer,termsPageInfo); termsBottom.setAlignment(Pos.CENTER_LEFT);
-        HBox termsPaging=new HBox(12,termsPrevious,termsPageButtons,termsNext); termsPaging.setAlignment(Pos.CENTER);
+        termsPagination.setPageLoader(this::reloadTermsPage);
 
         Button add=primary("Add Clause"); add.setOnAction(e->editTermsClause(termsTable,null,this::reloadTermsPage));
         Button edit=secondary("Edit"); edit.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(termsTable,x,this::reloadTermsPage);});
@@ -198,7 +187,7 @@ public final class SettingsView extends AppView {
         Button delete=secondary("Delete"); delete.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reloadTermsPage();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
         HBox buttons=new HBox(8,add,edit,up,down,delete); buttons.setAlignment(Pos.CENTER_RIGHT);
         card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
-        card.getChildren().addAll(title,desc,termsTableScroll,buttons,termsBottom,termsPaging);
+        card.getChildren().addAll(title,desc,termsTableScroll,buttons,termsPagination);
         reloadTermsPage();
         return card;
     }
@@ -219,9 +208,7 @@ public final class SettingsView extends AppView {
             fitTableHeight(termsTable,to-from,size,38);
             long start=termsTotalRows==0?0:(long)termsCurrentPage*size+1;
             long end=Math.min(termsTotalRows,(long)(termsCurrentPage+1)*size);
-            termsResultInfo.setText("Showing "+start+"–"+end+" of "+termsTotalRows);
-            termsPageInfo.setText("Page "+(termsCurrentPage+1)+" of "+termsTotalPages);
-            buildPageButtons(termsPageButtons,termsCurrentPage,termsTotalPages,this::reloadTermsPage);
+            termsPagination.setPageData(termsCurrentPage,termsTotalPages,termsTotalRows,size);
         } catch(RuntimeException ex){ showSimpleError(ex.getMessage()); }
     }
 
@@ -322,15 +309,10 @@ public final class SettingsView extends AppView {
         Button refresh=secondary("Refresh"); refresh.setOnAction(e->refreshBackups());
         HBox buttons=new HBox(8,backup,restore,delete,export,open,refresh); buttons.setAlignment(Pos.CENTER_RIGHT); buttons.getStyleClass().add("backup-actions");
 
-        backupResultInfo.getStyleClass().add("card-description"); backupPageInfo.getStyleClass().add("card-description"); backupPageButtons.setAlignment(Pos.CENTER);
-        Button backupPrevious=secondary("‹"); backupPrevious.setOnAction(e->loadBackupPage(backupCurrentPage-1));
-        Button backupNext=secondary("›"); backupNext.setOnAction(e->loadBackupPage(backupCurrentPage+1));
-        Region backupSpacer=new Region(); HBox.setHgrow(backupSpacer,Priority.ALWAYS);
-        HBox backupBottom=new HBox(10,backupResultInfo,backupSpacer,backupPageInfo); backupBottom.setAlignment(Pos.CENTER_LEFT);
-        HBox backupPaging=new HBox(12,backupPrevious,backupPageButtons,backupNext); backupPaging.setAlignment(Pos.CENTER);
+        backupPagination.setPageLoader(this::loadBackupPage);
 
         card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
-        card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTableScroll,buttons,backupBottom,backupPaging);
+        card.getChildren().addAll(title,desc,retentionRow,backupRetentionMessage,backupTableScroll,buttons,backupPagination);
         loadBackupPage(0);
         return card;
     }
@@ -346,14 +328,8 @@ public final class SettingsView extends AppView {
             int from=(int)((long)backupCurrentPage*size); int to=Math.min(all.size(),from+size);
             backupTable.getItems().setAll(all.subList(from,to)); fitTableHeight(backupTable,to-from,size,38);
             long start=backupTotalRows==0?0:(long)backupCurrentPage*size+1; long end=Math.min(backupTotalRows,(long)(backupCurrentPage+1)*size);
-            backupResultInfo.setText("Showing "+start+"–"+end+" of "+backupTotalRows); backupPageInfo.setText("Page "+(backupCurrentPage+1)+" of "+backupTotalPages);
-            buildPageButtons(backupPageButtons,backupCurrentPage,backupTotalPages,this::loadBackupPage);
+            backupPagination.setPageData(backupCurrentPage,backupTotalPages,backupTotalRows,size);
         }catch(Exception ex){showSimpleError(ex.getMessage());}
-    }
-
-    private void buildPageButtons(HBox box,int current,int total,java.util.function.IntConsumer loader){
-        box.getChildren().clear(); int start=Math.max(0,current-2), end=Math.min(total-1,start+4); start=Math.max(0,end-4);
-        for(int i=start;i<=end;i++){final int page=i; Button b=new Button(String.valueOf(i+1)); b.getStyleClass().add(i==current?"nav-selected":"secondary-button"); b.setOnAction(e->loader.accept(page)); box.getChildren().add(b);}
     }
 
     private java.util.Comparator<BackupService.BackupInfo> backupComparator(){

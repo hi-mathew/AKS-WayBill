@@ -34,11 +34,7 @@ public final class SavedWaybillsView extends AppView {
     private final DatePicker toDate = new DatePicker();
     private final ComboBox<String> statusFilter = new ComboBox<>();
     private final TableView<WaybillService.WaybillListRow> table = new TableView<>();
-    private final Label pageInfo = new Label();
-    private final Label resultInfo = new Label();
-    private final Button previousButton = new Button("‹");
-    private final Button nextButton = new Button("›");
-    private final HBox pageButtons = new HBox(5);
+    private final PaginationControl pagination = new PaginationControl();
     private int currentPage = 0;
     private int totalPages = 1;
     private String sortKey = "date";
@@ -187,17 +183,8 @@ public final class SavedWaybillsView extends AppView {
         Button export = button("Export Excel", "secondary-button"); export.setOnAction(event -> exportExcel());
         actionsBar.getChildren().addAll(export, refresh);
 
-        HBox paging = new HBox(12); paging.setAlignment(Pos.CENTER);
-        previousButton.getStyleClass().add("secondary-button"); nextButton.getStyleClass().add("secondary-button");
-        previousButton.setOnAction(event -> loadPage(currentPage - 1)); nextButton.setOnAction(event -> loadPage(currentPage + 1));
-        pageButtons.setAlignment(Pos.CENTER);
-        paging.getChildren().addAll(previousButton, pageButtons, nextButton);
-
-        HBox info = new HBox(15); info.setAlignment(Pos.CENTER_LEFT);
-        resultInfo.getStyleClass().add("card-description"); pageInfo.getStyleClass().add("card-description");
-        Region spacer = new Region(); HBox.setHgrow(spacer, Priority.ALWAYS); info.getChildren().addAll(resultInfo, spacer, pageInfo);
-
-        root.getChildren().addAll(filterCard, table, actionsBar, info, paging);
+        pagination.setPageLoader(this::loadPage);
+        root.getChildren().addAll(filterCard, table, actionsBar, pagination);
         return root;
     }
 
@@ -225,23 +212,8 @@ public final class SavedWaybillsView extends AppView {
             WaybillService.WaybillPage result = WaybillService.findPageForCurrentUser(searchField.getText(), fromDate.getValue(), toDate.getValue(), selectedStatus, sortKey, sortAscending, Math.max(0, page), pageSize);
             currentPage = result.page(); totalPages = result.totalPages(); table.getItems().setAll(result.rows());
             fitTableHeight(table, result.rows().size(), pageSize, 42);
-            long start = result.totalRows() == 0 ? 0 : (long) currentPage * pageSize + 1;
-            long end = Math.min(result.totalRows(), (long) (currentPage + 1) * pageSize);
-            resultInfo.setText("Showing " + start + "–" + end + " of " + result.totalRows());
-            pageInfo.setText("Page " + (currentPage + 1) + " of " + totalPages);
-            previousButton.setDisable(currentPage <= 0); nextButton.setDisable(currentPage >= totalPages - 1); buildPageButtons();
+            pagination.setPageData(currentPage, totalPages, result.totalRows(), pageSize);
         } catch (RuntimeException exception) { showError(exception.getMessage()); }
-    }
-
-    private void buildPageButtons() {
-        pageButtons.getChildren().clear();
-        int start = Math.max(0, currentPage - 2); int end = Math.min(totalPages - 1, start + 4); start = Math.max(0, end - 4);
-        for (int i = start; i <= end; i++) {
-            final int pageIndex = i;
-            Button pageButton = new Button(String.valueOf(i + 1));
-            pageButton.getStyleClass().add(i == currentPage ? "nav-selected" : "secondary-button");
-            pageButton.setOnAction(event -> loadPage(pageIndex)); pageButtons.getChildren().add(pageButton);
-        }
     }
 
     private static VBox labeled(String title, Control control) { Label label = new Label(title); label.getStyleClass().add("field-label"); VBox box = new VBox(4, label, control); return box; }

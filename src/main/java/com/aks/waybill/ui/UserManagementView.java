@@ -27,9 +27,7 @@ public final class UserManagementView extends AppView {
     private final TableView<UserService.UserRecord> table = new TableView<>();
     private final Label message = new Label();
     private final TextField search = new TextField();
-    private final Label resultInfo = new Label();
-    private final Label pageInfo = new Label();
-    private final HBox pageButtons = new HBox(5);
+    private final PaginationControl pagination = new PaginationControl();
     private int currentPage = 0;
     private int totalPages = 1;
     private String sortKey = "displayName";
@@ -87,12 +85,9 @@ public final class UserManagementView extends AppView {
         table.setRowFactory(tv->{TableRow<UserService.UserRecord> row=new TableRow<>();row.setOnMouseClicked(e->{if(e.getClickCount()==2&&!row.isEmpty())openEditor(row.getItem());});return row;});
         table.getSelectionModel().selectedItemProperty().addListener((obs,oldValue,newValue)->updateActionState());
 
-        resultInfo.getStyleClass().add("card-description"); pageInfo.getStyleClass().add("card-description"); pageButtons.setAlignment(Pos.CENTER);
-        Button previous=secondary("‹"); previous.setOnAction(e->loadPage(currentPage-1)); Button next=secondary("›"); next.setOnAction(e->loadPage(currentPage+1));
-        Region spacer=new Region(); HBox.setHgrow(spacer,Priority.ALWAYS); HBox bottom=new HBox(10,resultInfo,spacer,pageInfo); bottom.setAlignment(Pos.CENTER_LEFT);
-        HBox paging=new HBox(12,previous,pageButtons,next); paging.setAlignment(Pos.CENTER);
+        pagination.setPageLoader(this::loadPage);
         message.getStyleClass().add("settings-message"); message.setWrapText(true);
-        root.getChildren().addAll(toolbar,table,message,bottom,paging); updateActionState(); return root;
+        root.getChildren().addAll(toolbar,table,message,pagination); updateActionState(); return root;
     }
 
     private void loadPage(int requestedPage){
@@ -123,7 +118,7 @@ public final class UserManagementView extends AppView {
                 }
             }
             updateTableHeight(to-from,size); long start=totalRows==0?0:(long)currentPage*size+1; long end=Math.min(totalRows,(long)(currentPage+1)*size);
-            resultInfo.setText("Showing "+start+"–"+end+" of "+totalRows); pageInfo.setText("Page "+(currentPage+1)+" of "+totalPages); buildPages(); updateActionState();
+            pagination.setPageData(currentPage,totalPages,totalRows,size); updateActionState();
             setMessage(totalRows==0?"No users match the current search.":"Users loaded.",false);
         }catch(Exception e){updateTableHeight(0,sizeSafe());updateActionState();setMessage(msg(e),true);}
     }
@@ -151,8 +146,6 @@ public final class UserManagementView extends AppView {
 
     private int sizeSafe(){try{return Math.max(1,com.aks.waybill.service.SettingsService.getPageSize());}catch(Exception e){return 10;}}
     private static boolean contains(String value,String term){return value!=null&&value.toLowerCase().contains(term);}
-    private void buildPages(){pageButtons.getChildren().clear();int start=Math.max(0,currentPage-2),end=Math.min(totalPages-1,start+4);start=Math.max(0,end-4);for(int i=start;i<=end;i++){final int page=i;Button b=new Button(String.valueOf(i+1));b.getStyleClass().add(i==currentPage?"nav-selected":"secondary-button");b.setOnAction(e->loadPage(page));pageButtons.getChildren().add(b);}}
-
     private void updateTableHeight(int rows,int size){
         double height=TABLE_HEADER_HEIGHT+(Math.max(1,Math.min(rows,size))*TABLE_ROW_HEIGHT)+10;
         table.setMinHeight(Math.max(TABLE_EMPTY_HEIGHT,Math.min(height,TABLE_HEADER_HEIGHT+TABLE_ROW_HEIGHT+4))); table.setPrefHeight(height); table.setMaxHeight(height); VBox.setVgrow(table,Priority.NEVER);

@@ -34,9 +34,7 @@ public final class SavedDataView extends AppView {
         private final TextField search = new TextField();
         private final TableView<Object> table = new TableView<>();
         private final Label message = new Label();
-        private final Label resultInfo = new Label();
-        private final Label pageInfo = new Label();
-        private final HBox pageButtons = new HBox(5);
+        private final PaginationControl pagination = new PaginationControl();
         private int currentPage = 0;
         private String sortKey = "name";
         private boolean sortAscending = true;
@@ -49,7 +47,7 @@ public final class SavedDataView extends AppView {
         private TableColumn<Object,String> statusColumn;
 
         MasterTab(boolean carrierMode) {
-            this.carrierMode = carrierMode; setSpacing(14); setPadding(new Insets(0,0,20,0)); build(); loadPage(0);
+            this.carrierMode = carrierMode; setSpacing(14); setPadding(new Insets(0,0,20,0)); pagination.setPageLoader(this::loadPage); build(); loadPage(0);
         }
 
         private void build() {
@@ -94,14 +92,8 @@ public final class SavedDataView extends AppView {
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN); table.setPlaceholder(new Label(carrierMode?"No saved carriers found.":"No saved locations found."));
             table.setRowFactory(tv->{TableRow<Object> row=new TableRow<>();row.setOnMouseClicked(event->{if(event.getClickCount()==2&&!row.isEmpty())openDialog(row.getItem());});return row;});
 
-            resultInfo.getStyleClass().add("card-description"); pageInfo.getStyleClass().add("card-description"); pageButtons.setAlignment(Pos.CENTER);
-            Button previous=new Button("‹"); previous.getStyleClass().add("secondary-button"); previous.setOnAction(e->loadPage(currentPage-1));
-            Button next=new Button("›"); next.getStyleClass().add("secondary-button"); next.setOnAction(e->loadPage(currentPage+1));
-            Region spacer=new Region(); HBox.setHgrow(spacer,Priority.ALWAYS);
-            HBox bottom=new HBox(10,resultInfo,spacer,pageInfo); bottom.setAlignment(Pos.CENTER_LEFT);
-            HBox paging=new HBox(12,previous,pageButtons,next); paging.setAlignment(Pos.CENTER);
             message.getStyleClass().add("form-message");
-            getChildren().addAll(toolbar,table,message,bottom,paging);
+            getChildren().addAll(toolbar,table,message,pagination);
         }
 
         private void loadPage(int requestedPage){
@@ -120,8 +112,8 @@ public final class SavedDataView extends AppView {
                     int from=(int)((long)currentPage*size),to=Math.min(all.size(),from+size); table.setItems(FXCollections.observableArrayList(all.subList(from,to).stream().map(x->(Object)x).toList()));
                     restoreSortIndicator();
                 }
-                fitTableHeight(table,table.getItems().size(),size,42); long start=totalRows==0?0:(long)currentPage*size+1; long end=Math.min(totalRows,(long)(currentPage+1)*size);
-                resultInfo.setText("Showing "+start+"–"+end+" of "+totalRows); pageInfo.setText("Page "+(currentPage+1)+" of "+totalPages); buildPages(); message.setText("");
+                fitTableHeight(table,table.getItems().size(),size,42);
+                pagination.setPageData(currentPage,totalPages,totalRows,size); message.setText("");
             }catch(RuntimeException ex){message.setText(ex.getMessage());}
         }
 
@@ -142,10 +134,6 @@ public final class SavedDataView extends AppView {
             }
         }
 
-        private void buildPages(){
-            pageButtons.getChildren().clear(); int start=Math.max(0,currentPage-2),end=Math.min(totalPages-1,start+4); start=Math.max(0,end-4);
-            for(int i=start;i<=end;i++){final int page=i;Button b=new Button(String.valueOf(i+1));b.getStyleClass().add(i==currentPage?"nav-selected":"secondary-button");b.setOnAction(e->loadPage(page));pageButtons.getChildren().add(b);}
-        }
 
         private void editSelected(){Object selected=table.getSelectionModel().getSelectedItem();if(selected==null){message.setText("Select a record first.");return;}openDialog(selected);}
         private java.util.Comparator<SavedDataService.CarrierRecord> carrierComparator(){
