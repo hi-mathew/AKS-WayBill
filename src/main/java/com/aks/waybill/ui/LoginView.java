@@ -82,10 +82,7 @@ public class LoginView extends BorderPane {
         Label footer = new Label("W.A.S.P.  •  DESKTOP APPLICATION");
         footer.getStyleClass().add("brand-footer");
 
-        Label version = new Label("Version " + VERSION);
-        version.getStyleClass().add("brand-version");
-
-        VBox footerBox = new VBox(4, tagline, footer, version);
+        VBox footerBox = new VBox(4, tagline, footer);
         footerBox.getStyleClass().add("brand-footer-box");
 
         brand.getChildren().addAll(logoHolder, title, fullName, subtitle, separator, features, flow, spacer, footerBox);
@@ -152,7 +149,7 @@ public class LoginView extends BorderPane {
         content.setMaxWidth(420);
 
         boolean exists = auth.hasUsers();
-        Label eyebrow = new Label("SECURE SIGN IN");
+        Label eyebrow = new Label(exists ? "SECURE SIGN IN" : "INITIAL SETUP");
         eyebrow.getStyleClass().add("eyebrow");
         Label heading = new Label(exists ? "Welcome back" : "Create administrator");
         heading.getStyleClass().add("login-heading");
@@ -179,6 +176,14 @@ public class LoginView extends BorderPane {
         version.setAlignment(Pos.CENTER);
 
         content.getChildren().addAll(eyebrow, heading, description, form, close, version);
+        // Keep keyboard interaction natural on both the sign-in and first-launch forms.
+        wrapper.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                requestClose(Platform::exit);
+                event.consume();
+            }
+        });
+
         wrapper.getChildren().add(content);
         setCenter(wrapper);
     }
@@ -210,7 +215,7 @@ public class LoginView extends BorderPane {
     private void setupForm() {
         TextField username = text("Administrator username");
         TextField displayName = text("Display name");
-        TextField code = text("Waybill user code, e.g. MAT");
+        TextField code = text("Waybill code, e.g. ABC");
         PasswordField password = pass("Password");
         PasswordField confirmPassword = pass("Confirm password");
         Button create = primary("Create administrator");
@@ -237,6 +242,13 @@ public class LoginView extends BorderPane {
                 onLogin.accept(user.get());
             }
         });
+
+        // Support Enter-key navigation through the initial setup fields.
+        username.setOnAction(event -> displayName.requestFocus());
+        displayName.setOnAction(event -> code.requestFocus());
+        code.setOnAction(event -> password.requestFocus());
+        password.setOnAction(event -> confirmPassword.requestFocus());
+        confirmPassword.setOnAction(create.getOnAction());
 
         form.getChildren().addAll(
                 labeled("Username", username),
