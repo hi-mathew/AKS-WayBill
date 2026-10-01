@@ -47,7 +47,7 @@ public final class WaybillService {
     }
 
     public record WaybillListRow(long id, String waybillNumber, LocalDate waybillDate,
-                                 String shipperName, String consigneeName, String carrierName, String status) {
+                                 LocalDateTime createdAt, String shipperName, String consigneeName, String carrierName, String status) {
     }
 
     public record WaybillExportRow(String waybillNumber, LocalDate waybillDate, String shipperName, String consigneeName,
@@ -120,10 +120,11 @@ public final class WaybillService {
             case "consignee" -> "COALESCE(w.consignee_company_name, '')";
             case "carrier" -> "COALESCE(w.carrier_name, '')";
             case "status" -> "w.status";
+            case "created" -> "w.created_at";
             default -> "w.waybill_date";
         };
         String direction = ascending ? " ASC" : " DESC";
-        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, COALESCE(w.shipper_company_name, ''), COALESCE(w.consignee_company_name, ''), COALESCE(w.carrier_name, ''), w.status"
+        String dataSql = "SELECT w.id, w.waybill_number, w.waybill_date, w.created_at, COALESCE(w.shipper_company_name, ''), COALESCE(w.consignee_company_name, ''), COALESCE(w.carrier_name, ''), w.status"
                 + base + " ORDER BY " + sortColumn + direction + ", w.id" + (ascending ? " ASC" : " DESC") + " LIMIT ? OFFSET ?";
 
         try (Connection connection = Database.getConnection()) {
@@ -139,7 +140,7 @@ public final class WaybillService {
                 statement.setInt(i, safePage * safePageSize);
                 try (ResultSet rs = statement.executeQuery()) {
                     while (rs.next()) {
-                        rows.add(new WaybillListRow(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)));
+                        rows.add(new WaybillListRow(rs.getLong(1), rs.getString(2), LocalDate.parse(rs.getString(3), DB_DATE), parseDateTime(rs.getString(4)), rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8)));
                     }
                 }
             }
@@ -265,6 +266,12 @@ public final class WaybillService {
 
     private static void nonNegative(Double value, String field) {
         if (value != null && (!Double.isFinite(value) || value < 0)) throw new IllegalArgumentException(field + " must be a valid non-negative number.");
+    }
+
+    private static LocalDateTime parseDateTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        try { return LocalDateTime.parse(value, DB_DATE_TIME); }
+        catch (Exception ignored) { return null; }
     }
 
     private static LocalDate parseDate(String value) { return value == null || value.isBlank() ? null : LocalDate.parse(value, DB_DATE); }

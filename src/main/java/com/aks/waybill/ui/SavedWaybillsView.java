@@ -9,11 +9,15 @@ import com.aks.waybill.security.SessionContext;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.concurrent.Task;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.Window;
 
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -23,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 /** Searchable, paginated saved-waybill register. */
 public final class SavedWaybillsView extends AppView {
     private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final DateTimeFormatter DISPLAY_DATE_TIME = DateTimeFormatter.ofPattern("dd-MM-yyyy hh:mm a");
     private int pageSize = SettingsService.getPageSize();
 
     private final Runnable onBack;
@@ -37,7 +42,7 @@ public final class SavedWaybillsView extends AppView {
     private final PaginationControl pagination = new PaginationControl();
     private int currentPage = 0;
     private int totalPages = 1;
-    private String sortKey = "date";
+    private String sortKey = "created";
     private boolean sortAscending = false;
 
     public SavedWaybillsView() { this(() -> {}, id -> {}, id -> {}); }
@@ -65,21 +70,22 @@ public final class SavedWaybillsView extends AppView {
         searchField.setPromptText("Waybill no., shipper, consignee or carrier");
         searchField.setOnAction(event -> loadPage(0));
         fromDate.getStyleClass().add("list-filter-control");
-        fromDate.setPromptText("From date"); fromDate.setPrefWidth(150);
+        fromDate.setPromptText("Waybill date from"); fromDate.setPrefWidth(150);
         toDate.getStyleClass().add("list-filter-control");
-        toDate.setPromptText("To date"); toDate.setPrefWidth(150);
+        toDate.setPromptText("Waybill date to"); toDate.setPrefWidth(150);
         statusFilter.getStyleClass().add("list-filter-control");
         statusFilter.getItems().setAll("All", "DRAFT", "FINAL");
         statusFilter.setValue("All");
         statusFilter.setPrefWidth(130);
         Button search = button("Search", "primary-button"); search.getStyleClass().add("list-filter-action"); search.setOnAction(event -> loadPage(0));
         Button clear = button("Clear", "secondary-button"); clear.getStyleClass().add("list-filter-action"); clear.setOnAction(event -> { searchField.clear(); fromDate.setValue(null); toDate.setValue(null); statusFilter.setValue("All"); loadPage(0); });
-        VBox searchBox = labeled("Search", searchField); VBox fromBox = labeled("From", fromDate); VBox toBox = labeled("To", toDate); VBox statusBox = labeled("Status", statusFilter);
+        VBox searchBox = labeled("Search", searchField); VBox fromBox = labeled("Waybill Date From", fromDate); VBox toBox = labeled("Waybill Date To", toDate); VBox statusBox = labeled("Status", statusFilter);
         HBox searchRow = new HBox(12, searchBox, fromBox, toBox, statusBox, search, clear); searchRow.setAlignment(Pos.BOTTOM_LEFT); HBox.setHgrow(searchBox, Priority.ALWAYS); searchField.setMaxWidth(Double.MAX_VALUE);
         filterCard.getChildren().addAll(filterTitle, searchRow);
 
         TableColumn<WaybillService.WaybillListRow,String> number = column("Waybill No.", r -> r.waybillNumber(), 200);
         TableColumn<WaybillService.WaybillListRow,String> date = column("Date", r -> DISPLAY_DATE.format(r.waybillDate()), 100);
+        TableColumn<WaybillService.WaybillListRow,String> created = column("Created On", r -> r.createdAt() == null ? "—" : DISPLAY_DATE_TIME.format(r.createdAt()), 175);
         TableColumn<WaybillService.WaybillListRow,String> shipper = columnWithTooltip("Shipper / Consignor", r -> r.shipperName(), 170);
         TableColumn<WaybillService.WaybillListRow,String> consignee = columnWithTooltip("Consignee / Receiver", r -> r.consigneeName(), 170);
         TableColumn<WaybillService.WaybillListRow,String> carrier = columnWithTooltip("Carrier", r -> r.carrierName(), 150);
@@ -162,12 +168,12 @@ public final class SavedWaybillsView extends AppView {
             }
         });
 
-        table.getColumns().setAll(number, date, shipper, consignee, carrier, status, actions);
+        table.getColumns().setAll(number, date, created, shipper, consignee, carrier, status, actions);
         table.setOnSort(event -> {
             if (table.getSortOrder().isEmpty()) return;
             TableColumn<?, ?> selected = table.getSortOrder().get(0);
             sortKey = selected == number ? "number" : selected == date ? "date" : selected == shipper ? "shipper"
-                    : selected == consignee ? "consignee" : selected == carrier ? "carrier" : selected == status ? "status" : "date";
+                    : selected == consignee ? "consignee" : selected == carrier ? "carrier" : selected == status ? "status" : selected == created ? "created" : "date";
             sortAscending = selected.getSortType() == TableColumn.SortType.ASCENDING;
             event.consume();
             loadPage(0);
@@ -199,11 +205,111 @@ public final class SavedWaybillsView extends AppView {
     }
 
     private void exportExcel() {
+        Window owner = getScene() == null ? null : getScene().getWindow();
         FileChooser chooser=new FileChooser(); chooser.setTitle("Export Saved Waybills to Excel"); chooser.setInitialFileName("AKS-Waybills-"+java.time.LocalDate.now()+".xlsx"); chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Workbook (*.xlsx)","*.xlsx"));
         Path initialDir=AppPaths.defaultSaveDirectory(); if(java.nio.file.Files.isDirectory(initialDir)) chooser.setInitialDirectory(initialDir.toFile());
-        java.io.File file=chooser.showSaveDialog(getScene()==null?null:getScene().getWindow()); if(file==null)return;
-        try{String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
-        var rows=WaybillService.findAllForExcelForCurrentUser(searchField.getText(),fromDate.getValue(),toDate.getValue(),selectedStatus);ExcelExportService.export(file.toPath(),rows);new Alert(Alert.AlertType.INFORMATION,"Excel export created successfully.\nRecords exported: "+rows.size(),ButtonType.OK).showAndWait();}catch(Exception ex){showError(ex.getMessage());}
+        java.io.File file=chooser.showSaveDialog(owner); if(file==null)return;
+        if (!file.getName().toLowerCase().endsWith(".xlsx")) file = new java.io.File(file.getAbsolutePath() + ".xlsx");
+
+        final Path output = file.toPath();
+        final String search = searchField.getText();
+        final LocalDate from = fromDate.getValue();
+        final LocalDate to = toDate.getValue();
+        final String selectedStatus = "All".equalsIgnoreCase(statusFilter.getValue()) ? null : statusFilter.getValue();
+
+        Stage progressDialog = createExcelProgressDialog(owner);
+        Task<Integer> task = new Task<>() {
+            @Override
+            protected Integer call() throws Exception {
+                var rows = WaybillService.findAllForExcelForCurrentUser(search, from, to, selectedStatus);
+                ExcelExportService.export(output, rows);
+                return rows.size();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            dismissExcelProgressDialog(progressDialog);
+            new Alert(Alert.AlertType.INFORMATION,
+                    "Excel export created successfully.\nRecords exported: " + task.getValue(),
+                    ButtonType.OK).showAndWait();
+        });
+
+        task.setOnFailed(event -> {
+            dismissExcelProgressDialog(progressDialog);
+            Throwable failure = task.getException();
+            showError(failure == null || failure.getMessage() == null
+                    ? "Unable to export waybills to Excel."
+                    : failure.getMessage());
+        });
+
+        progressDialog.show();
+        Thread worker = new Thread(task, "wasp-excel-export");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static Stage createExcelProgressDialog(Window owner) {
+        DialogPane pane = new DialogPane();
+        pane.getStyleClass().add("wasp-dialog-pane");
+        pane.setHeaderText("Generating Excel report");
+
+        ProgressIndicator progress = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
+        progress.setPrefSize(48, 48);
+        progress.setMinSize(48, 48);
+        progress.setMaxSize(48, 48);
+
+        Label message = new Label("Preparing the waybill data and creating the Excel file...\nPlease wait.");
+        message.setWrapText(true);
+        message.setMaxWidth(360);
+        message.setAlignment(Pos.CENTER);
+
+        VBox content = new VBox(14, progress, message);
+        content.setAlignment(Pos.CENTER);
+        content.setPadding(new Insets(8, 12, 12, 12));
+        content.setPrefWidth(430);
+        pane.setContent(content);
+        pane.getButtonTypes().clear();
+
+        StackPane circle = new StackPane();
+        circle.getStyleClass().addAll("wasp-dialog-icon", "wasp-dialog-info");
+        circle.setMinSize(34, 34);
+        circle.setPrefSize(34, 34);
+        circle.setMaxSize(34, 34);
+        circle.setTranslateY(8);
+        Label glyph = new Label("i");
+        glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+        glyph.setMinSize(34, 34);
+        glyph.setPrefSize(34, 34);
+        glyph.setMaxSize(34, 34);
+        glyph.setAlignment(Pos.CENTER);
+        circle.getChildren().add(glyph);
+        pane.setGraphic(circle);
+
+        Stage stage = new Stage();
+        stage.setTitle("Generating Excel");
+        stage.initModality(Modality.WINDOW_MODAL);
+        if (owner != null) stage.initOwner(owner);
+        stage.setResizable(false);
+        javafx.scene.Scene scene = new javafx.scene.Scene(pane);
+        if (owner != null && owner.getScene() != null) scene.getStylesheets().addAll(owner.getScene().getStylesheets());
+        stage.setScene(scene);
+        stage.setOnCloseRequest(event -> event.consume());
+        stage.setOnShown(event -> {
+            pane.applyCss();
+            stage.sizeToScene();
+            if (owner != null) {
+                stage.setX(owner.getX() + Math.max(0, (owner.getWidth() - stage.getWidth()) / 2));
+                stage.setY(owner.getY() + Math.max(0, (owner.getHeight() - stage.getHeight()) / 2));
+            }
+        });
+        return stage;
+    }
+
+    private static void dismissExcelProgressDialog(Stage stage) {
+        if (stage == null) return;
+        stage.setOnCloseRequest(null);
+        if (stage.isShowing()) stage.hide();
+        stage.close();
     }
 
     private void openView(long id) { onView.accept(id); }

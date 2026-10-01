@@ -53,6 +53,18 @@ public final class QuickDatePicker extends DatePicker {
         return new DatePickerSkin(this) {
             @Override
             public Node getPopupContent() {
+                /*
+                 * DatePickerSkin.show() calls datePickerContent.clearFocus()
+                 * after super.show(). The JavaFX 21 skin initializes its
+                 * internal datePickerContent from getPopupContent(). Since we
+                 * provide our own popup, we still need to let the standard
+                 * implementation initialize that internal content first.
+                 *
+                 * Without this call, opening the picker can result in:
+                 *   NullPointerException: datePickerContent is null
+                 * in DatePickerSkin.show().
+                 */
+                super.getPopupContent();
                 return createCalendarPopup();
             }
         };
