@@ -29,6 +29,9 @@ import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.io.*;
 import java.awt.image.BufferedImage;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.GeneralPath;
+import java.awt.geom.Rectangle2D;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -594,12 +597,47 @@ public final class WaybillReportService {
                 float height = box.getHeight();
                 float fontSize = Math.min(width, height) * 0.17f;
 
-                float textWidth = font.getStringWidth("D R A F T") / 1000f * fontSize;
-                float textHeight = fontSize;
+                String watermarkText = "D R A F T";
                 float centerX = width / 2f;
                 float centerY = height / 2f;
-                float x = centerX - textWidth / 2f;
-                float y = centerY - textHeight / 3f - (height * 0.18f);
+
+                /*
+                 * The Word template uses a WordArt watermark centred relative
+                 * to the page. PDFBox rotates text around the text origin, so
+                 * centring the text advance width/height is not sufficient: the
+                 * actual ink is then visibly offset. Build the glyph outline
+                 * for the same text, find its true visual bounds, and position
+                 * that visual centre at the PDF page centre. This makes the PDF
+                 * watermark use the same page-centred reference as Word instead
+                 * of relying on a page-specific positional fudge factor.
+                 */
+                GeneralPath watermarkPath = new GeneralPath();
+                float glyphCursor = 0f;
+                for (int i = 0; i < watermarkText.length(); i++) {
+                    char ch = watermarkText.charAt(i);
+                    byte[] encoded = font.encode(String.valueOf(ch));
+                    int code = encoded[0] & 0xFF;
+                    if (ch != ' ') {
+                        String glyphName = font.getGlyphList().codePointToName(ch);
+                        GeneralPath glyphPath = font.getPath(glyphName);
+                        AffineTransform translate = AffineTransform.getTranslateInstance(glyphCursor, 0);
+                        watermarkPath.append(translate.createTransformedShape(glyphPath), false);
+                    }
+                    glyphCursor += font.getWidth(code);
+                }
+
+                Rectangle2D inkBounds = watermarkPath.getBounds2D();
+                double glyphScale = fontSize / 1000d;
+                double inkCenterX = (inkBounds.getX() + inkBounds.getWidth() / 2d) * glyphScale;
+                double inkCenterY = (inkBounds.getY() + inkBounds.getHeight() / 2d) * glyphScale;
+                double watermarkAngle = Math.toRadians(45);
+
+                float x = centerX - (float) (
+                        inkCenterX * Math.cos(watermarkAngle)
+                                - inkCenterY * Math.sin(watermarkAngle));
+                float y = centerY - (float) (
+                        inkCenterX * Math.sin(watermarkAngle)
+                                + inkCenterY * Math.cos(watermarkAngle));
 
                 try (PDPageContentStream content = new PDPageContentStream(
                         document, page, PDPageContentStream.AppendMode.PREPEND, true, true)) {
@@ -611,7 +649,7 @@ public final class WaybillReportService {
                     content.beginText();
                     content.setFont(font, fontSize);
                     content.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(45), x, y));
-                    content.showText("D R A F T");
+                    content.showText(watermarkText);
                     content.endText();
                     content.restoreGraphicsState();
                 }

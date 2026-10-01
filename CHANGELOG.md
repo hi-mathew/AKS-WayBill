@@ -1,3 +1,8 @@
+## v1.4.0 – PDF DRAFT watermark centering
+- Corrected the PDF DRAFT watermark positioning to use the actual rendered glyph bounds and centre the watermark visually on the page, matching the page-centred Word WordArt watermark.
+- Removed the previous page-specific positional offset from the PDF watermark calculation.
+- Preserved the existing Word watermark and all other report/layout behavior.
+
 
 ## 1.4.0 - Filter Control Alignment
 - Standardized list-screen filter control height to 35 px.
