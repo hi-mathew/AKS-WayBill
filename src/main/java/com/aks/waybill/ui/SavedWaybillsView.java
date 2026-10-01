@@ -30,8 +30,8 @@ public final class SavedWaybillsView extends AppView {
     private final java.util.function.LongConsumer onEdit;
     private final TextField searchField = new TextField();
     { InputLimits.maxLength(searchField, 400); }
-    private final DatePicker fromDate = new DatePicker();
-    private final DatePicker toDate = new DatePicker();
+    private final DatePicker fromDate = new QuickDatePicker();
+    private final DatePicker toDate = new QuickDatePicker();
     private final ComboBox<String> statusFilter = new ComboBox<>();
     private final TableView<WaybillService.WaybillListRow> table = new TableView<>();
     private final PaginationControl pagination = new PaginationControl();

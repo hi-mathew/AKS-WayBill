@@ -795,3 +795,112 @@
     -fx-background-color: #e9edfb;
     -fx-text-fill: #4b5fa8;
 }
+
+/* W.A.S.P. quick date picker: direct month/year selection for long date jumps. */
+.quick-date-picker {
+    -fx-background-color: white;
+    -fx-border-color: #d6dde7;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+}
+.quick-date-popup .combo-box {
+    -fx-pref-height: 30px;
+    -fx-min-height: 30px;
+    -fx-max-height: 30px;
+}
+.quick-date-popup .quick-date-day-header {
+    -fx-text-fill: #697586;
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+}
+.quick-date-popup .quick-date-day {
+    -fx-background-color: transparent;
+    -fx-background-radius: 5px;
+    -fx-text-fill: #344054;
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+}
+.quick-date-popup .quick-date-day:hover {
+    -fx-background-color: #eaf3f8;
+    -fx-text-fill: #0b4b7d;
+}
+.quick-date-popup .quick-date-day.quick-date-today {
+    -fx-border-color: #8eacc1;
+    -fx-border-radius: 5px;
+    -fx-border-width: 1px;
+}
+.quick-date-popup .quick-date-day.quick-date-selected {
+    -fx-background-color: #0b5a8f;
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+}
+.quick-date-popup .quick-date-nav {
+    -fx-background-color: #eef4f8;
+    -fx-background-radius: 5px;
+    -fx-text-fill: #0b4b7d;
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-padding: 0;
+}
+.quick-date-popup .quick-date-nav:hover {
+    -fx-background-color: #dcecf5;
+}
+
+/* W.A.S.P. DatePicker enhancement: quick Month/Year navigation while retaining
+   the standard JavaFX calendar and direct date entry. */
+.quick-date-picker-popup {
+    -fx-background-color: white;
+    -fx-border-color: #d6dde7;
+    -fx-border-width: 1px;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+}
+.quick-date-selectors {
+    -fx-background-color: #f3f6f9;
+    -fx-border-color: transparent transparent #d6dde7 transparent;
+    -fx-border-width: 0 0 1px 0;
+}
+.quick-date-navigation {
+    -fx-background-color: #f3f6f9;
+}
+.quick-date-selector-label {
+    -fx-text-fill: #697586;
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+}
+.quick-date-selectors .combo-box {
+    -fx-pref-height: 28px;
+    -fx-min-height: 28px;
+    -fx-max-height: 28px;
+}
+.quick-date-year-spinner {
+    -fx-pref-height: 28px;
+    -fx-min-height: 28px;
+    -fx-max-height: 28px;
+}
+.quick-date-year-spinner .text-field {
+    -fx-background-color: white;
+    -fx-border-color: #b9c8d6;
+    -fx-border-width: 1px 0 1px 1px;
+    -fx-border-radius: 5px 0 0 5px;
+    -fx-background-radius: 5px 0 0 5px;
+    -fx-padding: 4px 7px;
+    -fx-font-size: 13px;
+}
+.quick-date-year-spinner .increment-arrow-button,
+.quick-date-year-spinner .decrement-arrow-button {
+    -fx-background-color: #eef4f8;
+    -fx-border-color: #b9c8d6;
+}
+.quick-date-year-spinner .increment-arrow-button {
+    -fx-border-width: 1px 1px 0 0;
+    -fx-background-radius: 0 5px 0 0;
+}
+.quick-date-year-spinner .decrement-arrow-button {
+    -fx-border-width: 0 1px 1px 0;
+    -fx-background-radius: 0 0 5px 0;
+}
+.quick-date-year-spinner .increment-arrow-button:hover,
+.quick-date-year-spinner .decrement-arrow-button:hover {
+    -fx-background-color: #dcecf5;
+}

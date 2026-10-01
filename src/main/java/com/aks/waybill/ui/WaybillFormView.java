@@ -44,8 +44,8 @@ public class WaybillFormView extends AppView {
     private String loadedStatus = "DRAFT";
 
     private final Label numberLabel = new Label();
-    private final DatePicker waybillDate = new DatePicker(LocalDate.now());
-    private final DatePicker estimatedDelivery = new DatePicker();
+    private final DatePicker waybillDate = new QuickDatePicker(LocalDate.now());
+    private final DatePicker estimatedDelivery = new QuickDatePicker();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final String SELECT_CARRIER = "— Select saved carrier —";
     private static final String SELECT_LOCATION = "— Select saved location —";
@@ -85,11 +85,11 @@ public class WaybillFormView extends AppView {
     private final TextArea remarks = area("Remarks", 3);
 
     private final TextField shipperDeclarationName = field("Name", InputLimits.DISPLAY_NAME);
-    private final DatePicker shipperDeclarationDate = new DatePicker();
+    private final DatePicker shipperDeclarationDate = new QuickDatePicker();
     private final TextField carrierReceiptDriverName = field("Driver Name", InputLimits.DRIVER);
-    private final DatePicker carrierReceiptDate = new DatePicker();
+    private final DatePicker carrierReceiptDate = new QuickDatePicker();
     private final TextField consigneePodReceiverName = field("Receiver Name", InputLimits.DISPLAY_NAME);
-    private final DatePicker consigneePodDate = new DatePicker();
+    private final DatePicker consigneePodDate = new QuickDatePicker();
 
     private final TableView<ItemRow> itemsTable = new TableView<>();
     private final Label message = new Label();
