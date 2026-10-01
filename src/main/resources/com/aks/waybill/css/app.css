@@ -594,7 +594,7 @@
     -fx-text-fill: #7a8492;
 }
 .dashboard-card-row .stat-status-value {
-    -fx-font-size: 20px;
+    -fx-font-size: 24px;
     -fx-font-weight: 700;
 }
 .dashboard-card-row .stat-draft-value {
@@ -627,8 +627,8 @@
     -fx-padding: 0 0 1px 0;
 }
 .app-footer-tagline {
-    -fx-font-size: 8px;
-    -fx-line-spacing: 0px;
+    -fx-font-size: 10px;
+    -fx-line-spacing: 1px;
 }
 .app-footer-separator {
     -fx-padding: 2px 0 2px 0;
@@ -636,13 +636,13 @@
 }
 .app-footer-credit {
     -fx-text-fill: #b4c9d8;
-    -fx-font-size: 8px;
+    -fx-font-size: 9px;
     -fx-font-weight: 600;
     -fx-line-spacing: 0px;
 }
 .app-footer-copyright {
     -fx-text-fill: #718fa5;
-    -fx-font-size: 7px;
+    -fx-font-size: 8px;
     -fx-line-spacing: 0px;
     -fx-padding: 1px 0 0 0;
 }
