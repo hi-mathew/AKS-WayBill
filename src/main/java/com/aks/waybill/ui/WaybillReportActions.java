@@ -9,6 +9,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.ProgressIndicator;
+import javafx.application.Platform;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -24,17 +25,34 @@ public final class WaybillReportActions {
     private WaybillReportActions() {}
 
     public static void generatePdf(Window owner, long waybillId) {
-        generate(owner, waybillId, true);
+        generate(owner, waybillId, true, null);
     }
 
     public static void generateWord(Window owner, long waybillId) {
-        generate(owner, waybillId, false);
+        generate(owner, waybillId, false, null);
     }
 
-    private static void generate(Window owner, long waybillId, boolean pdf) {
+    /**
+     * Generates a document and invokes onComplete on the JavaFX application
+     * thread after the generation flow (including the result alert) has
+     * finished. This overload is used when the caller temporarily hides a
+     * modal dialog before starting generation.
+     */
+    public static void generatePdf(Window owner, long waybillId, Runnable onComplete) {
+        generate(owner, waybillId, true, onComplete);
+    }
+
+    public static void generateWord(Window owner, long waybillId, Runnable onComplete) {
+        generate(owner, waybillId, false, onComplete);
+    }
+
+    private static void generate(Window owner, long waybillId, boolean pdf, Runnable onComplete) {
         WaybillService.WaybillDetails details = WaybillService.findById(waybillId);
         if (details == null) {
             alert(javafx.scene.control.Alert.AlertType.ERROR, "Generate Document", "The selected waybill could not be found.", owner);
+            if (onComplete != null) {
+                Platform.runLater(onComplete);
+            }
             return;
         }
 
@@ -48,7 +66,12 @@ public final class WaybillReportActions {
         Path initialDir = AppPaths.defaultSaveDirectory();
         if (java.nio.file.Files.isDirectory(initialDir)) chooser.setInitialDirectory(initialDir.toFile());
         File file = chooser.showSaveDialog(owner);
-        if (file == null) return;
+        if (file == null) {
+            if (onComplete != null) {
+                Platform.runLater(onComplete);
+            }
+            return;
+        }
         if (!file.getName().toLowerCase().endsWith(pdf ? ".pdf" : ".docx")) {
             file = new File(file.getAbsolutePath() + (pdf ? ".pdf" : ".docx"));
         }
@@ -74,6 +97,7 @@ public final class WaybillReportActions {
                     "The " + (pdf ? "PDF" : "Word document") + " was generated successfully.\n\n"
                             + "File name: " + output.getFileName() + "\nSaved to: " + output.getParent(),
                     owner);
+            if (onComplete != null) onComplete.run();
         });
 
         task.setOnFailed(event -> {
@@ -84,6 +108,7 @@ public final class WaybillReportActions {
                     : failure.getMessage();
             alert(javafx.scene.control.Alert.AlertType.ERROR,
                     "Document Generation Failed", message, owner);
+            if (onComplete != null) onComplete.run();
         });
 
         progressDialog.show();

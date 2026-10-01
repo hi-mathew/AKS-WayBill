@@ -17,6 +17,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Popup;
+import javafx.stage.Window;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -189,6 +190,18 @@ public class WaybillFormView extends AppView {
         } else if (mode == Mode.VIEW) {
             getChildren().add(viewTopActionBar());
         }
+
+        // Validation/status is rendered inside the fixed top action bar. This keeps
+        // it immediately visible without adding/removing vertical space when a
+        // message appears, so the scrollable form never jumps or changes height.
+        message.getStyleClass().add("form-message");
+        message.setWrapText(false);
+        message.setTextOverrun(javafx.scene.control.OverrunStyle.ELLIPSIS);
+        message.setPrefHeight(18);
+        message.setMinHeight(18);
+        message.setMaxHeight(18);
+        message.setVisible(false);
+        message.setManaged(false);
 
         ScrollPane scroll = new ScrollPane(page);
         scroll.setFitToWidth(true);
@@ -484,18 +497,28 @@ public class WaybillFormView extends AppView {
         Label titleLabel = label(title, "field-label");
         Label desc = label(description, "card-description");
         desc.setWrapText(true);
+        // Keep the name/date fields aligned across all three declaration panels.
+        // The first two descriptions wrap to two lines while the POD description
+        // is shorter; reserving the same description height prevents the last
+        // column from appearing vertically higher.
+        desc.setMinHeight(36);
+        desc.setPrefHeight(36);
+        desc.setMaxHeight(36);
         panel.getChildren().addAll(titleLabel, desc, labeledControl(nameLabel, nameField), labeledControl("Date", datePicker));
         return panel;
     }
 
     private HBox topActionBar() {
         HBox box = new HBox(16);
-        box.setAlignment(Pos.CENTER_RIGHT);
+        box.setAlignment(Pos.CENTER_LEFT);
         box.getStyleClass().add("waybill-top-actions");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
         box.getChildren().addAll(
-                newActionButton("Clear", false, 100),
+                message, spacer,
+                newActionButton("Save", true, 110),
                 newActionButton("Save & View Saved Waybills", false, 224),
-                newActionButton("Save", true, 110)
+                newActionButton("Clear", false, 100)
         );
         return box;
     }
@@ -511,8 +534,10 @@ public class WaybillFormView extends AppView {
      */
     private HBox editTopActionBar() {
         HBox box = new HBox(16);
-        box.setAlignment(Pos.CENTER_RIGHT);
+        box.setAlignment(Pos.CENTER_LEFT);
         box.getStyleClass().add("waybill-top-actions");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button topCancel = new Button("Cancel");
         topCancel.getStyleClass().add("secondary-button");
@@ -534,14 +559,16 @@ public class WaybillFormView extends AppView {
         topSave.setMaxHeight(36);
         topSave.setOnAction(event -> updateExisting());
 
-        box.getChildren().addAll(topCancel, topSave);
+        box.getChildren().addAll(message, spacer, topCancel, topSave);
         return box;
     }
 
     private HBox viewTopActionBar() {
         HBox box = new HBox(16);
-        box.setAlignment(Pos.CENTER_RIGHT);
+        box.setAlignment(Pos.CENTER_LEFT);
         box.getStyleClass().add("waybill-top-actions");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
         configureViewLifecycleButton(topFinalizeButton, true);
         configureViewLifecycleButton(topRevertButton, false);
@@ -550,7 +577,7 @@ public class WaybillFormView extends AppView {
         Button word = viewReportButton("Generate Word");
         Button back = viewBackButton();
 
-        box.getChildren().addAll(topFinalizeButton, topRevertButton, pdf, word, back);
+        box.getChildren().addAll(message, spacer, topFinalizeButton, topRevertButton, pdf, word, back);
         return box;
     }
 
@@ -621,7 +648,6 @@ public class WaybillFormView extends AppView {
         HBox box = new HBox(16);
         box.setAlignment(Pos.CENTER_RIGHT);
         box.getStyleClass().add("waybill-bottom-actions");
-        message.getStyleClass().add("form-message");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -629,13 +655,13 @@ public class WaybillFormView extends AppView {
             Button clear = newActionButton("Clear", false, 100);
             Button saveAndView = newActionButton("Save & View Saved Waybills", false, 224);
             Button saveAndCreate = newActionButton("Save", true, 110);
-            box.getChildren().addAll(message, spacer, clear, saveAndView, saveAndCreate);
+            box.getChildren().addAll(spacer, saveAndCreate, saveAndView, clear);
         } else if (mode == Mode.EDIT) {
             cancelButton.getStyleClass().add("secondary-button");
             cancelButton.setOnAction(event -> onCancel.run());
             saveButton.getStyleClass().add("primary-button");
             saveButton.setOnAction(event -> updateExisting());
-            box.getChildren().addAll(message, spacer, cancelButton, saveButton);
+            box.getChildren().addAll(spacer, cancelButton, saveButton);
         } else {
             finalizeButton.getStyleClass().add("primary-button");
             finalizeButton.setOnAction(event -> confirmFinalize());
@@ -865,6 +891,11 @@ public class WaybillFormView extends AppView {
     }
 
     private void showSaveSuccessDialog(WaybillService.SavedWaybill saved) {
+        Alert dialog = createSaveSuccessDialog(saved);
+        handleSaveSuccessDialog(dialog, saved);
+    }
+
+    private Alert createSaveSuccessDialog(WaybillService.SavedWaybill saved) {
         Alert dialog = new Alert(Alert.AlertType.INFORMATION);
         dialog.setTitle("Waybill Saved");
         dialog.setHeaderText("Waybill saved successfully");
@@ -873,8 +904,6 @@ public class WaybillFormView extends AppView {
             dialog.initOwner(getScene().getWindow());
         }
 
-        // Shared W.A.S.P dialog styling calculates a stable width from the actual
-        // action labels, so this dialog does not need hard-coded dimensions.
         setInformationGraphic(dialog);
 
         ButtonType view = new ButtonType("View Waybill", ButtonBar.ButtonData.OK_DONE);
@@ -883,19 +912,53 @@ public class WaybillFormView extends AppView {
         ButtonType createNew = new ButtonType("Create New Waybill", ButtonBar.ButtonData.OTHER);
         ButtonType close = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getButtonTypes().setAll(view, pdf, word, createNew, close);
+        return dialog;
+    }
 
-        Button viewButton = (Button) dialog.getDialogPane().lookupButton(view);
-        Button pdfButton = (Button) dialog.getDialogPane().lookupButton(pdf);
-        Button wordButton = (Button) dialog.getDialogPane().lookupButton(word);
-        Button createButton = (Button) dialog.getDialogPane().lookupButton(createNew);
-        Button closeButton = (Button) dialog.getDialogPane().lookupButton(close);
-
+    private void handleSaveSuccessDialog(Alert dialog, WaybillService.SavedWaybill saved) {
         while (true) {
-            var result = dialog.showAndWait().orElse(close);
-            if (result == view) { onViewSaved.accept(saved.id()); return; }
-            if (result == pdf) { WaybillReportActions.generatePdf(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
-            if (result == word) { WaybillReportActions.generateWord(getScene() == null ? null : getScene().getWindow(), saved.id()); continue; }
-            if (result == createNew) { clearForm(); savedNew = false; dirty = false; onCreateNew.run(); return; }
+            var result = dialog.showAndWait().orElse(null);
+            if (result == null || result == ButtonType.CANCEL) {
+                onSaved.run();
+                return;
+            }
+
+            String text = result.getText();
+            if ("View Waybill".equals(text)) {
+                onViewSaved.accept(saved.id());
+                return;
+            }
+
+            if ("Create New Waybill".equals(text)) {
+                clearForm();
+                savedNew = false;
+                dirty = false;
+                onCreateNew.run();
+                return;
+            }
+
+            if ("Close".equals(text)) {
+                onSaved.run();
+                return;
+            }
+
+            if ("Generate PDF".equals(text) || "Generate Word".equals(text)) {
+                Window reportOwner = getScene() == null ? null : getScene().getWindow();
+                boolean pdf = "Generate PDF".equals(text);
+
+                // Hide the saved dialog while the report is generated so the
+                // progress window cannot get trapped behind a nested Alert.
+                dialog.hide();
+
+                Runnable reopen = () -> Platform.runLater(() -> handleSaveSuccessDialog(dialog, saved));
+                if (pdf) {
+                    WaybillReportActions.generatePdf(reportOwner, saved.id(), reopen);
+                } else {
+                    WaybillReportActions.generateWord(reportOwner, saved.id(), reopen);
+                }
+                return;
+            }
+
             onSaved.run();
             return;
         }
@@ -1420,9 +1483,28 @@ public class WaybillFormView extends AppView {
     }
     private static String safe(String value) { return value == null ? "" : value; }
 
-    private void clearMessage() { message.setText(""); message.getStyleClass().removeAll("error-message", "success-message"); }
-    private void showError(String text) { message.getStyleClass().remove("success-message"); message.getStyleClass().add("error-message"); message.setText(text); }
-    private void showSuccess(String text) { message.getStyleClass().remove("error-message"); message.getStyleClass().add("success-message"); message.setText(text); }
+    private void clearMessage() {
+        message.setText("");
+        message.getStyleClass().removeAll("error-message", "success-message");
+        message.setVisible(false);
+        message.setManaged(false);
+    }
+
+    private void showError(String text) {
+        message.getStyleClass().remove("success-message");
+        message.getStyleClass().add("error-message");
+        message.setText(text);
+        message.setVisible(true);
+        message.setManaged(true);
+    }
+
+    private void showSuccess(String text) {
+        message.getStyleClass().remove("error-message");
+        message.getStyleClass().add("success-message");
+        message.setText(text);
+        message.setVisible(true);
+        message.setManaged(true);
+    }
 
     private static VBox card() { VBox box = new VBox(12); box.getStyleClass().add("settings-card"); box.setPadding(new Insets(16)); return box; }
     private static Label heading(String text) { Label label = new Label(text); label.getStyleClass().add("section-heading"); label.setWrapText(true); return label; }
