@@ -25,9 +25,11 @@ public final class DataExchangeView extends AppView {
 
     private final Label installationLabel = new Label();
     private final Label lastExportLabel = new Label();
+    private final Label recoveryArchiveLabel = new Label();
     private final Label messageLabel = new Label();
     private final Button fullExportButton = button("Full Export", "primary-button");
     private final Button incrementalExportButton = button("Incremental Export", "secondary-button");
+    private final Button recoverExportButton = button("Recover Selected Export", "secondary-button");
     private final ProgressIndicator progress = new ProgressIndicator();
     private final TableView<DataExchangeService.ExportHistory> historyTable = new TableView<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
@@ -63,7 +65,10 @@ public final class DataExchangeView extends AppView {
         installationLabel.setWrapText(true);
         lastExportLabel.getStyleClass().add("settings-note");
         lastExportLabel.setWrapText(true);
-        card.getChildren().addAll(title, description, installationLabel, lastExportLabel);
+        recoveryArchiveLabel.getStyleClass().add("settings-note");
+        recoveryArchiveLabel.setWrapText(true);
+        recoveryArchiveLabel.setText("Recovery archive: " + com.aks.waybill.config.AppPaths.dataDirectory().resolve("data-exchange-archive"));
+        card.getChildren().addAll(title, description, installationLabel, lastExportLabel, recoveryArchiveLabel);
         return card;
     }
 
@@ -89,7 +94,7 @@ public final class DataExchangeView extends AppView {
     private VBox historyCard() {
         VBox card = card();
         Label title = title("Export History");
-        Label description = description("Only successfully completed exports are used as the starting point for the next Incremental Export. Failed exports do not advance the incremental checkpoint.");
+        Label description = description("Only successfully completed exports are used as the starting point for the next Incremental Export. Failed exports do not advance the incremental checkpoint. Select a completed export and use Recover Selected Export if the delivered package was lost.");
 
         TableColumn<DataExchangeService.ExportHistory, String> date = column("Completed", 175, h -> format(h.completedAt()));
         TableColumn<DataExchangeService.ExportHistory, String> type = column("Type", 110, h -> h.type().name());
@@ -101,7 +106,13 @@ public final class DataExchangeView extends AppView {
         historyTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         historyTable.setPrefHeight(220);
         VBox.setVgrow(historyTable, Priority.ALWAYS);
-        card.getChildren().addAll(title, description, historyTable);
+        recoverExportButton.setDisable(true);
+        recoverExportButton.setOnAction(e -> recoverSelectedExport());
+        historyTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) ->
+                recoverExportButton.setDisable(newValue == null || !"COMPLETED".equalsIgnoreCase(newValue.status())));
+        HBox actions = new HBox(10, recoverExportButton);
+        actions.setAlignment(Pos.CENTER_LEFT);
+        card.getChildren().addAll(title, description, historyTable, actions);
         return card;
     }
 
@@ -152,6 +163,49 @@ public final class DataExchangeView extends AppView {
                             "Records: " + String.format("%,d", result.recordCount()) + "\n" +
                             "Package: " + result.packagePath() + "\n" +
                             "SHA-256: " + result.packageHash(), false);
+                    progress.setVisible(false);
+                    progress.setManaged(false);
+                    loadState();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    setMessage(safe(e), true);
+                    progress.setVisible(false);
+                    progress.setManaged(false);
+                    loadState();
+                });
+            }
+        });
+    }
+
+    private void recoverSelectedExport() {
+        if (progress.isVisible()) return;
+        DataExchangeService.ExportHistory selected = historyTable.getSelectionModel().getSelectedItem();
+        if (selected == null || !"COMPLETED".equalsIgnoreCase(selected.status())) return;
+
+        Window owner = getScene() == null ? null : getScene().getWindow();
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select Folder for Recovered Export");
+        Path defaultDir = Paths.get(System.getProperty("user.home"), "Documents", "W.A.S.P-DataExchange");
+        try { java.nio.file.Files.createDirectories(defaultDir); chooser.setInitialDirectory(defaultDir.toFile()); } catch (Exception ignored) {}
+        java.io.File selectedFolder = chooser.showDialog(owner);
+        if (selectedFolder == null) return;
+
+        recoverExportButton.setDisable(true);
+        fullExportButton.setDisable(true);
+        incrementalExportButton.setDisable(true);
+        progress.setVisible(true);
+        progress.setManaged(true);
+        setMessage("Recovering the selected export package…", false);
+
+        executor.submit(() -> {
+            try {
+                Path recovered = DataExchangeService.recoverExportPackage(selected.exportId(), selectedFolder.toPath());
+                Platform.runLater(() -> {
+                    setMessage("Export package recovered successfully.\n" +
+                            "Export ID: " + selected.exportId() + "\n" +
+                            "Package: " + recovered + "\n" +
+                            "The incremental checkpoint was not changed.", false);
                     progress.setVisible(false);
                     progress.setManaged(false);
                     loadState();

@@ -1,6 +1,7 @@
 package com.aks.waybill.service;
 
 import com.aks.waybill.db.Database;
+import com.aks.waybill.config.AppPaths;
 import com.aks.waybill.logging.WaspLogger;
 
 import java.io.BufferedWriter;
@@ -10,6 +11,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -127,7 +129,11 @@ public final class DataExchangeService {
             }
 
             String hash = sha256(temp);
-            Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            // Create the recovery copy before marking the export completed. A
+            // completed export is therefore always recoverable unless the local
+            // application data directory itself is lost.
+            archiveExportPackage(target, exportId);
             String completedAt = Instant.now().toString();
             markExportCompleted(exportId, completedAt, recordCount, target.toAbsolutePath().toString(), hash);
             updateInstallationLastExport(completedAt);
@@ -140,6 +146,70 @@ public final class DataExchangeService {
             markExportFailedQuietly(exportId, e.getMessage());
             WaspLogger.error("Data Exchange export failed. exportId=" + exportId, e);
             throw new IllegalStateException("Data Exchange export failed: " + safeMessage(e), e);
+        }
+    }
+
+    /**
+     * Keeps an internal recovery copy of every successfully completed export.
+     * This copy is intentionally separate from the user-selected destination so
+     * deleting/moving the delivered package does not destroy the recovery copy.
+     */
+    private static Path archiveExportPackage(Path packagePath, String exportId) throws IOException {
+        Path archive = AppPaths.dataDirectory().resolve("data-exchange-archive");
+        Files.createDirectories(archive);
+        Path archivedPackage = archive.resolve("WASP-DataExchange-" + exportId + ".waspexport.zip");
+        Files.copy(packagePath, archivedPackage, StandardCopyOption.REPLACE_EXISTING);
+        return archivedPackage;
+    }
+
+    /**
+     * Recreates a lost delivery copy of a previously completed export without
+     * changing the incremental checkpoint. The original package bytes are used
+     * whenever the internal recovery archive exists, so the recovered package
+     * retains the original export ID and exact contents.
+     */
+    public static Path recoverExportPackage(String exportId, Path destination) {
+        if (exportId == null || exportId.isBlank()) throw new IllegalArgumentException("Export ID is required.");
+        if (destination == null) throw new IllegalArgumentException("Recovery destination is required.");
+
+        try (Connection c = Database.getConnection();
+             PreparedStatement p = c.prepareStatement(
+                     "SELECT export_type, status, package_path FROM data_exchange_export WHERE export_id=?")) {
+            p.setString(1, exportId);
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next()) throw new IllegalArgumentException("The selected export could not be found in Export History.");
+                if (!"COMPLETED".equalsIgnoreCase(r.getString("status"))) {
+                    throw new IllegalStateException("Only completed exports can be recovered.");
+                }
+
+                Files.createDirectories(destination.toAbsolutePath().getParent());
+                Path archive = AppPaths.dataDirectory().resolve("data-exchange-archive")
+                        .resolve("WASP-DataExchange-" + exportId + ".waspexport.zip");
+
+                // Backfill the recovery archive for older exports when the original
+                // package is still available. This does not alter export history.
+                if (!Files.isRegularFile(archive)) {
+                    String originalPath = r.getString("package_path");
+                    if (originalPath != null && !originalPath.isBlank()) {
+                        Path original = Path.of(originalPath);
+                        if (Files.isRegularFile(original)) {
+                            archiveExportPackage(original, exportId);
+                        }
+                    }
+                }
+
+                if (!Files.isRegularFile(archive)) {
+                    throw new IllegalStateException(
+                            "The recovery copy for this export is unavailable. The original package is also no longer available, so the exact historical export cannot be reconstructed from the current database.");
+                }
+
+                Path target = destination.resolve(archive.getFileName().toString());
+                Files.copy(archive, target, StandardCopyOption.REPLACE_EXISTING);
+                WaspLogger.info("Data Exchange export recovered. exportId=" + exportId + ", package=" + target);
+                return target;
+            }
+        } catch (SQLException | IOException e) {
+            throw new IllegalStateException("Unable to recover Data Exchange export: " + safeMessage(e), e);
         }
     }
 
