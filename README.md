@@ -135,3 +135,7 @@ consoleLevel=INFO
 ```
 
 Supported values are `SEVERE`/`ERROR`, `WARNING`, `INFO`, `DEBUG`/`FINE`, `TRACE`/`FINEST`, `ALL`, and `OFF`. `consoleLevel` controls console output separately. Restart W.A.S.P. after changing the file.
+
+
+### W.A.S.P. 2.0.0 Data Exchange
+The current 2.0.0 foundation assigns each local database a stable Installation ID and Global UUIDs for records. The Data Exchange screen can create controlled Full and Incremental export packages for later consolidation. Export packages are not database backups and do not contain user password hashes.

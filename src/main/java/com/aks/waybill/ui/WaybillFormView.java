@@ -65,6 +65,7 @@ public class WaybillFormView extends AppView {
 
     private final ComboBox<String> savedCarrier = savedSelector("— Select saved carrier —");
     private final List<String> carrierMasterValues = new ArrayList<>();
+    private final java.util.Map<String, SavedDataService.CarrierRecord> carrierMasterRecords = new java.util.LinkedHashMap<>();
     private final TextField carrier = field("Carrier name", InputLimits.CARRIER);
     private final TextField driver = field("Driver name", InputLimits.DRIVER);
     private final TextField vehicle = field("Vehicle / Trailer No.", InputLimits.VEHICLE);
@@ -342,7 +343,7 @@ public class WaybillFormView extends AppView {
                 SavedDataService.CarrierRecord record = SavedDataService.createCarrier(
                         name.getText(), driverField.getText(), vehicleField.getText());
                 loadSavedCarriers();
-                selectSavedCarrier(record.name(), true);
+                selectSavedCarrier(record, true);
             } catch (RuntimeException ex) {
                 showError(ex.getMessage() == null ? "Unable to save carrier." : ex.getMessage());
             }
@@ -755,7 +756,7 @@ public class WaybillFormView extends AppView {
             populateCompany(details.shipper(), shipperContact, shipperAddress, shipperPhone, shipperEmail);
             populateCompany(details.consignee(), consigneeContact, consigneeAddress, consigneePhone, consigneeEmail);
 
-            selectSavedCarrier(details.carrierName(), false);
+            selectSavedCarrier(details.carrierName(), details.driverName(), details.vehicleTrailerNo(), false);
             driver.setText(safe(details.driverName()));
             vehicle.setText(safe(details.vehicleTrailerNo()));
             origin.setText(safe(details.originLoadingPoint()));
@@ -1117,6 +1118,40 @@ public class WaybillFormView extends AppView {
         popup.setConsumeAutoHidingEvents(false);
         popup.getContent().clear();
         popup.getContent().add(suggestions);
+
+        // Keep autocomplete suggestions inside the editor width. Long
+        // Carrier + Driver + Vehicle labels must not make the ListView
+        // request a wider content area or display a horizontal scrollbar.
+        suggestions.setCellFactory(list -> truncatingSuggestionCell(list));
+    }
+
+    private static ListCell<String> truncatingSuggestionCell(ListView<String> list) {
+        ListCell<String> cell = new ListCell<>() {
+            private final Label text = new Label();
+
+            {
+                text.setEllipsisString("...");
+                text.setWrapText(false);
+                text.setMaxWidth(Double.MAX_VALUE);
+                setGraphic(text);
+                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                setMinWidth(0);
+                setMaxWidth(Double.MAX_VALUE);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                text.setText(empty || item == null ? "" : item);
+                text.maxWidthProperty().unbind();
+                text.prefWidthProperty().unbind();
+                text.maxWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(0d, list.getWidth() - 24d), list.widthProperty()));
+                text.prefWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(0d, list.getWidth() - 24d), list.widthProperty()));
+            }
+        };
+        return cell;
     }
 
     private void configureSavedSelectors() {
@@ -1155,7 +1190,8 @@ public class WaybillFormView extends AppView {
                 vehicle.clear();
                 return;
             }
-            SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, true);
+            SavedDataService.CarrierRecord record = carrierMasterRecords.get(value);
+            if (record == null) record = SavedDataService.findCarrierByName(value, true);
             if (record != null) {
                 carrier.setText(safe(record.name()));
                 driver.setText(safe(record.driverName()));
@@ -1327,6 +1363,35 @@ public class WaybillFormView extends AppView {
         list.setMaxHeight(180);
         list.setFocusTraversable(false);
         list.getStyleClass().add("company-suggestion-list");
+
+        // Keep autocomplete rows inside the popup viewport. A plain String
+        // ListCell can report the full text as its preferred width, which makes
+        // JavaFX create a horizontal scrollbar for long Carrier/Driver/Vehicle
+        // labels. Render the text through a constrained Label instead.
+        list.setCellFactory(view -> new ListCell<>() {
+            private final Label text = new Label();
+
+            {
+                text.setMaxWidth(Double.MAX_VALUE);
+                text.setEllipsisString("...");
+                text.setWrapText(false);
+                setGraphic(text);
+                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                setMinWidth(0);
+                setPrefWidth(0);
+                setMaxWidth(Double.MAX_VALUE);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                text.setText(empty || item == null ? "" : item);
+                text.setMaxWidth(Double.MAX_VALUE);
+                text.prefWidthProperty().unbind();
+                text.prefWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(0d, getWidth() - 20d), widthProperty()));
+            }
+        });
         return list;
     }
 
@@ -1337,6 +1402,8 @@ public class WaybillFormView extends AppView {
         suggestions.setPrefWidth(width);
         suggestions.setMinWidth(width);
         suggestions.setMaxWidth(width);
+        suggestions.applyCss();
+        suggestions.requestLayout();
         var bounds = editor.localToScreen(editor.getBoundsInLocal());
         if (bounds == null) return;
         if (!popup.isShowing()) popup.show(editor, bounds.getMinX(), bounds.getMaxY());
@@ -1344,11 +1411,27 @@ public class WaybillFormView extends AppView {
 
     private void loadSavedCarriers() {
         carrierMasterValues.clear();
-        carrierMasterValues.addAll(SavedDataService.findCarriers(null, true).stream()
-                .map(SavedDataService.CarrierRecord::name).filter(v -> v != null && !v.isBlank()).toList());
+        carrierMasterRecords.clear();
+        for (SavedDataService.CarrierRecord record : SavedDataService.findCarriers(null, true)) {
+            String label = carrierDisplayLabel(record);
+            if (!label.isBlank() && !carrierMasterRecords.containsKey(label)) {
+                carrierMasterValues.add(label);
+                carrierMasterRecords.put(label, record);
+            }
+        }
         savedCarrier.getItems().setAll(java.util.stream.Stream.concat(
                 java.util.stream.Stream.of(SELECT_CARRIER), carrierMasterValues.stream()).toList());
         savedCarrier.getSelectionModel().select(SELECT_CARRIER);
+    }
+
+    private static String carrierDisplayLabel(SavedDataService.CarrierRecord record) {
+        if (record == null || record.name() == null || record.name().isBlank()) return "";
+        String driver = safe(record.driverName());
+        String vehicle = safe(record.vehicleTrailerNo());
+        StringBuilder label = new StringBuilder(record.name().trim());
+        if (!driver.isBlank()) label.append(" — Driver: ").append(driver);
+        if (!vehicle.isBlank()) label.append(" — Vehicle: ").append(vehicle);
+        return label.toString();
     }
 
     private void loadSavedLocations() {
@@ -1366,38 +1449,139 @@ public class WaybillFormView extends AppView {
     private static ComboBox<String> savedSelector(String prompt) {
         ComboBox<String> box = new ComboBox<>();
         box.setPromptText(prompt);
+        // Keep the selector constrained by its parent column rather than allowing
+        // a long Carrier + Driver + Vehicle label to influence the form width.
+        // The visible text remains truncated by the ComboBox, while the full
+        // combination is still available in the popup list.
+        box.setMinWidth(0);
+        box.setPrefWidth(0);
         box.setMaxWidth(Double.MAX_VALUE);
         box.getItems().add(prompt);
         box.getSelectionModel().select(prompt);
         // The master-data selector is deliberately selection-only. The editable
         // value is entered/searched in the text field directly below it.
         box.setEditable(false);
+
+        // Carrier labels can be long (Carrier + Driver + Vehicle). Keep both the
+        // selected-value display and the popup rows constrained to the ComboBox
+        // width so the popup never grows horizontally or shows a horizontal
+        // scrollbar. Ellipsis keeps the full value available without disturbing
+        // the form layout.
+        box.setButtonCell(truncatingComboCell(box));
+        box.setCellFactory(listView -> truncatingComboCell(box));
+
+        // The JavaFX ComboBox popup may size itself from the preferred width of
+        // its ListCells. For long Carrier + Driver + Vehicle labels that can
+        // create a horizontal scrollbar even though the ComboBox itself is
+        // correctly constrained. Force the popup ListView to the ComboBox width
+        // and disable horizontal scrolling; the cell handles ellipsis.
+        box.setOnShowing(event -> javafx.application.Platform.runLater(() -> {
+            javafx.scene.Node popupList = box.lookup(".list-view");
+            if (popupList instanceof javafx.scene.control.ListView<?> listView) {
+                double width = box.getWidth();
+                if (width > 0) {
+                    listView.setMinWidth(width);
+                    listView.setPrefWidth(width);
+                    listView.setMaxWidth(width);
+                }
+                // ListView does not expose a public horizontal-scrollbar API.
+                // Prevent horizontal overflow by making every popup cell fit the
+                // popup viewport; the cell's Label applies ellipsis to long text.
+                listView.applyCss();
+                listView.requestLayout();
+            }
+        }));
+
         box.getStyleClass().add("settings-field");
         return box;
     }
 
-    private void selectSavedCarrier(String value) {
-        selectSavedCarrier(value, true);
+    private static ListCell<String> truncatingComboCell(ComboBox<String> box) {
+        ListCell<String> cell = new ListCell<>() {
+            private final Label text = new Label();
+
+            {
+                text.setMaxWidth(Double.MAX_VALUE);
+                text.setEllipsisString("...");
+                text.setStyle("-fx-padding: 0 6 0 0;");
+                setGraphic(text);
+                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                setPrefWidth(0);
+                setMinWidth(0);
+                setMaxWidth(Double.MAX_VALUE);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    text.setText("");
+                } else {
+                    text.setText(item);
+                }
+                text.prefWidthProperty().unbind();
+                text.maxWidthProperty().unbind();
+                double availableWidth = Math.max(0d, (getWidth() > 0 ? getWidth() : box.getWidth()) - 28d);
+                text.setPrefWidth(availableWidth);
+                text.maxWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(0d, (getWidth() > 0 ? getWidth() : box.getWidth()) - 28d),
+                        widthProperty(), box.widthProperty()));
+                if (box.getWidth() > 0) {
+                    setMinWidth(0);
+                    setPrefWidth(box.getWidth());
+                    setMaxWidth(box.getWidth());
+                }
+            }
+        };
+        return cell;
     }
 
-    private void selectSavedCarrier(String value, boolean populateDetails) {
-        if (value == null || value.isBlank()) {
+    private void selectSavedCarrier(SavedDataService.CarrierRecord record, boolean populateDetails) {
+        if (record == null) {
             savedCarrier.getSelectionModel().select(SELECT_CARRIER);
             applyCarrierSelection(SELECT_CARRIER);
             return;
         }
-        if (!savedCarrier.getItems().contains(value)) savedCarrier.getItems().add(value);
-        savedCarrier.getSelectionModel().select(value);
-        SavedDataService.CarrierRecord record = SavedDataService.findCarrierByName(value, false);
-        if (record != null) {
-            carrier.setText(safe(record.name()));
-            if (populateDetails) {
-                driver.setText(safe(record.driverName()));
-                vehicle.setText(safe(record.vehicleTrailerNo()));
-            }
-        } else {
-            carrier.setText(value);
+        String label = carrierDisplayLabel(record);
+        if (!savedCarrier.getItems().contains(label)) {
+            savedCarrier.getItems().add(label);
+            carrierMasterValues.add(label);
+            carrierMasterRecords.put(label, record);
         }
+        savedCarrier.getSelectionModel().select(label);
+        carrier.setText(safe(record.name()));
+        if (populateDetails) {
+            driver.setText(safe(record.driverName()));
+            vehicle.setText(safe(record.vehicleTrailerNo()));
+        }
+    }
+
+    private void selectSavedCarrier(String carrierName, String driverName, String vehicleTrailerNo, boolean populateDetails) {
+        if (carrierName == null || carrierName.isBlank()) {
+            savedCarrier.getSelectionModel().select(SELECT_CARRIER);
+            applyCarrierSelection(SELECT_CARRIER);
+            return;
+        }
+        SavedDataService.CarrierRecord match = SavedDataService.findCarriers(carrierName, true).stream()
+                .filter(r -> r.name() != null && r.name().equalsIgnoreCase(carrierName.trim()))
+                .filter(r -> sameNullableText(r.driverName(), driverName))
+                .filter(r -> sameNullableText(r.vehicleTrailerNo(), vehicleTrailerNo))
+                .findFirst()
+                .orElseGet(() -> SavedDataService.findCarrierByName(carrierName, false));
+        if (match != null) selectSavedCarrier(match, populateDetails);
+        else {
+            carrier.setText(carrierName);
+            if (populateDetails) {
+                driver.setText(safe(driverName));
+                vehicle.setText(safe(vehicleTrailerNo));
+            }
+        }
+    }
+
+    private static boolean sameNullableText(String a, String b) {
+        String left = a == null ? "" : a.trim();
+        String right = b == null ? "" : b.trim();
+        return left.equalsIgnoreCase(right);
     }
 
     private static void selectSavedValue(ComboBox<String> box, String value) {

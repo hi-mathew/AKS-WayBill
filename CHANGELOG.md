@@ -1,3 +1,16 @@
+## 2.0.0 – Master Data Synchronization Refinement
+
+- Existing master data is now marked as updated only when its actual values change during New/Edit Waybill save.
+- Selecting an unchanged Shipper, Consignee, Carrier, or Location no longer advances its `updated_at` timestamp.
+- Carrier masters now support multiple Driver + Vehicle/Trailer combinations under the same Carrier name.
+- The saved-carrier selector displays the driver and vehicle/trailer so duplicate carrier names are distinguishable.
+- Database schema marker advances to 2.0.1 for the carrier uniqueness migration.
+
+
+## 2.0.0 – Incremental Export Timestamp Compatibility Fix
+- Fixed incremental Data Exchange filtering for SQLite timestamps stored in the application’s local `yyyy-MM-dd HH:mm:ss` format while export checkpoints use ISO-8601 timestamps.
+- Incremental export now compares timestamps using SQLite `julianday()` normalization so modified waybills, master data, users and audit records are detected correctly.
+- Waybill items continue to follow the modified parent waybill timestamp.
 ## 2.0.0 – Startup / Database Upgrade State Correction
 
 - Added a persistent `data_exchange.schema_version` marker so the Data Exchange identity migration runs only once per database.
@@ -90,3 +103,15 @@
 - Added live startup status messages for database preparation and Data Exchange identity migration phases.
 - Prevented normal application close handling while the startup/database preparation task is running.
 - Added a clear startup failure screen/dialog when the database cannot be prepared.
+
+
+## W.A.S.P. 2.0.0 – Data Exchange Export
+- Added a Data Exchange workspace available to W.A.S.P. users.
+- Added controlled Full Export and Incremental Export packages.
+- Export packages use a W.A.S.P. manifest plus UTF-8 CSV data files inside a `.waspexport.zip` archive.
+- Exported records retain Global IDs and Source Installation ID for future central consolidation.
+- User password hashes and authentication-only fields are not exported.
+- Added export history, successful-export checkpointing and SHA-256 package verification.
+- Incremental exports include records changed after the previous successful export checkpoint; waybill items follow their parent waybill update timestamp.
+- Export failures do not advance the incremental checkpoint.
+- Added Data Exchange navigation to the main W.A.S.P. workspace.

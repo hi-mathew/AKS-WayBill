@@ -39,6 +39,7 @@ public class DashboardView extends BorderPane {
     private final Button newWaybillButton = nav("＋  New Waybill", false);
     private final Button savedWaybillsButton = nav("▤  Saved Waybills", false);
     private final Button companiesButton = nav("▦  Saved Data", false);
+    private final Button dataExchangeButton = nav("⇄  Data Exchange", false);
     private final Button settingsButton = nav("⚙  Settings", false);
     private final Button usersButton = nav("♟  User Management", false);
     private final Button auditButton = nav("▤  Audit Log", false);
@@ -94,7 +95,8 @@ public class DashboardView extends BorderPane {
                 dashboardButton,
                 newWaybillButton,
                 savedWaybillsButton,
-                companiesButton);
+                companiesButton,
+                dataExchangeButton);
 
         if (SessionContext.isAdmin()) {
             Label administration = label("ADMINISTRATION", "sidebar-section");
@@ -112,6 +114,7 @@ public class DashboardView extends BorderPane {
         newWaybillButton.setOnAction(e -> showNewWaybill());
         savedWaybillsButton.setOnAction(e -> showSavedWaybills());
         companiesButton.setOnAction(e -> showSavedData());
+        dataExchangeButton.setOnAction(e -> showDataExchange());
         settingsButton.setOnAction(e -> showSettings());
         usersButton.setOnAction(e -> showUserManagement());
         auditButton.setOnAction(e -> showAuditLog());
@@ -397,6 +400,10 @@ public class DashboardView extends BorderPane {
 
     private void showSavedData() {
         navigateWithUnsavedChanges(() -> activate(companiesButton, "Saved Data", new SavedDataView()));
+    }
+
+    private void showDataExchange() {
+        navigateWithUnsavedChanges(() -> activate(dataExchangeButton, "Data Exchange", new DataExchangeView()));
     }
 
     private void showSettings() {

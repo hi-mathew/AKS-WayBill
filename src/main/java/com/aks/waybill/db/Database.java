@@ -24,7 +24,7 @@ public final class Database {
      * migration still needs to run. This intentionally checks only migration
      * metadata and never scans the application's business tables.
      *
-     * A missing marker means this is either a fresh database or a pre-2.0.0
+     * A missing marker means this is either a fresh database or a pre-2.0.1
      * database, so the migration is required. Once completed, the marker is
      * stored in application_settings and normal launches bypass the migration.
      */
@@ -42,7 +42,7 @@ public final class Database {
                     try (ResultSet r = p.executeQuery()) {
                         if (!r.next()) return true;
                         String version = r.getString(1);
-                        return !"2.0.0".equals(version);
+                        return !"2.0.1".equals(version);
                     }
                 }
             }
@@ -81,7 +81,7 @@ public final class Database {
                 s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_app_user_user_code ON app_user(user_code)");
                 s.execute("CREATE TABLE IF NOT EXISTS application_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
                 ensureSeparateCompanyMasters(c);
-                s.execute("CREATE TABLE IF NOT EXISTS saved_carrier (id INTEGER PRIMARY KEY AUTOINCREMENT, carrier_name TEXT NOT NULL UNIQUE COLLATE NOCASE, driver_name TEXT, vehicle_trailer_no TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+                s.execute("CREATE TABLE IF NOT EXISTS saved_carrier (id INTEGER PRIMARY KEY AUTOINCREMENT, carrier_name TEXT NOT NULL COLLATE NOCASE, driver_name TEXT, vehicle_trailer_no TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 ensureColumn(c, "saved_carrier", "driver_name", "TEXT");
                 ensureColumn(c, "saved_carrier", "vehicle_trailer_no", "TEXT");
                 s.execute("CREATE TABLE IF NOT EXISTS saved_location (id INTEGER PRIMARY KEY AUTOINCREMENT, location_name TEXT NOT NULL UNIQUE COLLATE NOCASE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
@@ -251,11 +251,24 @@ public final class Database {
     }
 
     /**
-     * Initializes the identity and import-tracking structures used by W.A.S.P. 2.0.0.
+     * Initializes the identity/import-tracking structures and applies the 2.0.1 master-data identity migration.
      * This migration is intentionally additive: existing local IDs and application
      * behaviour are preserved so v1.4.0 databases can be upgraded in place.
      */
     private static void initializeDataExchangeSchema(Connection c, Consumer<String> progress) throws SQLException {
+        // These small operational tables are safe to ensure on every startup. They
+        // are metadata only and do not scan or modify business records. This also
+        // allows the Export screen to be introduced after a database has already
+        // completed the main 2.0.0 identity migration.
+        try (Statement s = c.createStatement()) {
+            s.execute("CREATE TABLE IF NOT EXISTS data_exchange_installation (installation_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, app_version TEXT NOT NULL, last_export_at TEXT)");
+            s.execute("CREATE TABLE IF NOT EXISTS data_exchange_import (id INTEGER PRIMARY KEY AUTOINCREMENT, import_id TEXT NOT NULL UNIQUE, source_installation_id TEXT NOT NULL, source_app_version TEXT, export_type TEXT NOT NULL, exported_at TEXT, imported_at TEXT NOT NULL, record_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, package_hash TEXT, details TEXT)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_source ON data_exchange_import(source_installation_id)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_import_id ON data_exchange_import(import_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS data_exchange_export (id INTEGER PRIMARY KEY AUTOINCREMENT, export_id TEXT NOT NULL UNIQUE, export_type TEXT NOT NULL, started_at TEXT NOT NULL, completed_at TEXT, from_timestamp TEXT, to_timestamp TEXT, record_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, package_path TEXT, package_hash TEXT, details TEXT)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_export_completed ON data_exchange_export(completed_at)");
+        }
+
         // Once the 2.0.0 Data Exchange migration has completed, do not rerun it
         // during ordinary application startup. The lightweight startup check in
         // Main.java decides whether the preparation screen is needed; this guard
@@ -263,7 +276,7 @@ public final class Database {
         try (PreparedStatement p = c.prepareStatement(
                 "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.schema_version'")) {
             try (ResultSet r = p.executeQuery()) {
-                if (r.next() && "2.0.0".equals(r.getString(1))) {
+                if (r.next() && "2.0.1".equals(r.getString(1))) {
                     return;
                 }
             }
@@ -279,13 +292,6 @@ public final class Database {
         boolean previousAutoCommit = c.getAutoCommit();
         try {
             c.setAutoCommit(false);
-
-            try (Statement s = c.createStatement()) {
-                s.execute("CREATE TABLE IF NOT EXISTS data_exchange_installation (installation_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, app_version TEXT NOT NULL, last_export_at TEXT)");
-                s.execute("CREATE TABLE IF NOT EXISTS data_exchange_import (id INTEGER PRIMARY KEY AUTOINCREMENT, import_id TEXT NOT NULL UNIQUE, source_installation_id TEXT NOT NULL, source_app_version TEXT, export_type TEXT NOT NULL, exported_at TEXT, imported_at TEXT NOT NULL, record_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, package_hash TEXT, details TEXT)");
-                s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_source ON data_exchange_import(source_installation_id)");
-                s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_import_id ON data_exchange_import(import_id)");
-            }
 
             String installationId = getOrCreateInstallationId(c);
             progress.accept("Preparing installation identity…");
@@ -319,6 +325,13 @@ public final class Database {
                 }
             }
 
+            // W.A.S.P. 2.0.1: a carrier master is identified by the complete
+            // Carrier + Driver + Vehicle/Trailer combination. Existing 2.0.0
+            // databases had carrier_name UNIQUE, so migrate that table before
+            // creating the new combination index.
+            progress.accept("Updating carrier master structure…");
+            migrateCarrierMasterSchema(c);
+
             try (PreparedStatement p = c.prepareStatement(
                     "UPDATE data_exchange_installation SET app_version=? WHERE installation_id=?")) {
                 p.setString(1, "2.0.0");
@@ -330,7 +343,7 @@ public final class Database {
             // Because this runs inside the same transaction, a failed migration cannot
             // accidentally mark the database as upgraded.
             try (PreparedStatement p = c.prepareStatement(
-                    "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.schema_version','2.0.0') " +
+                    "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.schema_version','2.0.1') " +
                     "ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value")) {
                 p.executeUpdate();
             }
@@ -350,6 +363,48 @@ public final class Database {
             } catch (SQLException e) {
                 WaspLogger.error("Unable to restore database auto-commit mode after Data Exchange migration", e);
             }
+        }
+    }
+
+
+    /**
+     * Migrates saved_carrier from carrier-name-only uniqueness to uniqueness of
+     * the complete carrier/driver/vehicle combination. SQLite does not support
+     * dropping a table-level UNIQUE constraint directly, so the table is
+     * rebuilt using the documented safe table-recreation approach.
+     */
+    private static void migrateCarrierMasterSchema(Connection c) throws SQLException {
+        if (!tableExists(c, "saved_carrier")) return;
+
+        boolean legacyUnique = false;
+        try (PreparedStatement p = c.prepareStatement(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='saved_carrier'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (r.next()) {
+                    String sql = r.getString(1);
+                    legacyUnique = sql != null && sql.toUpperCase(java.util.Locale.ROOT).contains("CARRIER_NAME TEXT NOT NULL UNIQUE");
+                }
+            }
+        }
+
+        if (legacyUnique) {
+            try (Statement s = c.createStatement()) {
+                s.execute("PRAGMA foreign_keys=OFF");
+                s.execute("DROP TABLE IF EXISTS saved_carrier_new");
+                s.execute("CREATE TABLE saved_carrier_new (id INTEGER PRIMARY KEY AUTOINCREMENT, carrier_name TEXT NOT NULL COLLATE NOCASE, driver_name TEXT, vehicle_trailer_no TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, global_id TEXT, source_installation_id TEXT)");
+                s.execute("INSERT INTO saved_carrier_new(id,carrier_name,driver_name,vehicle_trailer_no,active,created_at,updated_at,global_id,source_installation_id) SELECT id,carrier_name,driver_name,vehicle_trailer_no,active,created_at,updated_at,global_id,source_installation_id FROM saved_carrier");
+                s.execute("DROP TABLE saved_carrier");
+                s.execute("ALTER TABLE saved_carrier_new RENAME TO saved_carrier");
+                s.execute("PRAGMA foreign_keys=ON");
+            }
+        }
+
+        // Existing rows from the old schema cannot contain duplicate carrier names,
+        // so creating the new combination index is safe. COALESCE makes NULL and blank
+        // driver/vehicle values behave as the same identity component.
+        try (Statement s = c.createStatement()) {
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_saved_carrier_combination ON saved_carrier(carrier_name COLLATE NOCASE, COALESCE(driver_name,'') COLLATE NOCASE, COALESCE(vehicle_trailer_no,'') COLLATE NOCASE)");
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_carrier_global_id ON saved_carrier(global_id)");
         }
     }
 
@@ -478,6 +533,21 @@ public final class Database {
         try (PreparedStatement p = c.prepareStatement("SELECT 1 FROM app_user WHERE user_code=? AND id<>? LIMIT 1")) {
             p.setString(1, code); p.setLong(2, excludeId);
             try (ResultSet r = p.executeQuery()) { return r.next(); }
+        }
+    }
+
+    /** Returns the stable installation identity assigned to this local W.A.S.P. database. */
+    public static String getDataExchangeInstallationId() {
+        try (Connection c = getConnection(); PreparedStatement p = c.prepareStatement(
+                "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next() || r.getString(1) == null || r.getString(1).isBlank()) {
+                    throw new IllegalStateException("W.A.S.P. Data Exchange installation ID is not initialized.");
+                }
+                return r.getString(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Unable to read W.A.S.P. Data Exchange installation ID", e);
         }
     }
 

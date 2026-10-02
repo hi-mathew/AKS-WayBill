@@ -940,3 +940,26 @@
 .startup-error {
     -fx-text-fill: #b42318;
 }
+
+/* Keep long master-data suggestion labels inside their popup viewport. */
+.company-suggestion-list .list-cell {
+    -fx-text-overrun: ellipsis;
+    -fx-wrap-text: false;
+    -fx-min-width: 0;
+    -fx-pref-width: 0;
+}
+
+/* Autocomplete suggestions are intentionally single-line. Do not allow the
+   long master-data label to create a horizontal scrollbar in the popup. */
+.company-suggestion-list .scroll-bar:horizontal {
+    -fx-pref-height: 0;
+    -fx-opacity: 0;
+    -fx-padding: 0;
+}
+
+/* Saved Carrier/Location ComboBox popup cells must not request a width larger
+   than the ComboBox itself. */
+.combo-box-popup .list-cell {
+    -fx-text-overrun: ellipsis;
+    -fx-wrap-text: false;
+}

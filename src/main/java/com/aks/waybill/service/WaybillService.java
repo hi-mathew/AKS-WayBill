@@ -627,47 +627,83 @@ public final class WaybillService {
 
     private static void saveCarrierMaster(Connection connection, String carrierName, String driverName, String vehicleTrailerNo) throws SQLException {
         if (isBlank(carrierName)) return;
-        String find = "SELECT id FROM saved_carrier WHERE carrier_name=? COLLATE NOCASE LIMIT 1";
+
+        String normalizedCarrier = carrierName.trim();
+        String normalizedDriver = blankToNull(driverName);
+        String normalizedVehicle = blankToNull(vehicleTrailerNo);
+
+        // A carrier master represents a reusable Carrier + Driver + Vehicle/Trailer
+        // combination. Selecting the exact same combination must not change updated_at.
+        String find = "SELECT id, active FROM saved_carrier "
+                + "WHERE carrier_name=? COLLATE NOCASE "
+                + "AND COALESCE(driver_name,'') COLLATE NOCASE=COALESCE(?,'') COLLATE NOCASE "
+                + "AND COALESCE(vehicle_trailer_no,'') COLLATE NOCASE=COALESCE(?,'') COLLATE NOCASE "
+                + "ORDER BY id LIMIT 1";
         Long id = null;
+        boolean active = false;
         try (PreparedStatement statement = connection.prepareStatement(find)) {
-            statement.setString(1, carrierName.trim());
-            try (ResultSet rs = statement.executeQuery()) { if (rs.next()) id = rs.getLong(1); }
+            statement.setString(1, normalizedCarrier);
+            statement.setString(2, normalizedDriver);
+            statement.setString(3, normalizedVehicle);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    id = rs.getLong(1);
+                    active = rs.getInt(2) == 1;
+                }
+            }
         }
+
         if (id == null) {
             String insert = "INSERT INTO saved_carrier(carrier_name, driver_name, vehicle_trailer_no, active, created_at, updated_at) VALUES(?,?,?,1,?,?)";
             String now = DB_DATE_TIME.format(LocalDateTime.now());
             try (PreparedStatement statement = connection.prepareStatement(insert)) {
-                statement.setString(1, carrierName.trim());
-                statement.setString(2, blankToNull(driverName));
-                statement.setString(3, blankToNull(vehicleTrailerNo));
-                statement.setString(4, now); statement.setString(5, now); statement.executeUpdate();
+                statement.setString(1, normalizedCarrier);
+                statement.setString(2, normalizedDriver);
+                statement.setString(3, normalizedVehicle);
+                statement.setString(4, now);
+                statement.setString(5, now);
+                statement.executeUpdate();
             }
-        } else {
-            try (PreparedStatement statement = connection.prepareStatement("UPDATE saved_carrier SET driver_name=?, vehicle_trailer_no=?, active=1, updated_at=? WHERE id=?")) {
-                statement.setString(1, blankToNull(driverName));
-                statement.setString(2, blankToNull(vehicleTrailerNo));
-                statement.setString(3, DB_DATE_TIME.format(LocalDateTime.now()));
-                statement.setLong(4, id); statement.executeUpdate();
+        } else if (!active) {
+            // Reactivating an inactive exact combination is a genuine master-data change.
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE saved_carrier SET active=1, updated_at=? WHERE id=?")) {
+                statement.setString(1, DB_DATE_TIME.format(LocalDateTime.now()));
+                statement.setLong(2, id);
+                statement.executeUpdate();
             }
         }
+        // If the exact active combination already exists, deliberately do nothing so
+        // merely selecting/using it from a waybill does not advance updated_at.
     }
 
     private static void saveLocationMaster(Connection connection, String locationName) throws SQLException {
         if (isBlank(locationName)) return;
-        String find = "SELECT id FROM saved_location WHERE location_name=? COLLATE NOCASE LIMIT 1";
+        String normalized = locationName.trim();
+        String find = "SELECT id, active FROM saved_location WHERE location_name=? COLLATE NOCASE LIMIT 1";
         Long id = null;
+        boolean active = false;
         try (PreparedStatement statement = connection.prepareStatement(find)) {
-            statement.setString(1, locationName.trim());
-            try (ResultSet rs = statement.executeQuery()) { if (rs.next()) id = rs.getLong(1); }
-        }
-        String now = DB_DATE_TIME.format(LocalDateTime.now());
-        if (id == null) {
-            try (PreparedStatement statement = connection.prepareStatement("INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,1,?,?)")) {
-                statement.setString(1, locationName.trim()); statement.setString(2, now); statement.setString(3, now); statement.executeUpdate();
+            statement.setString(1, normalized);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) { id = rs.getLong(1); active = rs.getInt(2) == 1; }
             }
-        } else {
-            try (PreparedStatement statement = connection.prepareStatement("UPDATE saved_location SET active=1, updated_at=? WHERE id=?")) {
-                statement.setString(1, now); statement.setLong(2, id); statement.executeUpdate();
+        }
+        if (id == null) {
+            String now = DB_DATE_TIME.format(LocalDateTime.now());
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,1,?,?)")) {
+                statement.setString(1, normalized);
+                statement.setString(2, now);
+                statement.setString(3, now);
+                statement.executeUpdate();
+            }
+        } else if (!active) {
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE saved_location SET active=1, updated_at=? WHERE id=?")) {
+                statement.setString(1, DB_DATE_TIME.format(LocalDateTime.now()));
+                statement.setLong(2, id);
+                statement.executeUpdate();
             }
         }
     }
@@ -679,21 +715,34 @@ public final class WaybillService {
         if (!table.equals("shipper_company") && !table.equals("consignee_company")) {
             throw new IllegalArgumentException("Invalid company master.");
         }
-        String find = "SELECT id FROM " + table + " WHERE company_name = ? COLLATE NOCASE ORDER BY id LIMIT 1";
+        String find = "SELECT id, contact_person, address, phone_number, email_address, active FROM " + table
+                + " WHERE company_name = ? COLLATE NOCASE ORDER BY id LIMIT 1";
+        String companyName = data.companyName().trim();
+        String contact = blankToNull(data.contactPerson());
+        String address = blankToNull(data.address());
+        String phone = blankToNull(data.phoneNumber());
+        String email = blankToNull(data.emailAddress());
         try (PreparedStatement statement = connection.prepareStatement(find)) {
-            statement.setString(1, data.companyName().trim());
+            statement.setString(1, companyName);
             try (ResultSet rs = statement.executeQuery()) {
                 if (rs.next()) {
                     long id = rs.getLong(1);
-                    String update = "UPDATE " + table + " SET contact_person=?, address=?, phone_number=?, email_address=?, active=1, updated_at=? WHERE id=?";
-                    try (PreparedStatement u = connection.prepareStatement(update)) {
-                        u.setString(1, blankToNull(data.contactPerson()));
-                        u.setString(2, blankToNull(data.address()));
-                        u.setString(3, blankToNull(data.phoneNumber()));
-                        u.setString(4, blankToNull(data.emailAddress()));
-                        u.setString(5, DB_DATE_TIME.format(LocalDateTime.now()));
-                        u.setLong(6, id);
-                        u.executeUpdate();
+                    boolean changed = !sameNullable(rs.getString(2), contact)
+                            || !sameNullable(rs.getString(3), address)
+                            || !sameNullable(rs.getString(4), phone)
+                            || !sameNullable(rs.getString(5), email)
+                            || rs.getInt(6) != 1;
+                    if (changed) {
+                        String update = "UPDATE " + table + " SET contact_person=?, address=?, phone_number=?, email_address=?, active=1, updated_at=? WHERE id=?";
+                        try (PreparedStatement u = connection.prepareStatement(update)) {
+                            u.setString(1, contact);
+                            u.setString(2, address);
+                            u.setString(3, phone);
+                            u.setString(4, email);
+                            u.setString(5, DB_DATE_TIME.format(LocalDateTime.now()));
+                            u.setLong(6, id);
+                            u.executeUpdate();
+                        }
                     }
                     return id;
                 }
@@ -702,11 +751,11 @@ public final class WaybillService {
         String insert = "INSERT INTO " + table + " (company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)";
         String now = DB_DATE_TIME.format(LocalDateTime.now());
         try (PreparedStatement statement = connection.prepareStatement(insert, java.sql.Statement.RETURN_GENERATED_KEYS)) {
-            statement.setString(1, data.companyName().trim());
-            statement.setString(2, blankToNull(data.contactPerson()));
-            statement.setString(3, blankToNull(data.address()));
-            statement.setString(4, blankToNull(data.phoneNumber()));
-            statement.setString(5, blankToNull(data.emailAddress()));
+            statement.setString(1, companyName);
+            statement.setString(2, contact);
+            statement.setString(3, address);
+            statement.setString(4, phone);
+            statement.setString(5, email);
             statement.setString(6, now);
             statement.setString(7, now);
             statement.executeUpdate();
@@ -715,6 +764,10 @@ public final class WaybillService {
                 return keys.getLong(1);
             }
         }
+    }
+
+    private static boolean sameNullable(String a, String b) {
+        return java.util.Objects.equals(blankToNull(a), blankToNull(b));
     }
 
     private static void insertItems(Connection connection, long waybillId, List<WaybillItemData> items) throws SQLException {

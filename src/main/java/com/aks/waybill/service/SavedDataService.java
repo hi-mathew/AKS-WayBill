@@ -56,25 +56,37 @@ public final class SavedDataService {
         } catch (SQLException e) { WaspLogger.error("Unable to load saved locations", e); throw new IllegalStateException("Unable to load saved locations", e); }
     }
 
-    /** Saves a carrier master record, or updates its driver/vehicle details when the carrier already exists. */
+    /** Saves an exact carrier/driver/vehicle combination without modifying an identical active record. */
     public static CarrierRecord saveOrUpdateCarrier(String name, String driverName, String vehicleTrailerNo) {
         String value = required(name, "Carrier name");
         validateLength(value, 300, "Carrier name");
         validateLength(driverName, 200, "Driver name");
         validateLength(vehicleTrailerNo, 200, "Vehicle / Trailer No.");
+        String driver = blankToNull(driverName);
+        String vehicle = blankToNull(vehicleTrailerNo);
         try (Connection c = Database.getConnection()) {
-            CarrierRecord existing = findCarrierByName(value, false);
-            if (existing != null) {
-                try (PreparedStatement p = c.prepareStatement("UPDATE saved_carrier SET driver_name=?, vehicle_trailer_no=?, active=1, updated_at=datetime('now') WHERE id=?")) {
-                    p.setString(1, blankToNull(driverName)); p.setString(2, blankToNull(vehicleTrailerNo)); p.setLong(3, existing.id()); p.executeUpdate();
+            String sql = "SELECT id, active FROM saved_carrier WHERE carrier_name=? COLLATE NOCASE "
+                    + "AND COALESCE(driver_name,'') COLLATE NOCASE=COALESCE(?,'') COLLATE NOCASE "
+                    + "AND COALESCE(vehicle_trailer_no,'') COLLATE NOCASE=COALESCE(?,'') COLLATE NOCASE ORDER BY id LIMIT 1";
+            try (PreparedStatement p = c.prepareStatement(sql)) {
+                p.setString(1, value); p.setString(2, driver); p.setString(3, vehicle);
+                try (ResultSet r = p.executeQuery()) {
+                    if (r.next()) {
+                        long id = r.getLong(1);
+                        if (r.getInt(2) != 1) {
+                            try (PreparedStatement u = c.prepareStatement("UPDATE saved_carrier SET active=1, updated_at=datetime('now') WHERE id=?")) {
+                                u.setLong(1, id); u.executeUpdate();
+                            }
+                        }
+                        return new CarrierRecord(id, value, driver, vehicle, true);
+                    }
                 }
-                return new CarrierRecord(existing.id(), existing.name(), blankToNull(driverName), blankToNull(vehicleTrailerNo), true);
             }
             try (PreparedStatement p = c.prepareStatement(
                     "INSERT INTO saved_carrier(carrier_name,driver_name,vehicle_trailer_no,active,created_at,updated_at) VALUES(?,?,?,1,datetime('now'),datetime('now'))",
                     Statement.RETURN_GENERATED_KEYS)) {
-                p.setString(1, value); p.setString(2, blankToNull(driverName)); p.setString(3, blankToNull(vehicleTrailerNo)); p.executeUpdate();
-                try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new CarrierRecord(r.getLong(1), value, blankToNull(driverName), blankToNull(vehicleTrailerNo), true); }
+                p.setString(1, value); p.setString(2, driver); p.setString(3, vehicle); p.executeUpdate();
+                try (ResultSet r = p.getGeneratedKeys()) { r.next(); return new CarrierRecord(r.getLong(1), value, driver, vehicle, true); }
             }
         } catch (SQLException e) { WaspLogger.error("Unable to save carrier", e); throw new IllegalStateException("Unable to save carrier", e); }
     }
