@@ -1,3 +1,9 @@
+## W.A.S.P. 2.0.3
+
+- Added Data Exchange tombstones for deleted Waybills.
+- Incremental exports now include `data/waybill_deleted.csv` for Waybill deletions.
+- Waybill deletion, deletion tombstone, and audit entry are committed transactionally.
+
 ## 2.0.0 – Master Data Synchronization Refinement
 
 - Existing master data is now marked as updated only when its actual values change during New/Edit Waybill save.

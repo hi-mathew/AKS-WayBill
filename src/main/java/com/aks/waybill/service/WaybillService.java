@@ -612,20 +612,56 @@ public final class WaybillService {
     public static void delete(long waybillId) {
         if(!SessionContext.isAdmin()) throw new IllegalArgumentException("Only an Administrator can delete waybills.");
         try(Connection c=Database.getConnection()) {
-            String waybillNumber;
-            try (PreparedStatement lookup = c.prepareStatement("SELECT waybill_number FROM waybill WHERE id=?")) {
-                lookup.setLong(1, waybillId);
-                try (ResultSet rs = lookup.executeQuery()) {
-                    if (!rs.next()) throw new IllegalArgumentException("The selected waybill no longer exists.");
-                    waybillNumber = rs.getString(1);
+            c.setAutoCommit(false);
+            try {
+                String waybillNumber;
+                String waybillGlobalId;
+                try (PreparedStatement lookup = c.prepareStatement("SELECT waybill_number, global_id FROM waybill WHERE id=?")) {
+                    lookup.setLong(1, waybillId);
+                    try (ResultSet rs = lookup.executeQuery()) {
+                        if (!rs.next()) throw new IllegalArgumentException("The selected waybill no longer exists.");
+                        waybillNumber = rs.getString(1);
+                        waybillGlobalId = rs.getString(2);
+                    }
                 }
+
+                if (waybillGlobalId == null || waybillGlobalId.isBlank()) {
+                    throw new IllegalStateException("The selected waybill does not have a Global ID. Please restart W.A.S.P. and allow the Data Exchange database preparation to complete before deleting it.");
+                }
+
+                String sourceInstallationId = loadInstallationId(c);
+                String deletedAt = DB_DATE_TIME.format(LocalDateTime.now());
+                try (PreparedStatement tombstone = c.prepareStatement(
+                        "INSERT OR IGNORE INTO data_exchange_waybill_tombstone(global_id, source_installation_id, waybill_global_id, waybill_id, waybill_number, deleted_at) VALUES(?,?,?,?,?,?)")) {
+                    tombstone.setString(1, java.util.UUID.randomUUID().toString());
+                    tombstone.setString(2, sourceInstallationId);
+                    tombstone.setString(3, waybillGlobalId);
+                    tombstone.setLong(4, waybillId);
+                    tombstone.setString(5, waybillNumber);
+                    tombstone.setString(6, deletedAt);
+                    tombstone.executeUpdate();
+                }
+
+                try (PreparedStatement p=c.prepareStatement("DELETE FROM waybill WHERE id=?")) {
+                    p.setLong(1,waybillId);
+                    if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected waybill no longer exists.");
+                }
+
+                // Keep the deletion audit entry in the SAME transaction as the
+                // tombstone and business deletion. This guarantees that an
+                // exported deletion can never exist without its audit trail.
+                Long currentUserId = null;
+                try { currentUserId = SessionContext.requireUserId(); } catch (RuntimeException ignored) { }
+                insertAudit(c, currentUserId, waybillId, waybillNumber, "DELETE");
+
+                c.commit();
+                WaspLogger.info("Waybill deleted. waybillId=" + waybillId + ", waybillNumber=" + waybillNumber + ", globalId=" + waybillGlobalId);
+            } catch (SQLException | RuntimeException exception) {
+                try { c.rollback(); } catch (SQLException ignored) { }
+                throw exception;
+            } finally {
+                try { c.setAutoCommit(true); } catch (SQLException ignored) { }
             }
-            try (PreparedStatement p=c.prepareStatement("DELETE FROM waybill WHERE id=?")) {
-                p.setLong(1,waybillId);
-                if(p.executeUpdate()==0) throw new IllegalArgumentException("The selected waybill no longer exists.");
-            }
-            AuditLogService.logWithEntityLabel("DELETE","WAYBILL",waybillId,waybillNumber,"Waybill deleted by Administrator");
-            WaspLogger.info("Waybill deleted. waybillId=" + waybillId + ", waybillNumber=" + waybillNumber);
         } catch(SQLException e){throw new IllegalStateException("Unable to delete waybill",e);}
     }
 
@@ -923,7 +959,7 @@ public final class WaybillService {
             statement.setString(3, "WAYBILL");
             statement.setLong(4, waybillId);
             statement.setString(5, number);
-            statement.setString(6, "Created waybill " + number);
+            statement.setString(6, "DELETE".equals(action) ? "Deleted waybill " + number : "Created waybill " + number);
             statement.setString(7, DB_DATE_TIME.format(LocalDateTime.now()));
             statement.setString(8, java.util.UUID.randomUUID().toString());
             statement.setString(9, loadInstallationId(connection));

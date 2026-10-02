@@ -47,7 +47,7 @@ public final class DataExchangeService {
     private record TableSpec(String table, String fileName, String timestampColumn, String extraWhere) {}
 
     private static final String APP_VERSION = "2.0.0";
-    private static final String SCHEMA_VERSION = "2.0.2";
+    private static final String SCHEMA_VERSION = "2.0.3";
     private static final String NULL_MARKER = "\\N";
     private static final List<TableSpec> TABLES = List.of(
             new TableSpec("app_user", "app_user.csv", "updated_at", ""),
@@ -58,6 +58,7 @@ public final class DataExchangeService {
             new TableSpec("waybill", "waybill.csv", "updated_at", ""),
             new TableSpec("waybill_item", "waybill_item.csv", "updated_at", ""),
             new TableSpec("data_exchange_waybill_item_tombstone", "waybill_item_deleted.csv", "deleted_at", ""),
+            new TableSpec("data_exchange_waybill_tombstone", "waybill_deleted.csv", "deleted_at", ""),
             new TableSpec("audit_log", "audit_log.csv", "created_at", ""),
             new TableSpec("terms_condition", "terms_condition.csv", "updated_at", "")
     );
@@ -254,7 +255,7 @@ public final class DataExchangeService {
         if (type == ExportType.FULL) {
             // Tombstones describe deletions and are only meaningful incrementally;
             // a full export is a current-state snapshot.
-            if ("data_exchange_waybill_item_tombstone".equals(spec.table())) {
+            if ("data_exchange_waybill_item_tombstone".equals(spec.table()) || "data_exchange_waybill_tombstone".equals(spec.table())) {
                 return select + " WHERE 1=0 ORDER BY " + spec.table() + ".id";
             }
             return select + " ORDER BY " + spec.table() + ".id";

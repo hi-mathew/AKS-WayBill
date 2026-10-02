@@ -1498,38 +1498,26 @@ public class WaybillFormView extends AppView {
 
     private static ListCell<String> truncatingComboCell(ComboBox<String> box) {
         ListCell<String> cell = new ListCell<>() {
-            private final Label text = new Label();
-
             {
-                text.setMaxWidth(Double.MAX_VALUE);
-                text.setEllipsisString("...");
-                text.setStyle("-fx-padding: 0 6 0 0;");
-                setGraphic(text);
-                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
-                setPrefWidth(0);
+                setContentDisplay(ContentDisplay.TEXT_ONLY);
+                setWrapText(false);
+                setEllipsisString("...");
                 setMinWidth(0);
+                setPrefWidth(0);
                 setMaxWidth(Double.MAX_VALUE);
             }
 
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    text.setText("");
-                } else {
-                    text.setText(item);
-                }
-                text.prefWidthProperty().unbind();
-                text.maxWidthProperty().unbind();
-                double availableWidth = Math.max(0d, (getWidth() > 0 ? getWidth() : box.getWidth()) - 28d);
-                text.setPrefWidth(availableWidth);
-                text.maxWidthProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
-                        () -> Math.max(0d, (getWidth() > 0 ? getWidth() : box.getWidth()) - 28d),
-                        widthProperty(), box.widthProperty()));
-                if (box.getWidth() > 0) {
+                setText(empty || item == null ? "" : item);
+                setGraphic(null);
+
+                double cellWidth = getWidth() > 0 ? getWidth() : box.getWidth();
+                if (cellWidth > 0) {
                     setMinWidth(0);
-                    setPrefWidth(box.getWidth());
-                    setMaxWidth(box.getWidth());
+                    setPrefWidth(cellWidth);
+                    setMaxWidth(cellWidth);
                 }
             }
         };
