@@ -19,12 +19,12 @@ public final class AuditLogService {
     public static void logWithEntityLabel(String action, String entityType, Long entityId, String entityLabel, String details) {
         Long userId = null;
         try { if (SessionContext.getCurrentUser() != null) userId = SessionContext.requireUserId(); } catch (RuntimeException ignored) {}
-        try (Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at) VALUES(?,?,?,?,?,?,?)")) {
+        try (Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at,global_id,source_installation_id) VALUES(?,?,?,?,?,?,?,?,?)")) {
             if(userId==null)p.setNull(1,Types.INTEGER);else p.setLong(1,userId);
             p.setString(2,action); p.setString(3,entityType);
             if(entityId==null)p.setNull(4,Types.INTEGER);else p.setLong(4,entityId);
             if(entityLabel==null||entityLabel.isBlank())p.setNull(5,Types.VARCHAR);else p.setString(5,entityLabel);
-            p.setString(6,details); p.setString(7,LocalDateTime.now().toString()); p.executeUpdate();
+            p.setString(6,details); p.setString(7,LocalDateTime.now().toString()); p.setString(8,java.util.UUID.randomUUID().toString()); p.setString(9,loadInstallationId(c)); p.executeUpdate();
         } catch(SQLException e){throw new IllegalStateException("Unable to write audit log",e);}
     }
 
@@ -74,4 +74,15 @@ public final class AuditLogService {
     }
 
     public record Page(List<AuditRecord> rows,int page,int pageSize,long totalRows){public int totalPages(){return(int)Math.max(1,(totalRows+pageSize-1)/pageSize);}}
+    private static String loadInstallationId(Connection c) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement("SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next() || r.getString(1) == null || r.getString(1).isBlank()) {
+                    throw new SQLException("W.A.S.P. Data Exchange installation ID is not initialized.");
+                }
+                return r.getString(1);
+            }
+        }
+    }
+
 }

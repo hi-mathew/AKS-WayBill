@@ -277,6 +277,11 @@ public final class Database {
                 "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.schema_version'")) {
             try (ResultSet r = p.executeQuery()) {
                 if (r.next() && "2.0.2".equals(r.getString(1))) {
+                    // The schema migration is complete, but older 2.0.2 builds may
+                    // have created records without Data Exchange identity fields.
+                    // Repair those rows on every startup without changing business
+                    // timestamps or any existing valid Global IDs.
+                    repairMissingDataExchangeIdentities(c);
                     return;
                 }
             }
@@ -494,6 +499,22 @@ public final class Database {
             p.setString(2, java.time.Instant.now().toString());
             p.setString(3, "2.0.0");
             p.executeUpdate();
+        }
+    }
+
+    private static void repairMissingDataExchangeIdentities(Connection c) throws SQLException {
+        String installationId = getOrCreateInstallationId(c);
+        String[] tables = {
+                "app_user", "shipper_company", "consignee_company", "saved_carrier",
+                "saved_location", "waybill", "waybill_item", "audit_log", "terms_condition"
+        };
+        for (String table : tables) {
+            populateMissingGlobalIds(c, table, installationId);
+            try (PreparedStatement p = c.prepareStatement(
+                    "UPDATE " + table + " SET source_installation_id=? WHERE source_installation_id IS NULL OR TRIM(source_installation_id)=''")) {
+                p.setString(1, installationId);
+                p.executeUpdate();
+            }
         }
     }
 

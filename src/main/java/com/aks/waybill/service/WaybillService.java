@@ -300,49 +300,55 @@ public final class WaybillService {
                 findOrCreateCompany(connection, data.consignee(), "consignee_company");
 
                 long waybillId;
+                String sourceInstallationId = loadInstallationId(connection);
+                String waybillGlobalId = java.util.UUID.randomUUID().toString();
                 String sql = "INSERT INTO waybill "
                         + "(waybill_number, waybill_date, shipper_company_id, consignee_company_id, shipper_company_name, shipper_contact_person, shipper_address, shipper_phone_number, shipper_email_address, consignee_company_name, consignee_contact_person, consignee_address, consignee_phone_number, consignee_email_address, carrier_name, driver_name, vehicle_trailer_no, "
                         + "origin_loading_point, destination_unloading_point, estimated_delivery_date, "
                         + "special_instructions, hazardous_materials, remarks, shipper_declaration_name, shipper_declaration_date, "
                         + "carrier_receipt_driver_name, carrier_receipt_date, consignee_pod_receiver_name, consignee_pod_date, "
-                        + "created_by, created_at, updated_at, status) "
-                        + "VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        + "created_by, created_at, updated_at, status, global_id, source_installation_id) "
+                        + "VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
-                    int i = 1;
-                    statement.setString(i++, waybillNumber);
-                    statement.setString(i++, DB_DATE.format(data.waybillDate()));
-                    statement.setString(i++, blankToNull(data.shipper().companyName()));
-                    statement.setString(i++, blankToNull(data.shipper().contactPerson()));
-                    statement.setString(i++, blankToNull(data.shipper().address()));
-                    statement.setString(i++, blankToNull(data.shipper().phoneNumber()));
-                    statement.setString(i++, blankToNull(data.shipper().emailAddress()));
-                    statement.setString(i++, blankToNull(data.consignee().companyName()));
-                    statement.setString(i++, blankToNull(data.consignee().contactPerson()));
-                    statement.setString(i++, blankToNull(data.consignee().address()));
-                    statement.setString(i++, blankToNull(data.consignee().phoneNumber()));
-                    statement.setString(i++, blankToNull(data.consignee().emailAddress()));
-                    statement.setString(i++, blankToNull(data.carrierName()));
-                    statement.setString(i++, blankToNull(data.driverName()));
-                    statement.setString(i++, blankToNull(data.vehicleTrailerNo()));
-                    statement.setString(i++, blankToNull(data.originLoadingPoint()));
-                    statement.setString(i++, blankToNull(data.destinationUnloadingPoint()));
-                    if (data.estimatedDeliveryDate() == null) statement.setNull(i++, java.sql.Types.VARCHAR);
-                    else statement.setString(i++, DB_DATE.format(data.estimatedDeliveryDate()));
-                    statement.setString(i++, blankToNull(data.specialInstructions()));
-                    statement.setInt(i++, data.hazardousMaterials() ? 1 : 0);
-                    statement.setString(i++, blankToNull(data.remarks()));
-                    statement.setString(i++, blankToNull(data.shipperDeclarationName()));
-                    setNullableDate(statement, i++, data.shipperDeclarationDate());
-                    statement.setString(i++, blankToNull(data.carrierReceiptDriverName()));
-                    setNullableDate(statement, i++, data.carrierReceiptDate());
-                    statement.setString(i++, blankToNull(data.consigneePodReceiverName()));
-                    setNullableDate(statement, i++, data.consigneePodDate());
-                    if (data.createdBy() == null) statement.setNull(i++, java.sql.Types.INTEGER);
-                    else statement.setLong(i++, data.createdBy());
-                    statement.setString(i++, DB_DATE_TIME.format(now));
-                    statement.setString(i++, DB_DATE_TIME.format(now));
-                    statement.setString(i++, "DRAFT");
+                    statement.setString(1, waybillNumber);
+                    statement.setString(2, DB_DATE.format(data.waybillDate()));
+                    // shipper_company_id and consignee_company_id are explicit NULL literals in the
+                    // INSERT because the waybill keeps a historical snapshot of company details.
+                    // Therefore the first bind parameter after waybill_date is parameter 3.
+                    statement.setString(3, blankToNull(data.shipper().companyName()));
+                    statement.setString(4, blankToNull(data.shipper().contactPerson()));
+                    statement.setString(5, blankToNull(data.shipper().address()));
+                    statement.setString(6, blankToNull(data.shipper().phoneNumber()));
+                    statement.setString(7, blankToNull(data.shipper().emailAddress()));
+                    statement.setString(8, blankToNull(data.consignee().companyName()));
+                    statement.setString(9, blankToNull(data.consignee().contactPerson()));
+                    statement.setString(10, blankToNull(data.consignee().address()));
+                    statement.setString(11, blankToNull(data.consignee().phoneNumber()));
+                    statement.setString(12, blankToNull(data.consignee().emailAddress()));
+                    statement.setString(13, blankToNull(data.carrierName()));
+                    statement.setString(14, blankToNull(data.driverName()));
+                    statement.setString(15, blankToNull(data.vehicleTrailerNo()));
+                    statement.setString(16, blankToNull(data.originLoadingPoint()));
+                    statement.setString(17, blankToNull(data.destinationUnloadingPoint()));
+                    if (data.estimatedDeliveryDate() == null) statement.setNull(18, java.sql.Types.VARCHAR);
+                    else statement.setString(18, DB_DATE.format(data.estimatedDeliveryDate()));
+                    statement.setString(19, blankToNull(data.specialInstructions()));
+                    statement.setInt(20, data.hazardousMaterials() ? 1 : 0);
+                    statement.setString(21, blankToNull(data.remarks()));
+                    statement.setString(22, blankToNull(data.shipperDeclarationName()));
+                    setNullableDate(statement, 23, data.shipperDeclarationDate());
+                    statement.setString(24, blankToNull(data.carrierReceiptDriverName()));
+                    setNullableDate(statement, 25, data.carrierReceiptDate());
+                    statement.setString(26, blankToNull(data.consigneePodReceiverName()));
+                    setNullableDate(statement, 27, data.consigneePodDate());
+                    if (data.createdBy() == null) statement.setNull(28, java.sql.Types.INTEGER);
+                    else statement.setLong(28, data.createdBy());
+                    statement.setString(29, DB_DATE_TIME.format(now));
+                    statement.setString(30, DB_DATE_TIME.format(now));
+                    statement.setString(31, "DRAFT");
+                    statement.setString(32, waybillGlobalId);
+                    statement.setString(33, sourceInstallationId);
                     statement.executeUpdate();
 
                     try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -589,7 +595,7 @@ public final class WaybillService {
     }
 
     private static void insertAudit(Connection connection, long userId, String action, String entityType, Long entityId, String entityLabel, String details) throws SQLException {
-        try(PreparedStatement statement=connection.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at) VALUES(?,?,?,?,?,?,?)")) {
+        try(PreparedStatement statement=connection.prepareStatement("INSERT INTO audit_log(user_id,action,entity_type,entity_id,entity_label,details,created_at,global_id,source_installation_id) VALUES(?,?,?,?,?,?,?,?,?)")) {
             statement.setLong(1,userId);
             statement.setString(2,action);
             statement.setString(3,entityType);
@@ -597,6 +603,8 @@ public final class WaybillService {
             if(entityLabel==null||entityLabel.isBlank()) statement.setNull(5,java.sql.Types.VARCHAR); else statement.setString(5,entityLabel);
             statement.setString(6,details);
             statement.setString(7,LocalDateTime.now().toString());
+            statement.setString(8,java.util.UUID.randomUUID().toString());
+            statement.setString(9,loadInstallationId(connection));
             statement.executeUpdate();
         }
     }
@@ -650,7 +658,7 @@ public final class WaybillService {
         }
 
         if (id == null) {
-            String insert = "INSERT INTO saved_carrier(carrier_name, driver_name, vehicle_trailer_no, active, created_at, updated_at) VALUES(?,?,?,1,?,?)";
+            String insert = "INSERT INTO saved_carrier(carrier_name, driver_name, vehicle_trailer_no, active, created_at, updated_at, global_id, source_installation_id) VALUES(?,?,?,1,?,?,?,?)";
             String now = DB_DATE_TIME.format(LocalDateTime.now());
             try (PreparedStatement statement = connection.prepareStatement(insert)) {
                 statement.setString(1, normalizedCarrier);
@@ -658,6 +666,8 @@ public final class WaybillService {
                 statement.setString(3, normalizedVehicle);
                 statement.setString(4, now);
                 statement.setString(5, now);
+                statement.setString(6, java.util.UUID.randomUUID().toString());
+                statement.setString(7, loadInstallationId(connection));
                 statement.executeUpdate();
             }
         } else if (!active) {
@@ -688,10 +698,12 @@ public final class WaybillService {
         if (id == null) {
             String now = DB_DATE_TIME.format(LocalDateTime.now());
             try (PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO saved_location(location_name,active,created_at,updated_at) VALUES(?,1,?,?)")) {
+                    "INSERT INTO saved_location(location_name,active,created_at,updated_at,global_id,source_installation_id) VALUES(?,1,?,?,?,?)")) {
                 statement.setString(1, normalized);
                 statement.setString(2, now);
                 statement.setString(3, now);
+                statement.setString(4, java.util.UUID.randomUUID().toString());
+                statement.setString(5, loadInstallationId(connection));
                 statement.executeUpdate();
             }
         } else if (!active) {
@@ -744,7 +756,7 @@ public final class WaybillService {
                 }
             }
         }
-        String insert = "INSERT INTO " + table + " (company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)";
+        String insert = "INSERT INTO " + table + " (company_name, contact_person, address, phone_number, email_address, active, created_at, updated_at, global_id, source_installation_id) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)";
         String now = DB_DATE_TIME.format(LocalDateTime.now());
         try (PreparedStatement statement = connection.prepareStatement(insert, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, companyName);
@@ -754,6 +766,8 @@ public final class WaybillService {
             statement.setString(5, email);
             statement.setString(6, now);
             statement.setString(7, now);
+            statement.setString(8, java.util.UUID.randomUUID().toString());
+            statement.setString(9, loadInstallationId(connection));
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 if (!keys.next()) throw new SQLException("Unable to determine the company ID.");
@@ -902,7 +916,7 @@ public final class WaybillService {
     }
 
     private static void insertAudit(Connection connection, Long userId, long waybillId, String number, String action) throws SQLException {
-        String sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, entity_label, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, entity_label, details, created_at, global_id, source_installation_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             if (userId == null) statement.setNull(1, java.sql.Types.INTEGER); else statement.setLong(1, userId);
             statement.setString(2, action);
@@ -911,6 +925,8 @@ public final class WaybillService {
             statement.setString(5, number);
             statement.setString(6, "Created waybill " + number);
             statement.setString(7, DB_DATE_TIME.format(LocalDateTime.now()));
+            statement.setString(8, java.util.UUID.randomUUID().toString());
+            statement.setString(9, loadInstallationId(connection));
             statement.executeUpdate();
         }
     }

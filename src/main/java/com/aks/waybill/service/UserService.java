@@ -43,7 +43,7 @@ public final class UserService {
         validate(username, displayName, userCode, role);
         if (password == null || password.length() < 8) throw new IllegalArgumentException("Password must contain at least 8 characters.");
         String now = Instant.now().toString();
-        String sql = "INSERT INTO app_user(username,password_hash,display_name,user_code,role,enabled,must_change_password,created_at,updated_at) VALUES(?,?,?,?,?,1,0,?,?)";
+        String sql = "INSERT INTO app_user(username,password_hash,display_name,user_code,role,enabled,must_change_password,created_at,updated_at,global_id,source_installation_id) VALUES(?,?,?,?,?,1,0,?,?,?,?)";
         try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             p.setString(1, username.trim());
             p.setString(2, PasswordService.hash(password));
@@ -52,6 +52,8 @@ public final class UserService {
             p.setString(5, role.trim().toUpperCase());
             p.setString(6, now);
             p.setString(7, now);
+            p.setString(8, java.util.UUID.randomUUID().toString());
+            p.setString(9, loadInstallationId(c));
             p.executeUpdate();
             try (ResultSet keys = p.getGeneratedKeys()) {
                 if (!keys.next()) throw new SQLException("Unable to determine new user ID.");
@@ -157,4 +159,15 @@ public final class UserService {
                 r.getString("user_code"), r.getString("role"), r.getInt("enabled") == 1,
                 r.getInt("must_change_password") == 1, r.getString("last_login_at"), r.getString("created_at"));
     }
+    private static String loadInstallationId(Connection c) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement("SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next() || r.getString(1) == null || r.getString(1).isBlank()) {
+                    throw new SQLException("W.A.S.P. Data Exchange installation ID is not initialized.");
+                }
+                return r.getString(1);
+            }
+        }
+    }
+
 }

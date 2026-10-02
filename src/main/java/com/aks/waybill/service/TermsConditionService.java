@@ -54,8 +54,8 @@ public final class TermsConditionService {
         String now = LocalDateTime.now().toString();
         try (Connection c = Database.getConnection()) {
             if (id == 0) {
-                try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
-                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setInt(6, hazardousMaterialsReference ? 1 : 0); p.setString(7, now); p.setString(8, now); p.executeUpdate();
+                try (PreparedStatement p = c.prepareStatement("INSERT INTO terms_condition(clause_number,clause_title,clause_text,display_order,active,hazardous_materials_reference,created_at,updated_at,global_id,source_installation_id) VALUES(?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+                    p.setInt(1, clauseNumber); p.setString(2, title.trim()); p.setString(3, text.trim()); p.setInt(4, Math.max(1, displayOrder)); p.setInt(5, active ? 1 : 0); p.setInt(6, hazardousMaterialsReference ? 1 : 0); p.setString(7, now); p.setString(8, now); p.setString(9, java.util.UUID.randomUUID().toString()); p.setString(10, loadInstallationId(c)); p.executeUpdate();
                     try (ResultSet r = p.getGeneratedKeys()) { if (!r.next()) throw new SQLException("Unable to determine clause ID."); id = r.getLong(1); }
                 }
             } else {
@@ -144,4 +144,15 @@ public final class TermsConditionService {
 
     private static Clause read(ResultSet r) throws SQLException { return new Clause(r.getLong(1),r.getInt(2),r.getString(3),r.getString(4),r.getInt(5),r.getInt(6)==1,r.getInt(7)==1); }
     private static void validate(String title,String text){if(title==null||title.isBlank())throw new IllegalArgumentException("Clause title is required.");if(text==null||text.isBlank())throw new IllegalArgumentException("Clause text is required.");if(title.length()>300)throw new IllegalArgumentException("Clause title cannot exceed 300 characters.");if(text.length()>3000)throw new IllegalArgumentException("Clause text cannot exceed 3000 characters.");}
+    private static String loadInstallationId(Connection c) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement("SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next() || r.getString(1) == null || r.getString(1).isBlank()) {
+                    throw new SQLException("W.A.S.P. Data Exchange installation ID is not initialized.");
+                }
+                return r.getString(1);
+            }
+        }
+    }
+
 }
