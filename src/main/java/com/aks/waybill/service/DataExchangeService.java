@@ -45,7 +45,7 @@ public final class DataExchangeService {
     private record TableSpec(String table, String fileName, String timestampColumn, String extraWhere) {}
 
     private static final String APP_VERSION = "2.0.0";
-    private static final String SCHEMA_VERSION = "2.0.1";
+    private static final String SCHEMA_VERSION = "2.0.2";
     private static final String NULL_MARKER = "\\N";
     private static final List<TableSpec> TABLES = List.of(
             new TableSpec("app_user", "app_user.csv", "updated_at", ""),
@@ -54,7 +54,8 @@ public final class DataExchangeService {
             new TableSpec("saved_carrier", "saved_carrier.csv", "updated_at", ""),
             new TableSpec("saved_location", "saved_location.csv", "updated_at", ""),
             new TableSpec("waybill", "waybill.csv", "updated_at", ""),
-            new TableSpec("waybill_item", "waybill_item.csv", null, "JOIN waybill w ON w.id = waybill_item.waybill_id"),
+            new TableSpec("waybill_item", "waybill_item.csv", "updated_at", ""),
+            new TableSpec("data_exchange_waybill_item_tombstone", "waybill_item_deleted.csv", "deleted_at", ""),
             new TableSpec("audit_log", "audit_log.csv", "created_at", ""),
             new TableSpec("terms_condition", "terms_condition.csv", "updated_at", "")
     );
@@ -179,21 +180,17 @@ public final class DataExchangeService {
     private static String selectSql(TableSpec spec, String from, String to, ExportType type) {
         String select = "SELECT " + ("app_user".equals(spec.table())
                 ? "id, global_id, source_installation_id, username, display_name, user_code, role, enabled, created_at, updated_at"
-                : spec.table() + ".*") + " FROM " + spec.table() + " " + spec.extraWhere();
-        if (type == ExportType.FULL) return select + " ORDER BY " + spec.table() + ".id";
-        String condition;
-        if ("waybill_item".equals(spec.table())) {
-            condition = " WHERE w.updated_at > ? AND w.updated_at <= ?";
-        } else {
-            condition = " WHERE " + spec.table() + "." + spec.timestampColumn() + " > ? AND " + spec.table() + "." + spec.timestampColumn() + " <= ?";
+                : spec.table() + ".*") + " FROM " + spec.table();
+        if (type == ExportType.FULL) {
+            // Tombstones describe deletions and are only meaningful incrementally;
+            // a full export is a current-state snapshot.
+            if ("data_exchange_waybill_item_tombstone".equals(spec.table())) {
+                return select + " WHERE 1=0 ORDER BY " + spec.table() + ".id";
+            }
+            return select + " ORDER BY " + spec.table() + ".id";
         }
-        // waybill_item has the JOIN in extraWhere, so append WHERE before it is not possible.
-        if ("waybill_item".equals(spec.table())) {
-            return "SELECT waybill_item.* FROM waybill_item JOIN waybill w ON w.id = waybill_item.waybill_id" + condition + " ORDER BY waybill_item.id";
-        }
-        return "SELECT " + ("app_user".equals(spec.table())
-                ? "id, global_id, source_installation_id, username, display_name, user_code, role, enabled, created_at, updated_at"
-                : spec.table() + ".*") + " FROM " + spec.table() + condition + " ORDER BY " + spec.table() + ".id";
+        String condition = " WHERE " + spec.table() + "." + spec.timestampColumn() + " > ? AND " + spec.table() + "." + spec.timestampColumn() + " <= ?";
+        return select + condition + " ORDER BY " + spec.table() + ".id";
     }
 
     private static String checkpointToLocalTimestamp(String utcTimestamp) {

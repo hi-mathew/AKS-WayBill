@@ -42,7 +42,7 @@ public final class Database {
                     try (ResultSet r = p.executeQuery()) {
                         if (!r.next()) return true;
                         String version = r.getString(1);
-                        return !"2.0.1".equals(version);
+                        return !"2.0.2".equals(version);
                     }
                 }
             }
@@ -251,7 +251,7 @@ public final class Database {
     }
 
     /**
-     * Initializes the identity/import-tracking structures and applies the 2.0.1 master-data identity migration.
+     * Initializes the identity/import-tracking structures and applies the 2.0.1 master-data identity migration and 2.0.2 waybill-item change tracking migration.
      * This migration is intentionally additive: existing local IDs and application
      * behaviour are preserved so v1.4.0 databases can be upgraded in place.
      */
@@ -276,7 +276,7 @@ public final class Database {
         try (PreparedStatement p = c.prepareStatement(
                 "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.schema_version'")) {
             try (ResultSet r = p.executeQuery()) {
-                if (r.next() && "2.0.1".equals(r.getString(1))) {
+                if (r.next() && "2.0.2".equals(r.getString(1))) {
                     return;
                 }
             }
@@ -332,6 +332,12 @@ public final class Database {
             progress.accept("Updating carrier master structure…");
             migrateCarrierMasterSchema(c);
 
+            // W.A.S.P. 2.0.2: track waybill-item changes independently from the
+            // parent waybill so editing an unrelated waybill field does not make
+            // unchanged items appear in incremental exports.
+            progress.accept("Preparing waybill item change tracking…");
+            migrateWaybillItemChangeTracking(c);
+
             try (PreparedStatement p = c.prepareStatement(
                     "UPDATE data_exchange_installation SET app_version=? WHERE installation_id=?")) {
                 p.setString(1, "2.0.0");
@@ -339,11 +345,11 @@ public final class Database {
                 p.executeUpdate();
             }
 
-            // Persist the migration marker only after all identity work has succeeded.
+            // Persist the migration marker only after all identity and item-change work has succeeded.
             // Because this runs inside the same transaction, a failed migration cannot
             // accidentally mark the database as upgraded.
             try (PreparedStatement p = c.prepareStatement(
-                    "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.schema_version','2.0.1') " +
+                    "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.schema_version','2.0.2') " +
                     "ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value")) {
                 p.executeUpdate();
             }
@@ -373,6 +379,31 @@ public final class Database {
      * dropping a table-level UNIQUE constraint directly, so the table is
      * rebuilt using the documented safe table-recreation approach.
      */
+    private static void migrateWaybillItemChangeTracking(Connection c) throws SQLException {
+        if (!tableExists(c, "waybill_item")) return;
+
+        // Existing waybill items inherit the current parent waybill timestamp so
+        // a 2.0.1 -> 2.0.2 upgrade does not manufacture item changes.
+        ensureColumn(c, "waybill_item", "updated_at", "TEXT");
+        try (Statement s = c.createStatement()) {
+            s.execute("UPDATE waybill_item SET updated_at=(SELECT w.updated_at FROM waybill w WHERE w.id=waybill_item.waybill_id) WHERE updated_at IS NULL OR TRIM(updated_at)=''");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_waybill_item_updated_at ON waybill_item(updated_at)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_waybill_item_waybill_id ON waybill_item(waybill_id)");
+            s.execute("CREATE TABLE IF NOT EXISTS data_exchange_waybill_item_tombstone (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "global_id TEXT NOT NULL UNIQUE, " +
+                    "source_installation_id TEXT NOT NULL, " +
+                    "waybill_item_global_id TEXT NOT NULL, " +
+                    "waybill_global_id TEXT, " +
+                    "waybill_id INTEGER, " +
+                    "item_number INTEGER, " +
+                    "deleted_at TEXT NOT NULL, " +
+                    "FOREIGN KEY(waybill_id) REFERENCES waybill(id) ON DELETE SET NULL)");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_waybill_item_tombstone_deleted_at ON data_exchange_waybill_item_tombstone(deleted_at)");
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_waybill_item_tombstone_item ON data_exchange_waybill_item_tombstone(waybill_item_global_id)");
+        }
+    }
+
     private static void migrateCarrierMasterSchema(Connection c) throws SQLException {
         if (!tableExists(c, "saved_carrier")) return;
 

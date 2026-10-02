@@ -426,11 +426,7 @@ public final class WaybillService {
                     if (statement.executeUpdate() == 0) throw new IllegalArgumentException("The selected waybill no longer exists.");
                 }
 
-                try (PreparedStatement deleteItems = connection.prepareStatement("DELETE FROM waybill_item WHERE waybill_id=?")) {
-                    deleteItems.setLong(1, waybillId);
-                    deleteItems.executeUpdate();
-                }
-                insertItems(connection, waybillId, data.items());
+                syncItems(connection, waybillId, data.items());
 
                 String number = loadWaybillNumber(connection, waybillId);
                 insertAudit(connection, data.createdBy(), waybillId, number, "UPDATE");
@@ -771,15 +767,17 @@ public final class WaybillService {
     }
 
     private static void insertItems(Connection connection, long waybillId, List<WaybillItemData> items) throws SQLException {
-        if (items == null || items.isEmpty()) return;
+        List<WaybillItemData> normalized = normalizeItems(items);
+        if (normalized.isEmpty()) return;
 
+        String sourceInstallationId = loadInstallationId(connection);
+        String now = DB_DATE_TIME.format(LocalDateTime.now());
         String sql = "INSERT INTO waybill_item "
-                + "(waybill_id, item_number, description, package_type, quantity, weight_kg, volume_m3) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+                + "(waybill_id, item_number, description, package_type, quantity, weight_kg, volume_m3, global_id, source_installation_id, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int itemNumber = 1;
-            for (WaybillItemData item : items) {
-                if (item == null || isBlank(item.description())) continue;
+            for (WaybillItemData item : normalized) {
                 statement.setLong(1, waybillId);
                 statement.setInt(2, itemNumber++);
                 statement.setString(3, blankToNull(item.description()));
@@ -787,9 +785,119 @@ public final class WaybillService {
                 setNullableDouble(statement, 5, item.quantity());
                 setNullableDouble(statement, 6, item.weightKg());
                 setNullableDouble(statement, 7, item.volumeM3());
+                statement.setString(8, java.util.UUID.randomUUID().toString());
+                statement.setString(9, sourceInstallationId);
+                statement.setString(10, now);
                 statement.addBatch();
             }
             statement.executeBatch();
+        }
+    }
+
+    /**
+     * Updates only genuinely changed waybill items. Unchanged items retain their
+     * existing row ID, global ID and updated_at. New items are inserted, and
+     * removed items are recorded as Data Exchange tombstones before deletion.
+     */
+    private static void syncItems(Connection connection, long waybillId, List<WaybillItemData> items) throws SQLException {
+        List<WaybillItemData> normalized = normalizeItems(items);
+        String sourceInstallationId = loadInstallationId(connection);
+        String now = DB_DATE_TIME.format(LocalDateTime.now());
+
+        class ExistingItem {
+            final long id; final int itemNumber; final String description; final String packageType;
+            final Double quantity; final Double weightKg; final Double volumeM3; final String globalId;
+            ExistingItem(long id, int itemNumber, String description, String packageType, Double quantity, Double weightKg, Double volumeM3, String globalId) {
+                this.id=id; this.itemNumber=itemNumber; this.description=description; this.packageType=packageType;
+                this.quantity=quantity; this.weightKg=weightKg; this.volumeM3=volumeM3; this.globalId=globalId;
+            }
+        }
+
+        java.util.Map<Integer, ExistingItem> existing = new java.util.LinkedHashMap<>();
+        try (PreparedStatement p = connection.prepareStatement(
+                "SELECT id, item_number, description, package_type, quantity, weight_kg, volume_m3, global_id FROM waybill_item WHERE waybill_id=? ORDER BY item_number")) {
+            p.setLong(1, waybillId);
+            try (ResultSet r = p.executeQuery()) {
+                while (r.next()) {
+                    existing.put(r.getInt(2), new ExistingItem(r.getLong(1), r.getInt(2), r.getString(3), r.getString(4),
+                            nullableDouble(r, 5), nullableDouble(r, 6), nullableDouble(r, 7), r.getString(8)));
+                }
+            }
+        }
+
+        java.util.Set<Integer> retained = new java.util.HashSet<>();
+        int itemNumber = 1;
+        for (WaybillItemData item : normalized) {
+            ExistingItem old = existing.get(itemNumber);
+            if (old == null) {
+                String sql = "INSERT INTO waybill_item (waybill_id, item_number, description, package_type, quantity, weight_kg, volume_m3, global_id, source_installation_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                try (PreparedStatement p = connection.prepareStatement(sql)) {
+                    p.setLong(1, waybillId); p.setInt(2, itemNumber);
+                    p.setString(3, blankToNull(item.description())); p.setString(4, blankToNull(item.packageType()));
+                    setNullableDouble(p, 5, item.quantity()); setNullableDouble(p, 6, item.weightKg()); setNullableDouble(p, 7, item.volumeM3());
+                    p.setString(8, java.util.UUID.randomUUID().toString()); p.setString(9, sourceInstallationId); p.setString(10, now);
+                    p.executeUpdate();
+                }
+            } else {
+                retained.add(itemNumber);
+                if (!sameNullable(old.description, item.description())
+                        || !sameNullable(old.packageType, item.packageType())
+                        || !java.util.Objects.equals(old.quantity, item.quantity())
+                        || !java.util.Objects.equals(old.weightKg, item.weightKg())
+                        || !java.util.Objects.equals(old.volumeM3, item.volumeM3())) {
+                    try (PreparedStatement p = connection.prepareStatement(
+                            "UPDATE waybill_item SET description=?, package_type=?, quantity=?, weight_kg=?, volume_m3=?, updated_at=? WHERE id=?")) {
+                        p.setString(1, blankToNull(item.description())); p.setString(2, blankToNull(item.packageType()));
+                        setNullableDouble(p, 3, item.quantity()); setNullableDouble(p, 4, item.weightKg()); setNullableDouble(p, 5, item.volumeM3());
+                        p.setString(6, now); p.setLong(7, old.id); p.executeUpdate();
+                    }
+                }
+            }
+            itemNumber++;
+        }
+
+        String waybillGlobalId = null;
+        try (PreparedStatement p = connection.prepareStatement("SELECT global_id FROM waybill WHERE id=?")) {
+            p.setLong(1, waybillId);
+            try (ResultSet r = p.executeQuery()) { if (r.next()) waybillGlobalId = r.getString(1); }
+        }
+
+        for (ExistingItem old : existing.values()) {
+            if (retained.contains(old.itemNumber)) continue;
+            String itemGlobalId = old.globalId;
+            if (itemGlobalId == null || itemGlobalId.isBlank()) itemGlobalId = java.util.UUID.randomUUID().toString();
+            try (PreparedStatement p = connection.prepareStatement(
+                    "INSERT OR IGNORE INTO data_exchange_waybill_item_tombstone(global_id, source_installation_id, waybill_item_global_id, waybill_global_id, waybill_id, item_number, deleted_at) VALUES(?,?,?,?,?,?,?)")) {
+                p.setString(1, java.util.UUID.randomUUID().toString()); p.setString(2, sourceInstallationId);
+                p.setString(3, itemGlobalId); p.setString(4, waybillGlobalId); p.setLong(5, waybillId); p.setInt(6, old.itemNumber); p.setString(7, now);
+                p.executeUpdate();
+            }
+            try (PreparedStatement p = connection.prepareStatement("DELETE FROM waybill_item WHERE id=?")) {
+                p.setLong(1, old.id); p.executeUpdate();
+            }
+        }
+    }
+
+    private static List<WaybillItemData> normalizeItems(List<WaybillItemData> items) {
+        List<WaybillItemData> normalized = new ArrayList<>();
+        if (items == null) return normalized;
+        for (WaybillItemData item : items) {
+            if (item == null || isBlank(item.description())) continue;
+            normalized.add(new WaybillItemData(blankToNull(item.description()), blankToNull(item.packageType()),
+                    item.quantity(), item.weightKg(), item.volumeM3()));
+        }
+        return normalized;
+    }
+
+    private static String loadInstallationId(Connection connection) throws SQLException {
+        try (PreparedStatement p = connection.prepareStatement(
+                "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (!r.next() || r.getString(1) == null || r.getString(1).isBlank()) {
+                    throw new SQLException("W.A.S.P. Data Exchange installation ID is not initialized.");
+                }
+                return r.getString(1);
+            }
         }
     }
 
