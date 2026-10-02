@@ -336,7 +336,7 @@ public class DashboardView extends BorderPane {
                 aboutParagraph("W.A.S.P is a proprietary application owned and operated by AKS Global Logistics. All rights relating to the software, branding, business processes, and operational use of the application are reserved by AKS Global Logistics."),
                 aboutMetadata("Developed by", "Deepesh V. Thampi"),
                 aboutMetadata("Owned by", "AKS Global Logistics"),
-                aboutMetadata("Version", "1.4.0")
+                aboutMetadata("Version", "2.0.0")
         );
 
         dialog.getDialogPane().setContent(about);

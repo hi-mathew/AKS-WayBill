@@ -12,16 +12,66 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class Database {
     private Database() {
     }
 
-    public static void initialize() {
+    /**
+     * Performs a lightweight check to determine whether the Data Exchange 2.0.0
+     * migration still needs to run. This intentionally checks only migration
+     * metadata and never scans the application's business tables.
+     *
+     * A missing marker means this is either a fresh database or a pre-2.0.0
+     * database, so the migration is required. Once completed, the marker is
+     * stored in application_settings and normal launches bypass the migration.
+     */
+    public static boolean isDataExchangeUpgradeRequired() {
         try {
             Files.createDirectories(AppPaths.dataDirectory());
             Files.createDirectories(AppPaths.databaseFile().getParent());
             migrateLegacyPackagedDatabaseIfNeeded();
+            if (!Files.exists(AppPaths.databaseFile())) return true;
+
+            try (Connection c = getConnection()) {
+                if (!tableExists(c, "application_settings")) return true;
+                try (PreparedStatement p = c.prepareStatement(
+                        "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.schema_version'")) {
+                    try (ResultSet r = p.executeQuery()) {
+                        if (!r.next()) return true;
+                        String version = r.getString(1);
+                        return !"2.0.0".equals(version);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // If the lightweight check cannot establish the migration state, prefer
+            // the safe path: show the preparation screen and let full initialization
+            // report the actual database problem.
+            WaspLogger.warning("Unable to determine W.A.S.P. Data Exchange migration state; startup preparation will be shown. " + e.getMessage());
+            return true;
+        }
+    }
+
+    public static void initialize() {
+        initialize(message -> { });
+    }
+
+    /**
+     * Initializes the W.A.S.P. database and reports major startup/migration phases.
+     * The callback is invoked from the calling thread, so UI callers should marshal
+     * updates to the JavaFX application thread themselves.
+     */
+    public static void initialize(Consumer<String> progressListener) {
+        Consumer<String> progress = progressListener == null ? message -> { } : progressListener;
+        try {
+            progress.accept("Preparing database…");
+            Files.createDirectories(AppPaths.dataDirectory());
+            Files.createDirectories(AppPaths.databaseFile().getParent());
+            migrateLegacyPackagedDatabaseIfNeeded();
+            progress.accept("Checking database structure…");
             try (Connection c = getConnection(); Statement s = c.createStatement()) {
                 s.execute("PRAGMA foreign_keys = ON");
                 s.execute("PRAGMA journal_mode = WAL");
@@ -75,6 +125,12 @@ public final class Database {
                 ensureHazardousTermsReferenceColumn(c);
                 seedTermsConditions(c);
                 normalizeTermsConditionOrder(c);
+
+                // W.A.S.P. 2.0.0 Data Exchange foundation. Local numeric IDs remain
+                // unchanged; globally unique UUIDs and the source installation ID
+                // provide stable identity when multiple local databases are consolidated.
+                progress.accept("Preparing Data Exchange identity…");
+                initializeDataExchangeSchema(c, progress);
             }
         } catch (IOException | SQLException e) { WaspLogger.error("Operation failed in Database", e);
             throw new IllegalStateException("Unable to initialize W.A.S.P database", e);
@@ -191,6 +247,196 @@ public final class Database {
                 p.setInt(1, number); p.setInt(2, number); p.setLong(3, ids.get(i)); p.addBatch();
             }
             p.executeBatch();
+        }
+    }
+
+    /**
+     * Initializes the identity and import-tracking structures used by W.A.S.P. 2.0.0.
+     * This migration is intentionally additive: existing local IDs and application
+     * behaviour are preserved so v1.4.0 databases can be upgraded in place.
+     */
+    private static void initializeDataExchangeSchema(Connection c, Consumer<String> progress) throws SQLException {
+        // Once the 2.0.0 Data Exchange migration has completed, do not rerun it
+        // during ordinary application startup. The lightweight startup check in
+        // Main.java decides whether the preparation screen is needed; this guard
+        // protects the database layer as well.
+        try (PreparedStatement p = c.prepareStatement(
+                "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.schema_version'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (r.next() && "2.0.0".equals(r.getString(1))) {
+                    return;
+                }
+            }
+        }
+
+        /*
+         * IMPORTANT: this migration may touch tens of thousands of existing rows.
+         * Keep the complete Data Exchange upgrade in ONE SQLite transaction so the
+         * migration is fast and atomic. Without this, SQLite can end up committing
+         * individual batches/updates and a first launch on a populated test database
+         * can take several minutes.
+         */
+        boolean previousAutoCommit = c.getAutoCommit();
+        try {
+            c.setAutoCommit(false);
+
+            try (Statement s = c.createStatement()) {
+                s.execute("CREATE TABLE IF NOT EXISTS data_exchange_installation (installation_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, app_version TEXT NOT NULL, last_export_at TEXT)");
+                s.execute("CREATE TABLE IF NOT EXISTS data_exchange_import (id INTEGER PRIMARY KEY AUTOINCREMENT, import_id TEXT NOT NULL UNIQUE, source_installation_id TEXT NOT NULL, source_app_version TEXT, export_type TEXT NOT NULL, exported_at TEXT, imported_at TEXT NOT NULL, record_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, package_hash TEXT, details TEXT)");
+                s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_source ON data_exchange_import(source_installation_id)");
+                s.execute("CREATE INDEX IF NOT EXISTS idx_data_exchange_import_import_id ON data_exchange_import(import_id)");
+            }
+
+            String installationId = getOrCreateInstallationId(c);
+            progress.accept("Preparing installation identity…");
+
+            String[] tables = {
+                    "app_user", "shipper_company", "consignee_company", "saved_carrier",
+                    "saved_location", "waybill", "waybill_item", "audit_log", "terms_condition"
+            };
+
+            for (String table : tables) {
+                ensureColumn(c, table, "global_id", "TEXT");
+                ensureColumn(c, table, "source_installation_id", "TEXT");
+            }
+
+            // Existing rows get a UUID exactly once. UUIDs are deliberately independent
+            // from SQLite AUTOINCREMENT IDs because local databases can have identical IDs.
+            for (String table : tables) {
+                progress.accept("Preparing " + displayTableName(table) + "…");
+                populateMissingGlobalIds(c, table, installationId);
+            }
+
+            // Unique global IDs are the technical identity used by consolidation.
+            // Existing rows that already have a global_id but no source installation are
+            // assigned the current installation ID in the same transaction.
+            for (String table : tables) {
+                sCreateUniqueGlobalIndex(c, table);
+                try (PreparedStatement p = c.prepareStatement(
+                        "UPDATE " + table + " SET source_installation_id=? WHERE source_installation_id IS NULL OR TRIM(source_installation_id)=''")) {
+                    p.setString(1, installationId);
+                    p.executeUpdate();
+                }
+            }
+
+            try (PreparedStatement p = c.prepareStatement(
+                    "UPDATE data_exchange_installation SET app_version=? WHERE installation_id=?")) {
+                p.setString(1, "2.0.0");
+                p.setString(2, installationId);
+                p.executeUpdate();
+            }
+
+            // Persist the migration marker only after all identity work has succeeded.
+            // Because this runs inside the same transaction, a failed migration cannot
+            // accidentally mark the database as upgraded.
+            try (PreparedStatement p = c.prepareStatement(
+                    "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.schema_version','2.0.0') " +
+                    "ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value")) {
+                p.executeUpdate();
+            }
+
+            progress.accept("Finalizing database upgrade…");
+            c.commit();
+        } catch (SQLException | RuntimeException e) {
+            try {
+                c.rollback();
+            } catch (SQLException rollbackError) {
+                e.addSuppressed(rollbackError);
+            }
+            throw e;
+        } finally {
+            try {
+                c.setAutoCommit(previousAutoCommit);
+            } catch (SQLException e) {
+                WaspLogger.error("Unable to restore database auto-commit mode after Data Exchange migration", e);
+            }
+        }
+    }
+
+
+    private static String displayTableName(String table) {
+        return switch (table) {
+            case "app_user" -> "users";
+            case "shipper_company" -> "shipper companies";
+            case "consignee_company" -> "consignee companies";
+            case "saved_carrier" -> "carriers";
+            case "saved_location" -> "locations";
+            case "waybill" -> "waybills";
+            case "waybill_item" -> "waybill items";
+            case "audit_log" -> "audit records";
+            case "terms_condition" -> "terms and conditions";
+            default -> table;
+        };
+    }
+
+    private static String getOrCreateInstallationId(Connection c) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement(
+                "SELECT setting_value FROM application_settings WHERE setting_key='data_exchange.installation_id'")) {
+            try (ResultSet r = p.executeQuery()) {
+                if (r.next()) {
+                    String existing = r.getString(1);
+                    if (existing != null && !existing.isBlank()) {
+                        ensureInstallationRecord(c, existing);
+                        return existing;
+                    }
+                }
+            }
+        }
+
+        String installationId = UUID.randomUUID().toString();
+        String now = java.time.Instant.now().toString();
+        try (PreparedStatement p = c.prepareStatement(
+                "INSERT INTO application_settings(setting_key,setting_value) VALUES('data_exchange.installation_id',?)")) {
+            p.setString(1, installationId);
+            p.executeUpdate();
+        }
+        try (PreparedStatement p = c.prepareStatement(
+                "INSERT INTO data_exchange_installation(installation_id,created_at,app_version) VALUES(?,?,?)")) {
+            p.setString(1, installationId);
+            p.setString(2, now);
+            p.setString(3, "2.0.0");
+            p.executeUpdate();
+        }
+        WaspLogger.info("Initialized W.A.S.P. Data Exchange installation ID: " + installationId);
+        return installationId;
+    }
+
+    private static void ensureInstallationRecord(Connection c, String installationId) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement(
+                "INSERT OR IGNORE INTO data_exchange_installation(installation_id,created_at,app_version) VALUES(?,?,?)")) {
+            p.setString(1, installationId);
+            p.setString(2, java.time.Instant.now().toString());
+            p.setString(3, "2.0.0");
+            p.executeUpdate();
+        }
+    }
+
+    private static void populateMissingGlobalIds(Connection c, String table, String installationId) throws SQLException {
+        String idColumn = "id";
+        java.util.List<Long> ids = new java.util.ArrayList<>();
+        try (PreparedStatement p = c.prepareStatement(
+                "SELECT " + idColumn + " FROM " + table + " WHERE global_id IS NULL OR TRIM(global_id)='' ORDER BY " + idColumn);
+             ResultSet r = p.executeQuery()) {
+            while (r.next()) ids.add(r.getLong(1));
+        }
+        if (ids.isEmpty()) return;
+
+        try (PreparedStatement p = c.prepareStatement(
+                "UPDATE " + table + " SET global_id=?, source_installation_id=? WHERE id=?")) {
+            for (Long id : ids) {
+                p.setString(1, UUID.randomUUID().toString());
+                p.setString(2, installationId);
+                p.setLong(3, id);
+                p.addBatch();
+            }
+            p.executeBatch();
+        }
+    }
+
+    private static void sCreateUniqueGlobalIndex(Connection c, String table) throws SQLException {
+        String safe = table.replace("_", "_");
+        try (Statement s = c.createStatement()) {
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_" + safe + "_global_id ON " + table + "(global_id)");
         }
     }
 

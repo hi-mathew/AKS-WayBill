@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = '1.4.0'
+$Version = '2.0.0'
 
 $TargetDir = Join-Path $ProjectRoot 'target'
 $InputDir = Join-Path $TargetDir 'package-input'

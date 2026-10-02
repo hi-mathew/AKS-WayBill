@@ -904,3 +904,39 @@
 .quick-date-year-spinner .decrement-arrow-button:hover {
     -fx-background-color: #dcecf5;
 }
+
+/* W.A.S.P. 2.0.0 startup / database preparation screen */
+.startup-root {
+    -fx-background-color: #f5f7fa;
+}
+.startup-card {
+    -fx-background-color: white;
+    -fx-background-radius: 14px;
+    -fx-border-color: #e1e6ed;
+    -fx-border-radius: 14px;
+    -fx-padding: 34px 44px;
+    -fx-effect: dropshadow(gaussian, rgba(17,55,82,0.10), 24, 0.18, 0, 8);
+}
+.startup-title {
+    -fx-text-fill: #152235;
+    -fx-font-size: 25px;
+    -fx-font-weight: 700;
+}
+.startup-subtitle {
+    -fx-text-fill: #697586;
+    -fx-font-size: 13px;
+    -fx-line-spacing: 3px;
+}
+.startup-status {
+    -fx-text-fill: #0b4b7d;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+}
+.startup-detail {
+    -fx-text-fill: #8792a2;
+    -fx-font-size: 11px;
+    -fx-line-spacing: 2px;
+}
+.startup-error {
+    -fx-text-fill: #b42318;
+}

@@ -19,6 +19,7 @@ import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.Node;
 import javafx.scene.text.Text;
 import javafx.scene.text.Font;
@@ -35,26 +36,160 @@ public class Main extends Application {
     public void start(Stage primaryStage) {
         stage = primaryStage;
         WaspLogger.initialize();
-        WaspLogger.info("Starting W.A.S.P 1.4.0");
+        WaspLogger.info("Starting W.A.S.P 2.0.0");
         WaspLogger.debug("Application data directory: " + com.aks.waybill.config.AppPaths.dataDirectory());
         installDialogStyling();
-        try {
-            Database.initialize();
-            WaspLogger.info("Database initialization completed successfully.");
-        } catch (RuntimeException exception) {
-            WaspLogger.error("Database initialization failed.", exception);
-            throw exception;
-        }
+
         stage.setTitle("W.A.S.P");
         stage.setMinWidth(900);
         stage.setMinHeight(600);
-        stage.setResizable(true);
+        stage.setResizable(false);
         stage.getIcons().clear();
         var iconStream = getClass().getResourceAsStream("/com/aks/waybill/images/wasp-logo.png");
         if (iconStream != null) stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-        stage.setOnCloseRequest(this::handleWindowClose);
-        showLogin();
-        stage.show();
+
+        // The Data Exchange migration is needed only when the database has not yet
+        // been upgraded to the current Data Exchange schema. The check is deliberately
+        // lightweight so normal launches do not show the preparation screen or scan
+        // the application's data tables.
+        boolean upgradeRequired = Database.isDataExchangeUpgradeRequired();
+        if (upgradeRequired) {
+            // Database upgrades must not run on the JavaFX application thread. On a
+            // populated v1.4.0 database the identity migration can touch tens of
+            // thousands of rows, so show clear progress while it runs.
+            stage.setOnCloseRequest(event -> {
+                event.consume();
+                WaspLogger.warning("Close requested while W.A.S.P. startup/database preparation is in progress; request ignored.");
+            });
+            showStartupScreen();
+            stage.show();
+
+            javafx.concurrent.Task<Void> startupTask = new javafx.concurrent.Task<>() {
+                @Override
+                protected Void call() {
+                    Database.initialize(message -> updateStartupStatus(message));
+                    return null;
+                }
+            };
+
+            startupTask.setOnSucceeded(event -> {
+                WaspLogger.info("Database initialization completed successfully.");
+                stage.setResizable(true);
+                stage.setOnCloseRequest(this::handleWindowClose);
+                showLogin();
+            });
+
+            startupTask.setOnFailed(event -> {
+                Throwable exception = startupTask.getException();
+                WaspLogger.error("Database initialization failed.", exception);
+                showStartupFailure(exception);
+            });
+
+            Thread startupThread = new Thread(startupTask, "wasp-startup");
+            startupThread.setDaemon(false);
+            startupThread.start();
+        } else {
+            // Normal launch: the database has already completed the Data Exchange
+            // migration. Initialize the application synchronously here; this path
+            // performs only the existing lightweight startup checks and does not
+            // regenerate UUIDs or rerun the Data Exchange migration.
+            Database.initialize();
+            stage.setResizable(true);
+            stage.setOnCloseRequest(this::handleWindowClose);
+            showLogin();
+            stage.show();
+        }
+    }
+
+    private javafx.scene.control.Label startupStatusLabel;
+    private javafx.scene.control.Label startupDetailLabel;
+    private javafx.scene.control.ProgressIndicator startupProgress;
+
+    private void showStartupScreen() {
+        var root = new javafx.scene.layout.StackPane();
+        root.getStyleClass().add("startup-root");
+
+        var card = new javafx.scene.layout.VBox(14);
+        card.getStyleClass().add("startup-card");
+        card.setMaxWidth(560);
+        card.setMaxHeight(Region.USE_PREF_SIZE);
+
+        var logoStream = getClass().getResourceAsStream("/com/aks/waybill/images/wasp-logo.png");
+        javafx.scene.image.ImageView logo = new javafx.scene.image.ImageView();
+        if (logoStream != null) {
+            logo.setImage(new javafx.scene.image.Image(logoStream));
+        }
+        logo.setFitWidth(76);
+        logo.setFitHeight(76);
+        logo.setPreserveRatio(true);
+        logo.setSmooth(true);
+
+        var title = new javafx.scene.control.Label("Preparing W.A.S.P. 2.0.0");
+        title.getStyleClass().add("startup-title");
+
+        var subtitle = new javafx.scene.control.Label(
+                "Upgrading existing data for Data Exchange.\nPlease do not close the application.");
+        subtitle.getStyleClass().add("startup-subtitle");
+        subtitle.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        subtitle.setAlignment(javafx.geometry.Pos.CENTER);
+        subtitle.setWrapText(true);
+
+        startupProgress = new javafx.scene.control.ProgressIndicator();
+        startupProgress.setPrefSize(46, 46);
+        startupProgress.setMaxSize(46, 46);
+
+        startupStatusLabel = new javafx.scene.control.Label("Preparing database…");
+        startupStatusLabel.getStyleClass().add("startup-status");
+        startupStatusLabel.setWrapText(true);
+        startupStatusLabel.setAlignment(javafx.geometry.Pos.CENTER);
+
+        startupDetailLabel = new javafx.scene.control.Label(
+                "This step is performed only when the database needs to be upgraded.");
+        startupDetailLabel.getStyleClass().add("startup-detail");
+        startupDetailLabel.setWrapText(true);
+        startupDetailLabel.setAlignment(javafx.geometry.Pos.CENTER);
+        startupDetailLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+
+        card.setAlignment(javafx.geometry.Pos.CENTER);
+        card.getChildren().addAll(logo, title, subtitle, startupProgress, startupStatusLabel, startupDetailLabel);
+        root.getChildren().add(card);
+        javafx.scene.layout.StackPane.setAlignment(card, javafx.geometry.Pos.CENTER);
+
+        Scene scene = new Scene(root, 760, 500);
+        applyStyles(scene);
+        stage.setScene(scene);
+        stage.setWidth(760);
+        stage.setHeight(500);
+        stage.centerOnScreen();
+    }
+
+    private void updateStartupStatus(String message) {
+        javafx.application.Platform.runLater(() -> {
+            if (startupStatusLabel != null) {
+                startupStatusLabel.setText(message == null || message.isBlank() ? "Preparing database…" : message);
+            }
+        });
+    }
+
+    private void showStartupFailure(Throwable exception) {
+        if (startupProgress != null) startupProgress.setVisible(false);
+        if (startupStatusLabel != null) {
+            startupStatusLabel.setText("Database preparation failed.");
+            startupStatusLabel.getStyleClass().add("startup-error");
+        }
+        if (startupDetailLabel != null) {
+            startupDetailLabel.setText("W.A.S.P. cannot continue until the database can be prepared. Check the application log for details.");
+        }
+
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("W.A.S.P. Startup Error");
+        alert.setHeaderText("Unable to prepare the W.A.S.P. database");
+        alert.setContentText(exception == null || exception.getMessage() == null
+                ? "Database initialization failed. Check the W.A.S.P. log for details."
+                : exception.getMessage());
+        if (stage != null) alert.initOwner(stage);
+        alert.showAndWait();
+        exitApplication();
     }
 
     public void showLogin() {

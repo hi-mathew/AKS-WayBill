@@ -13,7 +13,7 @@ import javafx.scene.shape.Circle;
 import java.util.function.Consumer;
 
 public class LoginView extends BorderPane {
-    private static final String VERSION = "1.4.0";
+    private static final String VERSION = "2.0.0";
 
     private final AuthService auth = new AuthService();
     private final Consumer<AuthService.UserRecord> onLogin;

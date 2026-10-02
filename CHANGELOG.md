@@ -1,3 +1,20 @@
+## 2.0.0 – Startup / Database Upgrade State Correction
+
+- Added a persistent `data_exchange.schema_version` marker so the Data Exchange identity migration runs only once per database.
+- Added a lightweight startup check that reads only the migration marker; normal launches do not rescan or regenerate UUIDs.
+- The preparation screen is now shown only when the database is new or requires the 2.0.0 Data Exchange migration.
+- Fixed the startup-screen subtitle string so the 2.0.0 source compiles correctly.
+- The migration marker is written inside the same transaction as the identity migration, so a failed migration is not marked as complete.
+
+## W.A.S.P. 2.0.0 – Data Exchange Foundation
+
+- Introduced a unique Data Exchange Installation ID for each W.A.S.P. database.
+- Added globally unique UUID-based record identities while retaining existing local SQLite IDs.
+- Added source-installation tracking to exportable business records.
+- Added Data Exchange import tracking structures for future controlled consolidation.
+- Existing W.A.S.P. 1.4.0 database data is upgraded in place; existing local IDs and workflows are preserved.
+- This release establishes the identity layer for future Full Export, Incremental Export and Central Consolidation features.
+
 ## v1.4.0 – PDF DRAFT watermark centering
 - Corrected the PDF DRAFT watermark positioning to use the actual rendered glyph bounds and centre the watermark visually on the page, matching the page-centred Word WordArt watermark.
 - Removed the previous page-specific positional offset from the PDF watermark calculation.
@@ -65,3 +82,11 @@
 ## Saved Data grid sizing correction
 - Restored dynamic TableView height sizing for Companies, Carriers and Locations so the grid displays only the populated rows on the current page instead of rendering unnecessary blank rows.
 - Preserved the existing compact Saved Data layout and scrolling behavior for larger result sets.
+
+## 2.0.0 – Startup / Database Upgrade UX
+
+- Added a visible W.A.S.P. 2.0.0 startup preparation screen before the login screen.
+- Moved database initialization and Data Exchange upgrade work off the JavaFX application thread.
+- Added live startup status messages for database preparation and Data Exchange identity migration phases.
+- Prevented normal application close handling while the startup/database preparation task is running.
+- Added a clear startup failure screen/dialog when the database cannot be prepared.

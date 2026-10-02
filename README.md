@@ -91,7 +91,7 @@ packaging\package-windows.bat
 The installer is generated under:
 
 ```text
-target\installer\W.A.S.P-1.4.0.exe
+target\installer\W.A.S.P-2.0.0.exe
 ```
 
 ### Persistent production data
