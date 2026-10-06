@@ -121,3 +121,25 @@
 - Incremental exports include records changed after the previous successful export checkpoint; waybill items follow their parent waybill update timestamp.
 - Export failures do not advance the incremental checkpoint.
 - Added Data Exchange navigation to the main W.A.S.P. workspace.
+
+
+## Dashboard Layout Final 7
+- Increased Quick Actions and Administration card height to 70px for better readability while preserving section gaps.
+- Restored Recent Waybills to comfortable 38px header / 34px data-row sizing.
+- Set the dashboard Recent Waybills table height to exactly the header plus the number of returned rows (maximum five), eliminating the extra blank row.
+- Kept all existing dashboard content, navigation, user/role display, footer, and sidebar behavior unchanged.
+
+### Dashboard final visual polish
+- Added an explicit Draft/Final legend inside the dashboard status card using neutral text and grey/orange indicator markers.
+- Increased Quick Actions and Administration card height slightly while retaining the restored section spacing.
+- Kept the Recent Waybills table at its comfortable five-row layout without shrinking its row height.
+
+## Dashboard Final 9 – Draft/Final legend marker correction
+- Replaced CSS-styled Region legend markers with JavaFX Circle shapes so the Draft (grey) and Final (orange) indicators render reliably.
+- Kept legend text neutral/dark for readability.
+
+### Dashboard Final 10 — Draft/Final Legend Colour Fix
+- Fixed Draft/Final legend markers to set their grey/orange paint directly on the JavaFX Circle nodes.
+- Draft marker: grey (#9aa9b6).
+- Final marker: orange (#e99a2b).
+- No dashboard dimensions, spacing, table sizing, or application functionality changed.

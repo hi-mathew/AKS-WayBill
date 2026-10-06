@@ -13,6 +13,9 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.shape.Circle;
+import javafx.scene.paint.Color;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
@@ -33,6 +36,8 @@ public class DashboardView extends BorderPane {
     private final Runnable logout;
     private final Runnable exit;
     private final StackPane content = new StackPane();
+    private final ImageView topbarLogo = createTopbarLogo();
+    private final Label topbarDivider = label("|", "topbar-divider");
     private final Label pageTitle = label("Dashboard", "topbar-title");
 
     private final Button dashboardButton = nav("▦  Dashboard", true);
@@ -56,8 +61,14 @@ public class DashboardView extends BorderPane {
         this.exit = exit == null ? javafx.application.Platform::exit : exit;
         getStyleClass().add("app-root");
         setLeft(sidebar());
-        setTop(topbar());
-        setCenter(content);
+
+        // Keep the sidebar full-height. The header belongs to the main workspace
+        // and therefore starts immediately after the sidebar, matching the
+        // reference layout.
+        BorderPane workspace = new BorderPane();
+        workspace.setTop(topbar());
+        workspace.setCenter(content);
+        setCenter(workspace);
         showDashboard();
         installShortcuts();
     }
@@ -69,27 +80,39 @@ public class DashboardView extends BorderPane {
         s.setMinHeight(0);
         s.getStyleClass().add("sidebar");
 
-        var logoStream = getClass().getResourceAsStream("/com/aks/waybill/images/aks-logo.png");
+        var logoStream = getClass().getResourceAsStream("/com/aks/waybill/images/wasp_application_logo.png");
         ImageView logo = new ImageView();
         if (logoStream != null) {
             logo.setImage(new Image(logoStream));
         }
-        logo.setFitWidth(145);
+        // The supplied artwork is high resolution; JavaFX scales it cleanly, so
+        // there is no need for the user to prepare a smaller image.
+        logo.setFitWidth(180);
+        logo.setFitHeight(145);
         logo.setPreserveRatio(true);
 
-        StackPane lb = new StackPane(logo);
-        lb.setPadding(new Insets(2, 0, 14, 0));
+        // The supplied logo is a full-colour application mark. A straight white
+        // tile keeps it readable against the dark sidebar without changing the
+        // artwork itself.
+        StackPane logoTile = new StackPane(logo);
+        logoTile.setPrefSize(190, 151);
+        logoTile.setMinSize(190, 151);
+        logoTile.setMaxSize(190, 151);
+        logoTile.getStyleClass().add("sidebar-logo-tile");
+
+        StackPane lb = new StackPane(logoTile);
+        lb.setPadding(new Insets(0, 0, 0, 0));
 
         Label workspace = label("WORKSPACE", "sidebar-section");
         VBox top = new VBox(2, lb, workspace);
-        top.setPadding(new Insets(18, 14, 0, 14));
+        top.setPadding(new Insets(8, 14, 0, 14));
         s.setTop(top);
 
         // Keep the sidebar hierarchy meaningful for every role.  About is
         // informational, not administrative, so it belongs in its own group.
-        VBox navigation = new VBox(4);
+        VBox navigation = new VBox(1);
         navigation.setFillWidth(true);
-        navigation.setPadding(new Insets(0, 14, 8, 14));
+        navigation.setPadding(new Insets(0, 14, 2, 14));
 
         navigation.getChildren().addAll(
                 dashboardButton,
@@ -130,7 +153,7 @@ public class DashboardView extends BorderPane {
         navigationScroll.setFitToWidth(true);
         navigationScroll.setFitToHeight(false);
         navigationScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        navigationScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         navigationScroll.setPannable(false);
         navigationScroll.setFocusTraversable(false);
         navigationScroll.setMinHeight(0);
@@ -138,9 +161,20 @@ public class DashboardView extends BorderPane {
         s.setCenter(navigationScroll);
 
         Button signOut = nav("⇥  Sign out", false);
+        signOut.getStyleClass().add("nav-signout");
+        signOut.setStyle("-fx-text-fill: #f0a23a; -fx-font-weight: 800;");
         signOut.setOnAction(e -> requestLogout(logout));
 
-        Label footer1 = label("W.A.S.P.", "app-footer-title");
+        ImageView footerLogo = new ImageView();
+        var footerLogoStream = getClass().getResourceAsStream("/com/aks/waybill/images/wasp-wordmark-white.png");
+        if (footerLogoStream != null) {
+            footerLogo.setImage(new Image(footerLogoStream));
+        }
+        footerLogo.setFitWidth(54);
+        footerLogo.setFitHeight(20);
+        footerLogo.setPreserveRatio(true);
+        footerLogo.getStyleClass().add("app-footer-logo");
+
         Label footer2 = label("Simplifying Waybill Creation.\nImproving Operational Efficiency.", "app-footer-tagline");
         footer2.setWrapText(true);
         footer2.setTextOverrun(OverrunStyle.CLIP);
@@ -148,21 +182,22 @@ public class DashboardView extends BorderPane {
         Separator footerSeparator = new Separator(Orientation.HORIZONTAL);
         footerSeparator.getStyleClass().add("app-footer-separator");
 
-        Label developed = label("Developed by:  Deepesh V. Thampi", "app-footer-credit");
-        Label owned = label("Owned by:      AKS Global Logistics", "app-footer-credit");
+        HBox developed = footerCreditRow("Developed by:", "Deepesh V. Thampi");
+        HBox owned = footerCreditRow("Owned by:", "AKS Global Logistics");
         Label copyright = label("© " + LocalDate.now().getYear() + " AKS Global Logistics  ·  All Rights Reserved.", "app-footer-copyright");
 
-        for (Label footerLabel : List.of(footer2, developed, owned, copyright)) {
+        for (Label footerLabel : List.of(footer2, copyright)) {
             footerLabel.setWrapText(true);
             footerLabel.setTextOverrun(OverrunStyle.CLIP);
         }
 
-        VBox footer = new VBox(2, footer1, footer2, footerSeparator, developed, owned, copyright);
-        footer.setPadding(new Insets(4, 18, 3, 18));
+        VBox footer = new VBox(2, footerLogo, footer2, footerSeparator, developed, owned, copyright);
+        VBox.setMargin(footerLogo, new Insets(0, 0, 6, 0));
+        footer.setPadding(new Insets(1, 18, 1, 18));
         footer.setMaxWidth(Double.MAX_VALUE);
 
         VBox bottom = new VBox(2, footer, signOut);
-        bottom.setPadding(new Insets(0, 0, 10, 0));
+        bottom.setPadding(new Insets(0, 0, 3, 0));
         bottom.setFillWidth(true);
         s.setBottom(bottom);
 
@@ -175,6 +210,18 @@ public class DashboardView extends BorderPane {
         return label;
     }
 
+    private HBox footerCreditRow(String caption, String value) {
+        Label captionLabel = label(caption + " ", "app-footer-credit-caption");
+        captionLabel.setTextFill(Color.web("#a9bdcc"));
+        Label valueLabel = label(value, "app-footer-credit-value");
+        valueLabel.setTextFill(Color.WHITE);
+        valueLabel.setStyle("-fx-text-fill: #ffffff; -fx-font-weight: 800;");
+        HBox row = new HBox(0, captionLabel, valueLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setMaxWidth(Double.MAX_VALUE);
+        return row;
+    }
+
     private Button nav(String text, boolean selected) {
         Button button = new Button(text);
         button.setMaxWidth(Double.MAX_VALUE);
@@ -185,10 +232,24 @@ public class DashboardView extends BorderPane {
         return button;
     }
 
+    private ImageView createTopbarLogo() {
+        ImageView imageView = new ImageView();
+        var stream = getClass().getResourceAsStream("/com/aks/waybill/images/wasp-wordmark.png");
+        if (stream != null) {
+            imageView.setImage(new Image(stream));
+        }
+        // Small, crisp wordmark in the header. The source remains high-resolution.
+        imageView.setFitWidth(96);
+        imageView.setFitHeight(28);
+        imageView.setPreserveRatio(true);
+        imageView.getStyleClass().add("topbar-logo");
+        return imageView;
+    }
+
     private HBox topbar() {
-        HBox h = new HBox(18);
+        HBox h = new HBox(10);
         h.setAlignment(Pos.CENTER_LEFT);
-        h.setPadding(new Insets(16, 28, 16, 28));
+        h.setPadding(new Insets(10, 22, 10, 22));
         h.getStyleClass().add("topbar");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -201,7 +262,7 @@ public class DashboardView extends BorderPane {
         close.getStyleClass().addAll("window-control-button", "window-close-button");
         close.setTooltip(new Tooltip("Close W.A.S.P"));
         close.setOnAction(e -> requestExit(exit));
-        h.getChildren().addAll(pageTitle, spacer, clockLabel, user, minimize, close);
+        h.getChildren().addAll(topbarLogo, topbarDivider, pageTitle, spacer, clockLabel, user, minimize, close);
         updateClock();
         Timeline clock = new Timeline(new KeyFrame(Duration.seconds(1), e -> updateClock()));
         clock.setCycleCount(Timeline.INDEFINITE);
@@ -444,7 +505,7 @@ public class DashboardView extends BorderPane {
     }
 
     private void activate(Button selected, String title, Node view) {
-        for (Button button : new Button[]{dashboardButton, newWaybillButton, savedWaybillsButton, companiesButton, settingsButton, usersButton, auditButton, aboutButton}) {
+        for (Button button : new Button[]{dashboardButton, newWaybillButton, savedWaybillsButton, companiesButton, dataExchangeButton, settingsButton, usersButton, auditButton, aboutButton}) {
             button.getStyleClass().remove("nav-selected");
         }
         selected.getStyleClass().add("nav-selected");
@@ -453,8 +514,8 @@ public class DashboardView extends BorderPane {
     }
 
     private ScrollPane home() {
-        VBox c = new VBox(7);
-        c.setPadding(new Insets(8, 22, 12, 22));
+        VBox c = new VBox(4);
+        c.setPadding(new Insets(8, 20, 4, 20));
         c.getStyleClass().add("content-area");
         c.setFillWidth(true);
 
@@ -465,15 +526,10 @@ public class DashboardView extends BorderPane {
                 : "Create, manage and export your transportation waybills from one workspace.", "card-description");
 
         DashboardStats stats = loadStats();
+        String userScope = SessionContext.isAdmin() ? "All users" : "Created by you";
 
         Label overviewTitle = label("Overview", "section-heading");
-
-        // Keep the dashboard balanced as two three-column rows. The first row
-        // is informational and the second row is action-oriented. Draft and
-        // Final counts are combined into one status card so all overview cards
-        // remain aligned in a clean three-column layout.
         GridPane countsRow = threeColumnRow();
-        String userScope = SessionContext.isAdmin() ? "All users" : "Created by you";
         Node monthCard = stat("Waybills This Month", String.valueOf(stats.monthWaybills()),
                 userScope, "stat-month");
         Node statusCard = waybillStatusStat(stats.draftWaybills(), stats.finalWaybills(), userScope);
@@ -483,7 +539,7 @@ public class DashboardView extends BorderPane {
 
         Label quickActionsTitle = label("Quick Actions", "section-heading");
         GridPane actionsRow = threeColumnRow();
-        Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", "action-icon-blue", this::showNewWaybill);
+        Node newCard = action("New Waybill", "Create a new transportation waybill", "＋", "action-icon-orange", this::showNewWaybill);
         Node savedCard = action("Saved Waybills", "View, edit and generate PDF or Word reports", "▤", "action-icon-teal", this::showSavedWaybills);
         Node dataCard = action("Saved Data", "Manage reusable companies, carriers and locations", "▦", "action-icon-purple", this::showSavedData);
         addThree(actionsRow, newCard, savedCard, dataCard);
@@ -499,17 +555,30 @@ public class DashboardView extends BorderPane {
         Label recentTitle = label("Recent Waybills", "section-heading");
         VBox recentCard = recentWaybills();
 
-        c.getChildren().addAll(welcome, intro, introDetail, overviewTitle, countsRow, quickActionsTitle, actionsRow);
+        // Preserve clear visual separation between section labels and their cards.
+        VBox.setMargin(quickActionsTitle, new Insets(4, 0, 0, 0));
+        VBox.setMargin(actionsRow, new Insets(3, 0, 1, 0));
+        VBox.setMargin(administrationTitle, new Insets(4, 0, 0, 0));
+        VBox.setMargin(adminActions, new Insets(3, 0, 1, 0));
+        VBox.setMargin(recentTitle, new Insets(4, 0, 0, 0));
+        VBox.setMargin(recentCard, new Insets(3, 0, 0, 0));
+
+        c.getChildren().addAll(
+                welcome,
+                intro,
+                introDetail,
+                overviewTitle,
+                countsRow,
+                quickActionsTitle,
+                actionsRow);
+
         if (SessionContext.isAdmin()) {
             c.getChildren().addAll(administrationTitle, adminActions);
         }
 
-        // A small deliberate separation keeps Recent Waybills visually distinct
-        // while the compact rows above preserve enough vertical space for it to
-        // remain fully visible on the maximized desktop workspace.
         Region recentSpacer = new Region();
-        recentSpacer.setMinHeight(5);
-        recentSpacer.setPrefHeight(5);
+        recentSpacer.setMinHeight(0);
+        recentSpacer.setPrefHeight(0);
         c.getChildren().addAll(recentSpacer, recentTitle, recentCard);
 
         ScrollPane p = new ScrollPane(c);
@@ -624,39 +693,40 @@ public class DashboardView extends BorderPane {
 
     private VBox stat(String title, String value, String hint, String variantStyle) {
         VBox box = new VBox(4);
-        box.setMinWidth(165);
-        box.setPrefWidth(198);
-        box.setMaxWidth(230);
-        box.setMinHeight(70);
-        box.setPrefHeight(70);
-        box.setMaxHeight(70);
-        box.setPadding(new Insets(8, 12, 7, 12));
+        box.setMinWidth(0);
+        box.setPrefHeight(96);
+        box.setMinHeight(96);
+        box.setMaxHeight(96);
+        box.setPadding(new Insets(14, 16, 12, 16));
         box.getStyleClass().addAll("stat-card", variantStyle);
-        box.getChildren().addAll(
-                label(value + "  " + title, "stat-value-line"),
-                label(hint, "stat-hint"));
+
+        Label valueLabel = label(value, "stat-number");
+        Label titleLabel = label(title, "stat-title-line");
+        Label hintLabel = label(hint, "stat-hint");
+        hintLabel.setWrapText(true);
+        box.getChildren().addAll(valueLabel, titleLabel, hintLabel);
         return box;
     }
 
     private VBox waybillStatusStat(long draftCount, long finalCount, String scope) {
+        // The orange bar represents the Final share of all waybills (Final / (Draft + Final)).
+        // It is intentionally kept inside the same compact 96px card as the other overview cards.
         VBox box = new VBox(4);
-        box.setMinWidth(165);
-        box.setPrefWidth(198);
-        box.setMaxWidth(230);
-        box.setMinHeight(70);
-        box.setPrefHeight(70);
-        box.setMaxHeight(70);
-        box.setPadding(new Insets(7, 12, 6, 12));
+        box.setMinWidth(0);
+        box.setPrefHeight(96);
+        box.setMinHeight(96);
+        box.setMaxHeight(96);
+        box.setPadding(new Insets(10, 16, 9, 16));
         box.getStyleClass().addAll("stat-card", "stat-status");
 
-        Label title = label("Draft / Final Waybills", "stat-title-line");
+        Label title = label("Draft / Final", "stat-title-line");
         Label scopeLabel = label(scope, "stat-scope");
         Region titleSpacer = new Region();
         HBox.setHgrow(titleSpacer, Priority.ALWAYS);
         HBox titleRow = new HBox(8, title, titleSpacer, scopeLabel);
         titleRow.setAlignment(Pos.CENTER_LEFT);
 
-        HBox values = new HBox(18);
+        HBox values = new HBox(38);
         values.setAlignment(Pos.CENTER_LEFT);
 
         VBox draft = new VBox(0,
@@ -667,26 +737,86 @@ public class DashboardView extends BorderPane {
                 label("Final", "stat-status-label"));
         values.getChildren().addAll(draft, finalBox);
 
-        box.getChildren().addAll(titleRow, values);
+        long total = draftCount + finalCount;
+        double finalRatio = total == 0 ? 0.0 : (double) finalCount / total;
+        // Use a simple JavaFX region-based ratio bar instead of ProgressBar.
+        // This makes the filled portion render consistently across JavaFX skins.
+        StackPane progressTrack = new StackPane();
+        progressTrack.setMaxWidth(Double.MAX_VALUE);
+        progressTrack.setPrefHeight(7);
+        progressTrack.setMinHeight(7);
+        progressTrack.setMaxHeight(7);
+        progressTrack.getStyleClass().add("draft-final-progress");
+
+        // Base track represents Draft; orange overlay represents Final.
+        Rectangle draftTrack = new Rectangle();
+        draftTrack.setHeight(7);
+        draftTrack.setFill(Color.web("#9aa9b6"));
+        draftTrack.setMouseTransparent(true);
+        draftTrack.widthProperty().bind(progressTrack.widthProperty());
+        StackPane.setAlignment(draftTrack, Pos.CENTER_LEFT);
+
+        Rectangle progressFill = new Rectangle();
+        progressFill.setHeight(7);
+        progressFill.setFill(Color.web("#e99a2b"));
+        progressFill.setMouseTransparent(true);
+        progressFill.widthProperty().bind(progressTrack.widthProperty().multiply(finalRatio));
+        StackPane.setAlignment(progressFill, Pos.CENTER_LEFT);
+        progressTrack.getChildren().addAll(draftTrack, progressFill);
+
+        String ratioText = Math.round(finalRatio * 100) + "% Final";
+        progressTrack.setAccessibleText("Grey = Draft; Orange = Final; " + ratioText);
+        Tooltip.install(progressTrack, new Tooltip("Grey = Draft | Orange = Final | " + ratioText + " of all waybills"));
+
+        // Explicit legend keeps the Draft/Final meaning readable without
+        // requiring the labels themselves to use the indicator colours.
+        HBox legend = new HBox(14);
+        legend.setAlignment(Pos.CENTER_LEFT);
+        legend.getStyleClass().add("draft-final-legend");
+        legend.getChildren().addAll(
+                legendItem("Draft", "draft-final-legend-draft"),
+                legendItem("Final", "draft-final-legend-final")
+        );
+
+        box.getChildren().addAll(titleRow, values, progressTrack, legend);
         return box;
     }
 
+    private HBox legendItem(String text, String markerStyle) {
+        // Use an actual JavaFX shape rather than a styled Region so the colour
+        // marker is reliably visible across JavaFX skins and CSS loading order.
+        Circle marker = new Circle(4.5);
+        // Set the actual paint directly so the legend colours are reliable
+        // even if JavaFX CSS for Shape fills is overridden by the active skin.
+        marker.setFill("draft-final-legend-draft".equals(markerStyle)
+                ? Color.web("#9aa9b6")
+                : Color.web("#e99a2b"));
+        marker.setStroke("draft-final-legend-draft".equals(markerStyle)
+                ? Color.web("#8796a3")
+                : Color.web("#d4871e"));
+        marker.setStrokeWidth(0.6);
+        marker.setMouseTransparent(true);
+
+        Label textLabel = label(text, "draft-final-legend-label");
+        HBox item = new HBox(5, marker, textLabel);
+        item.setAlignment(Pos.CENTER_LEFT);
+        return item;
+    }
+
     private VBox action(String title, String description, String icon, String iconStyle, Runnable command) {
-        VBox box = new VBox(4);
-        box.setMinWidth(165);
-        box.setPrefWidth(198);
-        box.setMaxWidth(230);
-        box.setMinHeight(70);
-        box.setPrefHeight(70);
-        box.setMaxHeight(70);
-        box.setPadding(new Insets(8, 12, 7, 12));
+        VBox box = new VBox(5);
+        box.setMinWidth(0);
+        box.setPrefHeight(74);
+        box.setMinHeight(74);
+        box.setMaxHeight(74);
+        box.setPadding(new Insets(7, 12, 6, 12));
         box.getStyleClass().add("action-card");
 
         Label iconLabel = new Label(icon);
         iconLabel.getStyleClass().addAll("action-icon-badge", iconStyle);
-        iconLabel.setMinSize(32, 32);
-        iconLabel.setPrefSize(32, 32);
-        iconLabel.setMaxSize(32, 32);
+        iconLabel.setMinSize(30, 30);
+        iconLabel.setPrefSize(30, 30);
+        iconLabel.setMaxSize(30, 30);
         iconLabel.setAlignment(Pos.CENTER);
 
         Label titleLabel = label(title, "action-title-line");
@@ -737,7 +867,7 @@ public class DashboardView extends BorderPane {
         // The dashboard deliberately displays at most five recent records.
         // Size the table for its header plus exactly those rows and suppress
         // the vertical scrollbar when there is no possible overflow.
-        double tableHeight = 34 + (page.rows().size() * 34) + 6;
+        double tableHeight = 38 + (page.rows().size() * 34);
         table.setMinHeight(tableHeight);
         table.setPrefHeight(tableHeight);
         table.setMaxHeight(tableHeight);

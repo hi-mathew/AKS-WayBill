@@ -963,3 +963,830 @@
     -fx-text-overrun: ellipsis;
     -fx-wrap-text: false;
 }
+
+/* -------------------------------------------------------------------------
+   W.A.S.P Dashboard redesign - reference-inspired desktop layout
+   Keep the application shell square/straight; only dashboard content cards
+   use the softer rounded treatment from the reference design.
+   ------------------------------------------------------------------------- */
+.app-root {
+    -fx-background-color: #edf3f8;
+}
+
+.sidebar {
+    -fx-background-color: linear-gradient(to bottom right, #111920 0%, #0d1b2a 58%, #063b76 100%);
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.sidebar-section {
+    -fx-text-fill: #8da1b2;
+    -fx-font-size: 10px;
+    -fx-font-weight: 800;
+    -fx-padding: 10px 12px 6px 12px;
+}
+
+.nav-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 7px;
+    -fx-text-fill: #dce5ec;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-padding: 0 14px;
+    -fx-cursor: hand;
+}
+
+.nav-button:hover {
+    -fx-background-color: rgba(39, 113, 167, 0.32);
+}
+
+.nav-selected {
+    -fx-background-color: linear-gradient(to right, #173c5d, #1174bd);
+    -fx-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 9, 0.12, 0, 3);
+}
+
+.topbar {
+    -fx-background-color: white;
+    -fx-border-color: #dfe6ed;
+    -fx-border-width: 0 0 1px 0;
+    -fx-min-height: 54px;
+    -fx-pref-height: 54px;
+}
+
+.topbar-brand {
+    -fx-text-fill: #0b4b7d;
+    -fx-font-size: 21px;
+    -fx-font-weight: 900;
+}
+
+.topbar-divider {
+    -fx-text-fill: #b8c2cc;
+    -fx-font-size: 19px;
+    -fx-font-weight: 500;
+}
+
+.topbar-title {
+    -fx-text-fill: #182433;
+    -fx-font-size: 20px;
+    -fx-font-weight: 700;
+}
+
+.topbar-clock {
+    -fx-text-fill: #344054;
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+}
+
+.user-pill {
+    -fx-background-color: #f0f4f7;
+    -fx-text-fill: #304b61;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 16px;
+}
+
+.window-control-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #516274;
+    -fx-font-size: 15px;
+    -fx-font-weight: 700;
+    -fx-min-width: 30px;
+    -fx-min-height: 28px;
+    -fx-padding: 1px 7px;
+    -fx-background-radius: 5px;
+}
+
+.window-control-button:hover {
+    -fx-background-color: #edf2f6;
+}
+
+.window-close-button:hover {
+    -fx-background-color: #f8dddd;
+    -fx-text-fill: #a51d2d;
+}
+
+.content-area,
+.content-scroll,
+.content-scroll .viewport {
+    -fx-background-color: #edf3f8;
+}
+
+.page-heading {
+    -fx-text-fill: #101820;
+    -fx-font-size: 27px;
+    -fx-font-weight: 800;
+}
+
+.page-subheading {
+    -fx-text-fill: #344054;
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+}
+
+.card-description {
+    -fx-text-fill: #7a8694;
+    -fx-font-size: 11px;
+}
+
+.section-heading {
+    -fx-text-fill: #111827;
+    -fx-font-size: 17px;
+    -fx-font-weight: 800;
+    -fx-padding: 2px 0 0 0;
+}
+
+.dashboard-card-row {
+    -fx-background-color: transparent;
+}
+
+.dashboard-card-row .stat-card,
+.dashboard-card-row .action-card {
+    -fx-background-color: rgba(255,255,255,0.96);
+    -fx-border-color: #dce4eb;
+    -fx-border-width: 1px;
+    -fx-background-radius: 14px;
+    -fx-border-radius: 14px;
+    -fx-effect: dropshadow(gaussian, rgba(26,48,67,0.14), 12, 0.10, 0, 5);
+}
+
+.dashboard-card-row .stat-card {
+    -fx-min-height: 96px;
+    -fx-pref-height: 96px;
+    -fx-max-height: 96px;
+}
+
+.dashboard-card-row .stat-card.stat-status {
+    -fx-min-height: 96px;
+    -fx-pref-height: 96px;
+    -fx-max-height: 96px;
+}
+
+.dashboard-card-row .stat-number {
+    -fx-text-fill: #101820;
+    -fx-font-size: 25px;
+    -fx-font-weight: 800;
+}
+
+.dashboard-card-row .stat-title-line {
+    -fx-text-fill: #182433;
+    -fx-font-size: 13px;
+    -fx-font-weight: 800;
+}
+
+.dashboard-card-row .stat-hint {
+    -fx-text-fill: #7a8694;
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
+}
+
+.dashboard-card-row .stat-scope {
+    -fx-text-fill: #7a8694;
+    -fx-font-size: 10px;
+    -fx-font-weight: 600;
+}
+
+.dashboard-card-row .stat-status-value {
+    -fx-font-size: 23px;
+    -fx-font-weight: 800;
+}
+
+.dashboard-card-row .stat-draft-value {
+    -fx-text-fill: #a35d00;
+}
+
+.dashboard-card-row .stat-final-value {
+    -fx-text-fill: #1f6b47;
+}
+
+.dashboard-card-row .stat-status-label {
+    -fx-text-fill: #687585;
+    -fx-font-size: 9px;
+    -fx-font-weight: 700;
+}
+
+
+.status-legend-draft,
+.status-legend-final {
+    -fx-font-size: 9px;
+    -fx-font-weight: 700;
+}
+
+.status-legend-draft {
+    -fx-text-fill: #a35d00;
+}
+
+.status-legend-final {
+    -fx-text-fill: #1f6b47;
+}
+
+.dashboard-card-row .action-card {
+    -fx-min-height: 62px;
+    -fx-pref-height: 62px;
+    -fx-max-height: 62px;
+    -fx-cursor: hand;
+}
+
+.dashboard-card-row .action-card:hover {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #a9c2d5;
+    -fx-effect: dropshadow(gaussian, rgba(26,48,67,0.20), 15, 0.14, 0, 6);
+}
+
+.action-icon-badge {
+    -fx-background-radius: 9px;
+    -fx-font-size: 17px;
+    -fx-font-weight: 800;
+}
+
+.action-icon-orange {
+    -fx-background-color: #fff0dc;
+    -fx-text-fill: #d77a14;
+}
+
+.action-icon-teal {
+    -fx-background-color: #e0f4f1;
+    -fx-text-fill: #087f73;
+}
+
+.action-icon-purple {
+    -fx-background-color: #eee8f8;
+    -fx-text-fill: #704aa0;
+}
+
+.action-icon-indigo {
+    -fx-background-color: #e6edfb;
+    -fx-text-fill: #4260a9;
+}
+
+.dashboard-card-row .action-title-line {
+    -fx-text-fill: #172231;
+    -fx-font-size: 15px;
+    -fx-font-weight: 800;
+}
+
+.dashboard-card-row .action-description {
+    -fx-text-fill: #667382;
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
+}
+
+.dashboard-card-row + .section-heading {
+    -fx-padding: 4px 0 0 0;
+}
+
+.settings-card {
+    -fx-background-color: white;
+    -fx-background-radius: 14px;
+    -fx-border-color: #dce4eb;
+    -fx-border-radius: 14px;
+    -fx-effect: dropshadow(gaussian, rgba(26,48,67,0.13), 12, 0.10, 0, 5);
+}
+
+.dashboard-recent-table {
+    -fx-background-color: white;
+    -fx-background-radius: 14px;
+    -fx-border-color: #dce4eb;
+    -fx-border-radius: 14px;
+    -fx-effect: dropshadow(gaussian, rgba(26,48,67,0.14), 12, 0.10, 0, 5);
+    -fx-padding: 0;
+}
+
+.dashboard-recent-table .column-header-background {
+    -fx-background-color: #f5f8fa;
+    -fx-background-radius: 14px 14px 0 0;
+}
+
+.dashboard-recent-table .column-header,
+.dashboard-recent-table .filler {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent #e4e9ee #e4e9ee transparent;
+    -fx-size: 38px;
+}
+
+.dashboard-recent-table .column-header .label {
+    -fx-text-fill: #182433;
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+}
+
+.dashboard-recent-table .table-cell {
+    -fx-text-fill: #243140;
+    -fx-font-size: 11px;
+    -fx-padding: 7px 8px;
+    -fx-border-color: transparent #edf0f3 transparent transparent;
+}
+
+.dashboard-recent-table .table-row-cell {
+    -fx-background-color: white;
+}
+
+.dashboard-recent-table .table-row-cell:filled:hover {
+    -fx-background-color: #f7fafc;
+}
+
+.dashboard-recent-table .table-row-cell:filled:selected,
+.dashboard-recent-table .table-row-cell:filled:selected .table-cell {
+    -fx-background-color: #edf5fa;
+    -fx-text-fill: #172231;
+}
+
+.dashboard-recent-table .secondary-button {
+    -fx-background-color: #edf3f8;
+    -fx-text-fill: #1e4564;
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+    -fx-background-radius: 8px;
+    -fx-padding: 6px 12px;
+}
+
+.dashboard-recent-table .secondary-button:hover {
+    -fx-background-color: #dfeaf2;
+}
+
+.dashboard-recent-no-scrollbar .corner {
+    -fx-background-color: transparent;
+}
+
+.app-footer-title {
+    -fx-text-fill: #eef6fb;
+    -fx-font-size: 11px;
+    -fx-font-weight: 900;
+}
+
+.app-footer-tagline {
+    -fx-text-fill: #9db2c3;
+    -fx-font-size: 9px;
+    -fx-line-spacing: 1px;
+}
+
+.app-footer-credit {
+    -fx-text-fill: #a9bdcc;
+    -fx-font-size: 8px;
+    -fx-font-weight: 600;
+}
+
+.app-footer-copyright {
+    -fx-text-fill: #8097a9;
+    -fx-font-size: 8px;
+}
+
+.app-footer-separator {
+    -fx-background-color: #304b60;
+    -fx-border-color: #304b60;
+}
+
+/* Header/sidebar logo treatment for the reference-inspired shell. */
+.sidebar-logo-tile {
+    /* The supplied application logo has a dark background matching the sidebar.
+       Keep the tile straight-edged and transparent so the logo blends naturally. */
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+.topbar-logo {
+    -fx-smooth: true;
+}
+
+/* Dashboard/sidebar refinements: keep About visible on normal-height screens,
+   while retaining a usable scrollbar for shorter windows. */
+.sidebar .sidebar-scroll {
+}
+.sidebar-scroll .scroll-bar:vertical {
+    -fx-pref-width: 7px;
+    -fx-min-width: 7px;
+    -fx-max-width: 7px;
+    -fx-opacity: 1;
+    -fx-background-color: transparent;
+}
+.sidebar-scroll .scroll-bar:vertical .track {
+    -fx-background-color: rgba(255,255,255,0.06);
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(148,181,204,0.72);
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(183,211,228,0.9);
+}
+.sidebar-scroll .scroll-bar:vertical .increment-button,
+.sidebar-scroll .scroll-bar:vertical .decrement-button,
+.sidebar-scroll .scroll-bar:vertical .increment-arrow,
+.sidebar-scroll .scroll-bar:vertical .decrement-arrow {
+    -fx-padding: 0;
+    -fx-shape: "";
+}
+.sidebar .nav-button {
+    -fx-pref-height: 34px;
+    -fx-min-height: 34px;
+    -fx-max-height: 34px;
+}
+.sidebar .sidebar-section {
+    -fx-padding: 4px 12px 3px 12px;
+}
+.app-footer-logo {
+    -fx-opacity: 0.98;
+}
+.app-footer-tagline {
+    -fx-font-size: 9px;
+}
+
+/* Keep Draft/Final content prominent inside the existing 96px card. */
+.dashboard-card-row .stat-status-value {
+    -fx-font-size: 24px;
+    -fx-font-weight: 800;
+}
+.dashboard-card-row .stat-status-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+}
+.draft-final-progress {
+    -fx-accent: #e99a2b;
+    -fx-control-inner-background: #e8edf2;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+.draft-final-progress .track {
+    -fx-background-color: #e8edf2;
+    -fx-background-radius: 4px;
+    -fx-pref-height: 6px;
+}
+.draft-final-progress .bar {
+    -fx-background-color: #e99a2b;
+    -fx-background-radius: 4px;
+    -fx-background-insets: 0;
+}
+
+/* Final dashboard refinement: reliable sidebar scrollbar and visible ratio fill. */
+.sidebar-scroll {
+    -fx-vbar-policy: as-needed;
+}
+.sidebar-scroll .scroll-bar:vertical {
+    -fx-pref-width: 8px;
+    -fx-min-width: 8px;
+    -fx-max-width: 8px;
+    -fx-opacity: 1;
+}
+.sidebar-scroll .scroll-bar:vertical .track {
+    -fx-background-color: rgba(255,255,255,0.10);
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(160,196,220,0.82);
+    -fx-background-radius: 4px;
+}
+.sidebar-scroll .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(195,221,237,0.96);
+}
+
+.draft-final-progress {
+    -fx-background-color: #e8edf2;
+    -fx-background-radius: 4px;
+    -fx-border-color: #c7d0d8;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-padding: 0;
+}
+.draft-final-progress-fill {
+    -fx-background-color: #e99a2b;
+    -fx-background-radius: 3px;
+}
+
+/* Final dashboard polish: clearer footer ownership and W.A.S.P. accent sign-out. */
+.app-footer-credit-caption {
+    -fx-text-fill: #a9bdcc;
+    -fx-font-size: 8px;
+    -fx-font-weight: 600;
+}
+.app-footer-credit-value {
+    -fx-text-fill: #eef6fb;
+    -fx-font-size: 8px;
+    -fx-font-weight: 800;
+}
+.nav-signout {
+    -fx-text-fill: #f0a23a;
+}
+.nav-signout:hover {
+    -fx-background-color: rgba(240,162,58,0.12);
+    -fx-text-fill: #ffb85a;
+}
+.draft-final-progress {
+    -fx-background-color: #e8edf2;
+    -fx-background-radius: 4px;
+    -fx-border-color: #c7d0d8;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-padding: 0;
+}
+.draft-final-progress-fill {
+    -fx-fill: #e99a2b;
+    -fx-background-color: #e99a2b;
+}
+
+
+/* Final dashboard polish corrections: force accent colours on JavaFX nodes. */
+.sidebar .nav-signout {
+    -fx-text-fill: #f0a23a;
+    -fx-font-weight: 600;
+}
+.sidebar .nav-signout:hover {
+    -fx-background-color: rgba(240,162,58,0.12);
+    -fx-text-fill: #ffb85a;
+}
+.app-footer-credit-caption {
+    -fx-text-fill: #a9bdcc;
+    -fx-font-size: 8px;
+    -fx-font-weight: 600;
+}
+.app-footer-credit-value {
+    -fx-text-fill: #eef6fb;
+    -fx-font-size: 8px;
+    -fx-font-weight: 800;
+}
+
+
+/* Final sidebar fit: keep the full navigation visible at the normal maximized size.
+   The ScrollPane remains AS_NEEDED, so a scrollbar appears only when the window is
+   actually too short or the navigation content grows beyond the available height. */
+.sidebar .sidebar-scroll {
+    -fx-vbar-policy: as-needed;
+}
+.sidebar .sidebar-scroll .viewport {
+    -fx-background-color: transparent;
+}
+.sidebar .sidebar-scroll .content {
+    -fx-background-color: transparent;
+}
+.sidebar .sidebar-scroll .scroll-bar:vertical {
+    -fx-pref-width: 8px;
+    -fx-min-width: 8px;
+    -fx-max-width: 8px;
+}
+.app-footer-credit-caption {
+    -fx-text-fill: #a9bdcc;
+    -fx-font-size: 8px;
+    -fx-font-weight: 600;
+}
+.app-footer-credit-value {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 9px;
+    -fx-font-weight: 800;
+}
+
+
+/* Dashboard shell final fit refinement. */
+.sidebar .nav-button {
+    -fx-pref-height: 32px;
+    -fx-min-height: 32px;
+    -fx-max-height: 32px;
+}
+.sidebar .sidebar-section {
+    -fx-padding: 3px 12px 2px 12px;
+}
+.app-footer-logo {
+    -fx-opacity: 0.98;
+}
+.nav-signout {
+    -fx-text-fill: #f0a23a !important;
+    -fx-font-weight: 800 !important;
+}
+.nav-signout:hover {
+    -fx-text-fill: #ffb95b !important;
+    -fx-background-color: rgba(240,162,58,0.12);
+}
+.app-footer-credit-caption {
+    -fx-text-fill: #a9bdcc !important;
+    -fx-font-size: 8px;
+}
+.app-footer-credit-value {
+    -fx-text-fill: #ffffff !important;
+    -fx-font-size: 9px;
+    -fx-font-weight: 800 !important;
+}
+.draft-final-progress {
+    -fx-background-color: #9aa9b6;
+    -fx-background-radius: 3px;
+}
+.dashboard-card-row .stat-status-label {
+    -fx-font-size: 10px;
+}
+.dashboard-card-row .stat-status-label {
+    -fx-text-fill: #657786;
+}
+/* Quick actions and administration are deliberately shorter so five recent
+   waybill rows can remain visible on a normal maximized desktop screen. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 92px;
+    -fx-pref-height: 92px;
+    -fx-max-height: 92px;
+}
+.dashboard-card-row + .section-heading {
+    -fx-padding: 1px 0 0 0;
+}
+
+
+/* Dashboard final layout tuning: restore the larger sidebar logo while keeping normal-height navigation scrollbar-free. */
+.sidebar .nav-button {
+    -fx-pref-height: 34px;
+    -fx-min-height: 34px;
+    -fx-max-height: 34px;
+}
+.sidebar .sidebar-section {
+    -fx-padding: 4px 12px 3px 12px;
+}
+
+/* Keep Quick Actions and Administration compact enough to show five recent waybills on a normal maximized screen. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 82px;
+    -fx-pref-height: 82px;
+    -fx-max-height: 82px;
+    -fx-padding: 9px 14px 8px 14px;
+}
+.dashboard-card-row + .section-heading {
+    -fx-padding: 2px 0 0 0;
+}
+.dashboard-recent-table .column-header,
+.dashboard-recent-table .filler {
+    -fx-size: 32px;
+}
+.dashboard-recent-table .column-header {
+    -fx-pref-height: 32px;
+    -fx-min-height: 32px;
+    -fx-max-height: 32px;
+}
+.dashboard-recent-table .table-cell {
+    -fx-padding: 4px 8px;
+    -fx-font-size: 11px;
+}
+
+
+/* Dashboard Layout Final 3: restore a larger sidebar logo while tightening the
+   dashboard cards enough to keep five Recent Waybills visible on the normal
+   maximized desktop. The sidebar scrollbar remains AS_NEEDED. */
+.sidebar .nav-button {
+    -fx-pref-height: 32px;
+    -fx-min-height: 32px;
+    -fx-max-height: 32px;
+}
+.dashboard-card-row .action-card {
+    -fx-min-height: 72px;
+    -fx-pref-height: 72px;
+    -fx-max-height: 72px;
+}
+.dashboard-card-row .action-card .action-icon-badge {
+    -fx-min-width: 32px;
+    -fx-min-height: 32px;
+    -fx-pref-width: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-width: 32px;
+    -fx-max-height: 32px;
+}
+.dashboard-card-row .action-title-line {
+    -fx-font-size: 14px;
+}
+.dashboard-card-row .action-description {
+    -fx-font-size: 10px;
+}
+.dashboard-card-row + .section-heading {
+    -fx-padding: 2px 0 0 0;
+}
+
+
+/* Dashboard Layout Final 4: maximize usable vertical space at normal resolution. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 60px;
+    -fx-pref-height: 60px;
+    -fx-max-height: 60px;
+    -fx-padding: 7px 12px 6px 12px;
+}
+.dashboard-card-row .action-card .action-icon-badge {
+    -fx-min-width: 30px;
+    -fx-min-height: 30px;
+    -fx-pref-width: 30px;
+    -fx-pref-height: 30px;
+    -fx-max-width: 30px;
+    -fx-max-height: 30px;
+}
+.dashboard-card-row .action-title-line {
+    -fx-font-size: 13px;
+}
+.dashboard-card-row .action-description {
+    -fx-font-size: 9px;
+}
+.dashboard-card-row + .section-heading {
+    -fx-padding: 1px 0 0 0;
+}
+.dashboard-recent-table .column-header,
+.dashboard-recent-table .filler {
+    -fx-size: 30px;
+}
+.dashboard-recent-table .column-header {
+    -fx-pref-height: 30px;
+    -fx-min-height: 30px;
+    -fx-max-height: 30px;
+}
+.dashboard-recent-table .table-cell {
+    -fx-padding: 2px 7px;
+    -fx-font-size: 10px;
+}
+
+/* Dashboard final layout: preserve comfortable recent-waybill rows while compacting only the action cards. */
+.dashboard-recent-table .table-row-cell { -fx-cell-size: 34px; }
+
+/* Dashboard final correction: reduce only the action/administration cards;
+   restore comfortable Recent Waybills table geometry and keep section gaps. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 62px;
+    -fx-pref-height: 62px;
+    -fx-max-height: 62px;
+    -fx-padding: 5px 12px;
+}
+.dashboard-card-row .action-card .action-icon-badge {
+    -fx-min-width: 28px;
+    -fx-min-height: 28px;
+    -fx-pref-width: 28px;
+    -fx-pref-height: 28px;
+    -fx-max-width: 28px;
+    -fx-max-height: 28px;
+}
+.dashboard-card-row .action-title-line { -fx-font-size: 13px; }
+.dashboard-card-row .action-description { -fx-font-size: 10px; }
+.dashboard-recent-table .column-header,
+.dashboard-recent-table .filler { -fx-size: 38px; }
+.dashboard-recent-table .column-header {
+    -fx-pref-height: 38px;
+    -fx-min-height: 38px;
+    -fx-max-height: 38px;
+}
+.dashboard-recent-table .table-cell {
+    -fx-padding: 7px 8px;
+    -fx-font-size: 11px;
+}
+.dashboard-recent-table .table-row-cell { -fx-cell-size: 34px; }
+
+
+/* Dashboard Layout Final 7: give Quick Actions and Administration a little more
+   breathing room while sizing Recent Waybills to exactly five data rows. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 70px;
+    -fx-pref-height: 70px;
+    -fx-max-height: 70px;
+    -fx-padding: 7px 12px 6px 12px;
+}
+.dashboard-card-row .action-card .action-icon-badge {
+    -fx-min-width: 30px;
+    -fx-min-height: 30px;
+    -fx-pref-width: 30px;
+    -fx-pref-height: 30px;
+    -fx-max-width: 30px;
+    -fx-max-height: 30px;
+}
+.dashboard-card-row .action-title-line { -fx-font-size: 14px; }
+.dashboard-card-row .action-description { -fx-font-size: 10px; }
+.dashboard-recent-table .column-header,
+.dashboard-recent-table .filler { -fx-size: 38px; }
+.dashboard-recent-table .column-header {
+    -fx-pref-height: 38px;
+    -fx-min-height: 38px;
+    -fx-max-height: 38px;
+}
+.dashboard-recent-table .table-cell {
+    -fx-padding: 7px 8px;
+    -fx-font-size: 11px;
+}
+.dashboard-recent-table .table-row-cell { -fx-cell-size: 34px; }
+
+/* Dashboard final polish: slightly taller action/administration cards while
+   preserving the restored section spacing and comfortable recent-waybill rows. */
+.dashboard-card-row .action-card {
+    -fx-min-height: 74px;
+    -fx-pref-height: 74px;
+    -fx-max-height: 74px;
+}
+
+/* Draft/Final legend: keep labels neutral and use small indicator markers
+   so the meaning remains readable regardless of colour vision/display. */
+.draft-final-legend {
+    -fx-padding: 0;
+}
+.draft-final-legend-label {
+    -fx-font-size: 9px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #4b5563;
+}
+.draft-final-legend-draft {
+    -fx-fill: #9aa9b6;
+    -fx-stroke: #8796a3;
+    -fx-stroke-width: 0.6px;
+}
+.draft-final-legend-final {
+    -fx-fill: #e99a2b;
+    -fx-stroke: #d4871e;
+    -fx-stroke-width: 0.6px;
+}
