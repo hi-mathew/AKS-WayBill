@@ -30,37 +30,41 @@ public class LoginView extends BorderPane {
     private void buildBrand() {
         VBox brand = new VBox(12);
         brand.setAlignment(Pos.TOP_LEFT);
-        brand.setPadding(new Insets(26, 36, 20, 36));
+        brand.setPadding(new Insets(24, 34, 20, 34));
         brand.getStyleClass().add("brand-panel");
         brand.setPrefWidth(390);
-        brand.setMinWidth(330);
+        brand.setMinWidth(360);
+        brand.setMaxWidth(420);
 
         ImageView logo = new ImageView(new Image(
-                getClass().getResourceAsStream("/com/aks/waybill/images/aks-logo.png")));
-        logo.setFitWidth(230);
+                getClass().getResourceAsStream("/com/aks/waybill/images/wasp_application_logo.png")));
+        logo.setFitWidth(235);
         logo.setPreserveRatio(true);
+        logo.setSmooth(true);
 
         StackPane logoHolder = new StackPane(logo);
-        logoHolder.setAlignment(Pos.CENTER);
+        logoHolder.setAlignment(Pos.TOP_CENTER);
         logoHolder.setMaxWidth(Double.MAX_VALUE);
 
-        Label title = new Label("W.A.S.P");
-        title.getStyleClass().add("brand-title");
+        // Match the requested vertical rhythm: logo, two-line gap, separator,
+        // two-line gap, feature list, two-line gap, then the centred route flow.
+        Region logoGap = new Region();
+        logoGap.setMinHeight(24);
+        logoGap.setPrefHeight(24);
+        logoGap.setMaxHeight(24);
 
-        Label fullName = new Label("Waybill Automation & Shipping Platform");
-        fullName.setWrapText(true);
-        fullName.getStyleClass().add("brand-full-name");
-
-        Label subtitle = new Label("Professional waybill management for\nAKS Global Logistics Co.");
-        subtitle.setWrapText(true);
-        subtitle.setMaxWidth(Double.MAX_VALUE);
-        subtitle.setTextOverrun(OverrunStyle.CLIP);
-        subtitle.getStyleClass().add("brand-subtitle");
-
-        Separator separator = new Separator();
+        Region separator = new Region();
         separator.getStyleClass().add("brand-separator");
+        separator.setMinHeight(1);
+        separator.setPrefHeight(1);
+        separator.setMaxWidth(Double.MAX_VALUE);
 
-        VBox features = new VBox(10);
+        Region featureGap = new Region();
+        featureGap.setMinHeight(24);
+        featureGap.setPrefHeight(24);
+        featureGap.setMaxHeight(24);
+
+        VBox features = new VBox(12);
         features.getStyleClass().add("brand-features");
         features.getChildren().addAll(
                 feature("CREATE", "Create and manage waybills efficiently.", "＋"),
@@ -68,43 +72,48 @@ public class LoginView extends BorderPane {
                 feature("DELIVER", "Generate professional Word and PDF documents.", "↗")
         );
 
+        Region flowGap = new Region();
+        flowGap.setMinHeight(24);
+        flowGap.setPrefHeight(24);
+        flowGap.setMaxHeight(24);
+
         VBox flow = buildFlow();
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
-        Label tagline = new Label("Simplifying Waybill Creation.\nImproving Operational Efficiency.");
-        tagline.setWrapText(true);
-        tagline.setMaxWidth(Double.MAX_VALUE);
-        tagline.setTextOverrun(OverrunStyle.CLIP);
-        tagline.getStyleClass().add("brand-tagline");
-
         Label footer = new Label("W.A.S.P.  •  DESKTOP APPLICATION");
         footer.getStyleClass().add("brand-footer");
+        footer.setMaxWidth(Double.MAX_VALUE);
+        footer.setAlignment(Pos.CENTER);
 
-        VBox footerBox = new VBox(4, tagline, footer);
+        VBox footerBox = new VBox(4, footer);
         footerBox.getStyleClass().add("brand-footer-box");
+        footerBox.setAlignment(Pos.CENTER);
+        footerBox.setMaxWidth(Double.MAX_VALUE);
 
-        brand.getChildren().addAll(logoHolder, title, fullName, subtitle, separator, features, flow, spacer, footerBox);
+        brand.getChildren().addAll(logoHolder, logoGap, separator, featureGap,
+                features, flowGap, flow, spacer, footerBox);
         setLeft(brand);
     }
 
     private VBox feature(String title, String description, String iconText) {
         Label icon = new Label(iconText);
         icon.getStyleClass().add("brand-feature-icon");
-        icon.setMinSize(24, 24);
-        icon.setPrefSize(24, 24);
-        icon.setMaxSize(24, 24);
+        icon.setMinSize(30, 30);
+        icon.setPrefSize(30, 30);
+        icon.setMaxSize(30, 30);
         icon.setAlignment(Pos.CENTER);
 
         Label featureTitle = new Label(title);
         featureTitle.getStyleClass().add("brand-feature-title");
         featureTitle.setGraphic(icon);
-        featureTitle.setGraphicTextGap(8);
+        featureTitle.setGraphicTextGap(10);
 
         Label featureDescription = new Label(description);
         featureDescription.setWrapText(true);
         featureDescription.getStyleClass().add("brand-feature-description");
+        featureDescription.setTranslateX(40);
 
         VBox text = new VBox(2, featureTitle, featureDescription);
         text.setFillWidth(true);
@@ -120,10 +129,12 @@ public class LoginView extends BorderPane {
         Label arrow2 = flowArrow();
 
         HBox row = new HBox(7, origin, arrow1, transit, arrow2, destination);
-        row.setAlignment(Pos.CENTER_LEFT);
+        row.setAlignment(Pos.CENTER);
+        row.setMaxWidth(Double.MAX_VALUE);
 
         VBox box = new VBox(2, row);
         box.setMaxWidth(Double.MAX_VALUE);
+        box.setAlignment(Pos.CENTER);
         box.getStyleClass().add("brand-flow");
         return box;
     }
@@ -142,21 +153,28 @@ public class LoginView extends BorderPane {
 
     private void buildForm() {
         StackPane wrapper = new StackPane();
-        wrapper.setPadding(new Insets(35, 50, 35, 50));
+        // A little more top breathing room, as requested, without resizing the form.
+        wrapper.setPadding(new Insets(78, 50, 35, 50));
         wrapper.getStyleClass().add("login-panel");
 
-        VBox content = new VBox(20);
-        content.setMaxWidth(420);
+        VBox content = new VBox(16);
+        content.setMaxWidth(460);
 
         boolean exists = auth.hasUsers();
-        Label eyebrow = new Label(exists ? "SECURE SIGN IN" : "INITIAL SETUP");
+        Label eyebrow = new Label(exists ? "" : "INITIAL SETUP");
         eyebrow.getStyleClass().add("eyebrow");
+        eyebrow.setMaxWidth(Double.MAX_VALUE);
+        eyebrow.setAlignment(Pos.CENTER);
         Label heading = new Label(exists ? "Welcome back" : "Create administrator");
+        heading.setMaxWidth(Double.MAX_VALUE);
+        heading.setAlignment(Pos.CENTER);
         heading.getStyleClass().add("login-heading");
         Label description = new Label(exists
                 ? "Sign in to continue to your waybill workspace."
                 : "This is the first launch. Create the initial administrator account.");
         description.getStyleClass().add("login-description");
+        description.setMaxWidth(Double.MAX_VALUE);
+        description.setAlignment(Pos.CENTER);
 
         form.getStyleClass().add("login-form");
         if (exists) {
@@ -175,7 +193,10 @@ public class LoginView extends BorderPane {
         version.setMaxWidth(Double.MAX_VALUE);
         version.setAlignment(Pos.CENTER);
 
-        content.getChildren().addAll(eyebrow, heading, description, form, close, version);
+        if (!exists) {
+            content.getChildren().add(eyebrow);
+        }
+        content.getChildren().addAll(heading, description, form, close, version);
         // Keep keyboard interaction natural on both the sign-in and first-launch forms.
         wrapper.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {

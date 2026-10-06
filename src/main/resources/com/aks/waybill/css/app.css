@@ -1790,3 +1790,170 @@
     -fx-stroke: #d4871e;
     -fx-stroke-width: 0.6px;
 }
+
+/* Login screen: aligned with the W.A.S.P. desktop workspace theme. */
+.login-root {
+    -fx-background-color: #f5f7fa;
+}
+
+.brand-panel {
+    -fx-background-color: #0b2f4a;
+    -fx-border-color: #1f6ea5;
+    -fx-border-width: 0 3px 0 0;
+}
+
+.brand-tagline {
+    -fx-text-fill: #d9eaf5;
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-line-spacing: 4px;
+}
+
+.brand-separator {
+    -fx-background-color: #6f9fbd;
+    -fx-opacity: 0.55;
+}
+
+.brand-feature-title {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+}
+
+.brand-feature-description {
+    -fx-text-fill: #c5dbea;
+    -fx-font-size: 12px;
+    -fx-line-spacing: 2px;
+}
+
+.brand-feature-icon {
+    -fx-background-color: #1b5d87;
+    -fx-background-radius: 15px;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 13px;
+    -fx-font-weight: 800;
+}
+
+.brand-flow-node {
+    -fx-text-fill: #b9d5e6;
+    -fx-font-size: 9px;
+    -fx-font-weight: 800;
+}
+
+.brand-flow-arrow {
+    -fx-text-fill: #72a8c8;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+}
+
+.brand-footer {
+    -fx-text-fill: #a9c7da;
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+}
+
+.login-panel {
+    -fx-background-color: #f5f7fa;
+}
+
+.login-panel > .viewport {
+    -fx-background-color: #f5f7fa;
+}
+
+.login-heading {
+    -fx-text-fill: #152235;
+    -fx-font-size: 30px;
+    -fx-font-weight: 700;
+}
+
+.login-description {
+    -fx-text-fill: #697586;
+    -fx-font-size: 13px;
+    -fx-line-spacing: 3px;
+}
+
+.eyebrow {
+    -fx-text-fill: #0b4b7d;
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+}
+
+.login-form .text-field,
+.login-form .password-field {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d6dde7;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-padding: 0 13px;
+    -fx-font-size: 14px;
+    -fx-text-fill: #152235;
+}
+
+.login-form .text-field:focused,
+.login-form .password-field:focused {
+    -fx-border-color: #1f6ea5;
+    -fx-border-width: 1.5px;
+    -fx-effect: dropshadow(gaussian, rgba(31,110,165,0.12), 5, 0.12, 0, 0);
+}
+
+.field-label {
+    -fx-text-fill: #344054;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+}
+
+.primary-button {
+    -fx-background-color: #0b4b7d;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+    -fx-background-radius: 7px;
+    -fx-cursor: hand;
+}
+
+.primary-button:hover {
+    -fx-background-color: #1b5d87;
+}
+
+.secondary-button {
+    -fx-background-color: #eaf1f6;
+    -fx-text-fill: #24577c;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-background-radius: 7px;
+    -fx-cursor: hand;
+}
+
+.secondary-button:hover {
+    -fx-background-color: #dce8f0;
+}
+
+.login-version {
+    -fx-text-fill: #8b98aa;
+    -fx-font-size: 10px;
+}
+
+.form-message {
+    -fx-text-fill: #b42318;
+    -fx-font-size: 12px;
+    -fx-wrap-text: true;
+}
+
+
+/* Final simplified desktop login branding */
+.login-root .brand-tagline,
+.login-root .brand-separator {
+    -fx-managed: false;
+    -fx-visible: false;
+}
+.login-root .brand-footer {
+    -fx-alignment: CENTER;
+    -fx-text-alignment: CENTER;
+}
+.login-root .brand-footer-box {
+    -fx-alignment: CENTER;
+    -fx-fill-width: true;
+}
+.login-root .brand-flow {
+    -fx-alignment: CENTER_LEFT;
+}
