@@ -464,6 +464,58 @@ public class DashboardView extends BorderPane {
     }
 
     private void showDataExchange() {
+        if (currentUser == null) return;
+        // Clicking the already-active Data Exchange navigation item should not
+        // reopen the re-authentication dialog or recreate the current screen.
+        if (dataExchangeButton.getStyleClass().contains("nav-selected")) return;
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Confirm Data Exchange Access");
+        dialog.setHeaderText("Password confirmation required");
+        if (getScene() != null && getScene().getWindow() != null) {
+            dialog.initOwner(getScene().getWindow());
+        }
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Label message = new Label("Data Exchange is a critical operation. Enter your current password to continue.");
+        message.setWrapText(true);
+        message.setAlignment(javafx.geometry.Pos.CENTER);
+        message.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Current password");
+        VBox fields = new VBox(14, message, passwordField);
+        fields.setAlignment(javafx.geometry.Pos.CENTER);
+        fields.setPrefWidth(500);
+        fields.setPadding(new Insets(12, 8, 8, 8));
+        message.setMaxWidth(Double.MAX_VALUE);
+        message.setPrefWidth(500);
+        passwordField.setMaxWidth(420);
+        passwordField.setPrefWidth(420);
+        passwordField.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        GridPane centeredPassword = new GridPane();
+        centeredPassword.setAlignment(javafx.geometry.Pos.CENTER);
+        centeredPassword.add(passwordField, 0, 0);
+        fields.getChildren().setAll(message, centeredPassword);
+        dialog.getDialogPane().setContent(fields);
+        dialog.setResultConverter(button -> button);
+        dialog.setOnShown(event -> passwordField.requestFocus());
+
+        var result = dialog.showAndWait();
+        if (result.isEmpty() || result.get() != ButtonType.OK) return;
+        if (passwordField.getText() == null || passwordField.getText().isEmpty()) {
+            new Alert(Alert.AlertType.WARNING, "Please enter your current password.", ButtonType.OK).showAndWait();
+            return;
+        }
+        try {
+            if (!new AuthService().verifyPassword(currentUser.id(), passwordField.getText())) {
+                new Alert(Alert.AlertType.ERROR, "Incorrect password. Data Exchange was not opened.", ButtonType.OK).showAndWait();
+                return;
+            }
+        } catch (RuntimeException ex) {
+            new Alert(Alert.AlertType.ERROR, ex.getMessage(), ButtonType.OK).showAndWait();
+            return;
+        }
+
         navigateWithUnsavedChanges(() -> activate(dataExchangeButton, "Data Exchange", new DataExchangeView()));
     }
 

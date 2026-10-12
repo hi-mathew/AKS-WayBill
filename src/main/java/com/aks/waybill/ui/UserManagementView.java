@@ -38,6 +38,7 @@ public final class UserManagementView extends AppView {
 
     public UserManagementView() {
         super("User Management", "Manage application users, roles, user-specific waybill codes and passwords.");
+        getStyleClass().add("user-management-view");
         getChildren().add(build()); VBox.setVgrow(getChildren().get(2), Priority.ALWAYS);
         loadPage(0);
     }
@@ -173,7 +174,7 @@ public final class UserManagementView extends AppView {
         d.getDialogPane().setContent(g);d.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL,ButtonType.OK);d.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(javafx.event.ActionEvent.ACTION,e->{try{if(existing==null){UserService.create(username.getText(),name.getText(),code.getText(),role.getValue(),password.getText());}else{UserService.update(existing.id(),username.getText(),name.getText(),code.getText(),role.getValue());if(!password.getText().isBlank())UserService.resetPassword(existing.id(),password.getText());}loadPage(currentPage);}catch(Exception ex){e.consume();new Alert(Alert.AlertType.ERROR,"Unable to save user: "+msg(ex),ButtonType.OK).showAndWait();}});d.showAndWait();}
     private void add(GridPane g,int row,String label,Control c){Label l=new Label(label);l.getStyleClass().add("field-label");c.setPrefWidth(320);g.add(l,0,row);g.add(c,1,row);}
     private Button primary(String s){Button b=new Button(s);b.getStyleClass().add("primary-button");return b;}
-    private Button secondary(String s){Button b=new Button(s);b.getStyleClass().add("secondary-button");return b;}
+    private Button secondary(String s){Button b=new Button(s);b.getStyleClass().add("secondary-button");SecondaryButtonStyle.apply(b);return b;}
     private void setMessage(String s,boolean error){message.setText(s);message.getStyleClass().removeAll("success-message","error-message");message.getStyleClass().add(error?"error-message":"success-message");}
     private String msg(Exception e){return e.getMessage()==null?"Operation failed.":e.getMessage();}
     private String format(String value){

@@ -33,6 +33,23 @@ public class AuthService {
             }
         }catch(SQLException e){ WaspLogger.error("Unable to authenticate user", e); throw new IllegalStateException("Unable to authenticate user",e);}
     }
+    /** Verifies the password for an already authenticated user without changing login state. */
+    public boolean verifyPassword(long userId, String password) {
+        String sql = "SELECT password_hash, enabled FROM app_user WHERE id=?";
+        try (Connection c = Database.getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
+            p.setLong(1, userId);
+            try (ResultSet r = p.executeQuery()) {
+                boolean valid = r.next() && r.getInt("enabled") == 1
+                        && PasswordService.matches(password, r.getString("password_hash"));
+                if (!valid) WaspLogger.warning("Password re-authentication failed. userId=" + userId);
+                else WaspLogger.info("Password re-authentication succeeded. userId=" + userId);
+                return valid;
+            }
+        } catch (SQLException e) {
+            WaspLogger.error("Unable to verify password for re-authentication. userId=" + userId, e);
+            throw new IllegalStateException("Unable to verify password. Please try again.", e);
+        }
+    }
     private void registerFailedAttempt(long id,int current)throws SQLException{
         int next=current+1; String lock=next>=5?Instant.now().plusSeconds(900).toString():null;
         try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement("UPDATE app_user SET failed_login_attempts=?,locked_until=?,updated_at=? WHERE id=?")){

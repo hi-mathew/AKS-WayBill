@@ -15,6 +15,9 @@ public final class SettingsService {
     public static final String LIST_PAGE_SIZE = "application.list_page_size";
     public static final String BACKUP_RETENTION_ENABLED = "backup.retention.enabled";
     public static final String BACKUP_RETENTION_COUNT = "backup.retention.count";
+    public static final String SHOW_NEW_COMPANY = "waybill.show_new_company";
+    public static final String SHOW_NEW_CARRIER = "waybill.show_new_carrier";
+    public static final String SHOW_NEW_LOCATION = "waybill.show_new_location";
 
     private static final String DEFAULT_PART_1 = "AKS";
     private static final long DEFAULT_NEXT_SEQUENCE = 1001L;
@@ -53,6 +56,30 @@ public final class SettingsService {
             ensureDefault(c, LIST_PAGE_SIZE, String.valueOf(DEFAULT_PAGE_SIZE));
             return Integer.parseInt(getValue(c, LIST_PAGE_SIZE));
         } catch (Exception e) { WaspLogger.error("Unable to load pagination setting", e); throw new IllegalStateException("Unable to load pagination setting", e); }
+    }
+
+    public static boolean isNewCompanyOptionEnabled() { return getBooleanSetting(SHOW_NEW_COMPANY, false); }
+    public static boolean isNewCarrierOptionEnabled() { return getBooleanSetting(SHOW_NEW_CARRIER, false); }
+    public static boolean isNewLocationOptionEnabled() { return getBooleanSetting(SHOW_NEW_LOCATION, false); }
+
+    public static void saveQuickCreateOptions(boolean company, boolean carrier, boolean location) {
+        try (Connection c = Database.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                upsert(c, SHOW_NEW_COMPANY, String.valueOf(company));
+                upsert(c, SHOW_NEW_CARRIER, String.valueOf(carrier));
+                upsert(c, SHOW_NEW_LOCATION, String.valueOf(location));
+                c.commit();
+            } catch (Exception e) { c.rollback(); throw e; }
+            finally { c.setAutoCommit(true); }
+        } catch (Exception e) { WaspLogger.error("Unable to save quick-create options", e); throw new IllegalStateException("Unable to save quick-create options", e); }
+    }
+
+    private static boolean getBooleanSetting(String key, boolean defaultValue) {
+        try (Connection c = Database.getConnection()) {
+            ensureDefault(c, key, String.valueOf(defaultValue));
+            return Boolean.parseBoolean(getValue(c, key));
+        } catch (Exception e) { WaspLogger.error("Unable to load setting " + key, e); throw new IllegalStateException("Unable to load setting " + key, e); }
     }
 
     public static boolean isBackupRetentionEnabled() {

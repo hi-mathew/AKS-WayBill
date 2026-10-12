@@ -152,7 +152,7 @@ public final class CompaniesView extends AppView {
         private void clearMessage() { message.setText(""); message.getStyleClass().remove("error-message"); }
         private void showError(String text) { message.getStyleClass().add("error-message"); message.setText(text == null ? "Unable to complete operation." : text); }
         private void showInfo(String text) { message.getStyleClass().remove("error-message"); message.setText(text == null ? "Operation completed." : text); }
-        private static Button button(String text, String css) { Button b = new Button(text); b.getStyleClass().add(css); return b; }
+        private static Button button(String text, String css) { Button b = new Button(text); b.getStyleClass().add(css); if ("secondary-button".equals(css)) SecondaryButtonStyle.apply(b); return b; }
         private static TextField field(String prompt, String value, int max) { TextField f = new TextField(value); f.setPromptText(prompt); InputLimits.maxLength(f, max); f.getStyleClass().add("settings-field"); return f; }
         private static VBox labeled(String label, Control control) { VBox box = new VBox(5, new Label(label), control); control.setMaxWidth(Double.MAX_VALUE); return box; }
         private static String safe(String value) { return value == null ? "" : value; }

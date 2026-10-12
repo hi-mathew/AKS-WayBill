@@ -42,6 +42,10 @@ public final class SettingsView extends AppView {
     private final Label profileMessage = new Label();
     private final Label paginationMessage = new Label();
     private final Label preview = new Label();
+    private final CheckBox showNewCompanyOption = new CheckBox("Allow creating new companies from Waybill");
+    private final CheckBox showNewCarrierOption = new CheckBox("Allow creating new carriers from Waybill");
+    private final CheckBox showNewLocationOption = new CheckBox("Allow creating new locations from Waybill");
+    private final Label quickCreateMessage = new Label();
 
     private TableView<TermsConditionService.Clause> termsTable;
     private final PaginationControl termsPagination = new PaginationControl();
@@ -74,12 +78,14 @@ public final class SettingsView extends AppView {
         terms.setContent(termsContent);
         Tab pagination = new Tab("Pagination");
         pagination.setContent(wrapSettingsContent(paginationCard()));
+        Tab quickCreate = new Tab("Quick Create Options");
+        quickCreate.setContent(wrapSettingsContent(quickCreateCard()));
         Tab backup = new Tab("Backup & Restore");
         VBox backupContent = backupCard();
         VBox.setVgrow(backupContent, Priority.ALWAYS);
         backup.setContent(backupContent);
 
-        tabs.getTabs().addAll(numbering, profile, terms, pagination, backup);
+        tabs.getTabs().addAll(numbering, profile, terms, pagination, quickCreate, backup);
 
         // Keep the Settings heading, description and tab headers fixed.
         // Each selected tab owns its own vertical ScrollPane, so normal
@@ -260,6 +266,31 @@ public final class SettingsView extends AppView {
     }
 
     private Button backupNowButton;
+
+    private VBox quickCreateCard() {
+        VBox card = card();
+        Label title = new Label("Waybill Entry Options"); title.getStyleClass().add("settings-card-title");
+        Label desc = new Label("Choose whether users can create companies, carriers and locations directly from New Waybill and Edit Waybill. When disabled, users can still manage saved master data through Saved Data. All options are disabled by default on a fresh database.");
+        desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        VBox options = new VBox(16, showNewCompanyOption, showNewCarrierOption, showNewLocationOption);
+        quickCreateMessage.getStyleClass().add("settings-message"); quickCreateMessage.setWrapText(true);
+        HBox buttons = new HBox(10); buttons.setAlignment(Pos.CENTER_RIGHT);
+        Button save = primary("Save Changes"); save.setOnAction(e -> saveQuickCreateOptions());
+        Button reset = secondary("Reset to Disabled"); reset.setOnAction(e -> { showNewCompanyOption.setSelected(false); showNewCarrierOption.setSelected(false); showNewLocationOption.setSelected(false); saveQuickCreateOptions(); });
+        buttons.getChildren().addAll(reset, save);
+        card.getChildren().addAll(title, desc, options, quickCreateMessage, buttons);
+        showNewCompanyOption.setSelected(SettingsService.isNewCompanyOptionEnabled());
+        showNewCarrierOption.setSelected(SettingsService.isNewCarrierOptionEnabled());
+        showNewLocationOption.setSelected(SettingsService.isNewLocationOptionEnabled());
+        return card;
+    }
+
+    private void saveQuickCreateOptions() {
+        try {
+            SettingsService.saveQuickCreateOptions(showNewCompanyOption.isSelected(), showNewCarrierOption.isSelected(), showNewLocationOption.isSelected());
+            setMessage(quickCreateMessage, "Waybill entry options saved. They apply to newly opened New/Edit Waybill screens.", false);
+        } catch (Exception ex) { setMessage(quickCreateMessage, message(ex), true); }
+    }
 
     private VBox backupCard() {
         VBox card=card();

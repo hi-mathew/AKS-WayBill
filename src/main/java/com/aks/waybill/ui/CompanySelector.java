@@ -1,6 +1,7 @@
 package com.aks.waybill.ui;
 
 import com.aks.waybill.service.CompanyService;
+import com.aks.waybill.service.SettingsService;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
@@ -41,6 +42,8 @@ public final class CompanySelector extends VBox {
         HBox inputRow = new HBox(8, editor, newButton); inputRow.setAlignment(Pos.CENTER_LEFT); HBox.setHgrow(editor, Priority.ALWAYS);
         suggestionList.setMaxHeight(180); suggestionList.setPrefWidth(420); suggestionList.setFocusTraversable(false); suggestionList.getStyleClass().add("company-suggestion-list");
         suggestionPopup.setAutoHide(true); suggestionPopup.setHideOnEscape(true); suggestionPopup.getContent().add(suggestionList);
+        newButton.setVisible(SettingsService.isNewCompanyOptionEnabled());
+        newButton.setManaged(SettingsService.isNewCompanyOptionEnabled());
         getChildren().addAll(savedCompany, inputRow);
 
         editor.textProperty().addListener((obs, oldValue, newValue) -> {
@@ -117,6 +120,7 @@ public final class CompanySelector extends VBox {
     public void clearSelection() { internalChange = true; selectedCompany = null; editor.clear(); selectClearOption(); internalChange = false; hideSuggestions(); notifySelection(); }
     public void setTypedCompanyName(String companyName) { internalChange = true; selectedCompany = null; selectClearOption(); editor.setText(companyName == null ? "" : companyName); internalChange = false; filterAndShowSuggestions(editor.getText()); notifySelection(); }
     public void setReadOnly(boolean readOnly) { savedCompany.setDisable(readOnly); editor.setDisable(readOnly); newButton.setDisable(readOnly); if (readOnly) hideSuggestions(); }
+    public void refreshQuickCreateVisibility() { boolean show = SettingsService.isNewCompanyOptionEnabled(); newButton.setVisible(show); newButton.setManaged(show); }
 
     private void selectRecord(CompanyService.CompanyRecord record) { internalChange = true; selectedCompany = record; editor.setText(record.companyName()); if (!savedCompany.getItems().contains(record.companyName())) savedCompany.getItems().add(record.companyName()); savedCompany.getSelectionModel().select(record.companyName()); internalChange = false; hideSuggestions(); notifySelection(); }
     private void selectClearOption() {

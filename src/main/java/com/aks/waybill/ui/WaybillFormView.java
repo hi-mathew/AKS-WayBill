@@ -4,6 +4,7 @@ import com.aks.waybill.service.CompanyService;
 import com.aks.waybill.service.WaybillNumberService;
 import com.aks.waybill.service.WaybillService;
 import com.aks.waybill.service.SavedDataService;
+import com.aks.waybill.service.SettingsService;
 import com.aks.waybill.security.SessionContext;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -44,7 +45,7 @@ public class WaybillFormView extends AppView {
     private boolean applyingMasterSelection;
     private String loadedStatus = "DRAFT";
 
-    private final Label numberLabel = new Label();
+    private final TextField numberLabel = new TextField();
     private final DatePicker waybillDate = new QuickDatePicker(LocalDate.now());
     private final DatePicker estimatedDelivery = new QuickDatePicker();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
@@ -126,6 +127,22 @@ public class WaybillFormView extends AppView {
         this.onViewSaved = onViewSaved == null ? id -> {} : onViewSaved;
 
         numberLabel.getStyleClass().add("waybill-number");
+        // A read-only TextField supports native text selection and Ctrl+C in JavaFX.
+        numberLabel.setEditable(false);
+        numberLabel.setFocusTraversable(true);
+        numberLabel.setPrefColumnCount(Math.max(18, numberLabel.getText().length() + 1));
+        numberLabel.textProperty().addListener((observable, oldValue, newValue) -> {
+            int length = newValue == null ? 0 : newValue.length();
+            numberLabel.setPrefColumnCount(Math.max(18, Math.min(42, length + 1)));
+        });
+        MenuItem copyWaybillNumber = new MenuItem("Copy Waybill Number");
+        copyWaybillNumber.setOnAction(event -> {
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString(numberLabel.getText() == null ? "" : numberLabel.getText());
+            javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+        });
+        ContextMenu waybillNumberMenu = new ContextMenu(copyWaybillNumber);
+        numberLabel.setContextMenu(waybillNumberMenu);
         configureDatePicker(estimatedDelivery);
         configureDatePicker(shipperDeclarationDate);
         configureDatePicker(carrierReceiptDate);
@@ -311,6 +328,11 @@ public class WaybillFormView extends AppView {
     }
 
     private void configureMasterDataButtons() {
+        boolean showCarrier = SettingsService.isNewCarrierOptionEnabled();
+        boolean showLocation = SettingsService.isNewLocationOptionEnabled();
+        newCarrierButton.setVisible(showCarrier); newCarrierButton.setManaged(showCarrier);
+        newOriginButton.setVisible(showLocation); newOriginButton.setManaged(showLocation);
+        newDestinationButton.setVisible(showLocation); newDestinationButton.setManaged(showLocation);
         newCarrierButton.setOnAction(event -> openNewCarrierDialog());
         newOriginButton.setOnAction(event -> openNewLocationDialog(true));
         newDestinationButton.setOnAction(event -> openNewLocationDialog(false));
