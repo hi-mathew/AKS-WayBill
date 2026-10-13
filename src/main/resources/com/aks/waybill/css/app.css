@@ -2077,3 +2077,31 @@
 .user-management-view .secondary-button:disabled {
     -fx-opacity: 0.62;
 }
+
+
+/* Compact layout specifically for the logout/exit backup reminder. */
+.wasp-backup-reminder .header-panel {
+    -fx-padding: 9px 10px 8px 10px;
+}
+.wasp-backup-reminder .content.label {
+    -fx-padding: 8px 10px 5px 10px;
+    -fx-font-size: 12.5px;
+    -fx-line-spacing: 3px;
+    -fx-wrap-text: true;
+}
+.wasp-backup-reminder .graphic-container {
+    -fx-padding: 0 0 0 8px;
+}
+.wasp-backup-reminder .button-bar {
+    -fx-padding: 5px 8px 8px 8px;
+}
+.wasp-backup-reminder .button-bar .container {
+    -fx-spacing: 8px;
+}
+.wasp-backup-reminder .button {
+    -fx-padding: 6px 12px;
+    -fx-font-size: 12px;
+    -fx-min-height: 34px;
+    -fx-pref-height: 34px;
+    -fx-max-height: 34px;
+}

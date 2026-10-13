@@ -339,6 +339,7 @@ public class Main extends Application {
      */
     private static void sizeDialogButtons(javafx.scene.control.DialogPane pane) {
         pane.applyCss();
+        boolean compactBackupReminder = pane.getStyleClass().contains("wasp-backup-reminder");
 
         var buttons = pane.lookupAll(".button").stream()
                 .filter(Button.class::isInstance)
@@ -367,16 +368,21 @@ public class Main extends Application {
         var buttonBarNode = pane.lookup(".button-bar");
         if (buttonBarNode instanceof ButtonBar buttonBar) {
             buttonBar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
-            buttonBar.setButtonMinWidth(commonButtonWidth);
+            buttonBar.setButtonMinWidth(compactBackupReminder ? 0 : commonButtonWidth);
             for (Node node : buttonBar.getButtons()) {
                 if (node instanceof Button button) {
-                    ButtonBar.setButtonUniformSize(button, true);
-                    setStableDialogButtonSize(button, commonButtonWidth);
+                    ButtonBar.setButtonUniformSize(button, !compactBackupReminder);
+                    if (compactBackupReminder) {
+                        setCompactBackupButtonSize(button);
+                    } else {
+                        setStableDialogButtonSize(button, commonButtonWidth);
+                    }
                 }
             }
         } else {
             for (Button button : buttons) {
-                setStableDialogButtonSize(button, commonButtonWidth);
+                if (compactBackupReminder) setCompactBackupButtonSize(button);
+                else setStableDialogButtonSize(button, commonButtonWidth);
             }
         }
 
@@ -391,8 +397,9 @@ public class Main extends Application {
 
         double availableScreenWidth = Math.max(900,
                 Screen.getPrimary().getVisualBounds().getWidth() - 80);
-        double dialogWidth = Math.min(availableScreenWidth,
-                Math.max(560, requiredButtonWidth + safetyMargin));
+        double dialogWidth = compactBackupReminder
+                ? Math.min(availableScreenWidth, 680)
+                : Math.min(availableScreenWidth, Math.max(560, requiredButtonWidth + safetyMargin));
         if (pane.getStyleClass().contains("wasp-about-dialog")) {
             dialogWidth = Math.min(availableScreenWidth, Math.max(dialogWidth, 760));
         }
@@ -431,11 +438,12 @@ public class Main extends Application {
             var currentButtonBar = pane.lookup(".button-bar");
             if (currentButtonBar instanceof ButtonBar bar) {
                 bar.setButtonOrder(ButtonBar.BUTTON_ORDER_NONE);
-                bar.setButtonMinWidth(finalButtonWidth);
+                bar.setButtonMinWidth(compactBackupReminder ? 0 : finalButtonWidth);
                 for (Node node : bar.getButtons()) {
                     if (node instanceof Button button) {
-                        ButtonBar.setButtonUniformSize(button, true);
-                        setStableDialogButtonSize(button, finalButtonWidth);
+                        ButtonBar.setButtonUniformSize(button, !compactBackupReminder);
+                        if (compactBackupReminder) setCompactBackupButtonSize(button);
+                        else setStableDialogButtonSize(button, finalButtonWidth);
                     }
                 }
             }
@@ -481,6 +489,25 @@ public class Main extends Application {
         );
         GridPane.setHgrow(field, Priority.NEVER);
         GridPane.setFillWidth(field, false);
+    }
+
+    private static void setCompactBackupButtonSize(Button button) {
+        // All reminder actions use one shared width, sized to fit the longest
+        // caption so the complete labels remain visible.
+        double width = 194;
+        button.setMinWidth(width);
+        button.setPrefWidth(width);
+        button.setMaxWidth(width);
+        button.setMinHeight(34);
+        button.setPrefHeight(34);
+        button.setMaxHeight(34);
+        javafx.scene.layout.HBox.setHgrow(button, javafx.scene.layout.Priority.NEVER);
+        button.setStyle("-fx-min-width: " + width + "px;" +
+                "-fx-pref-width: " + width + "px;" +
+                "-fx-max-width: " + width + "px;" +
+                "-fx-min-height: 34px;" +
+                "-fx-pref-height: 34px;" +
+                "-fx-max-height: 34px;");
     }
 
     private static void setStableDialogButtonSize(Button button, double width) {
@@ -596,8 +623,9 @@ public class Main extends Application {
     public static boolean confirmBackup(javafx.stage.Window owner, String action) {
         Alert backup = new Alert(Alert.AlertType.CONFIRMATION);
         backup.setTitle("Backup Reminder");
+        backup.getDialogPane().getStyleClass().add("wasp-backup-reminder");
         backup.setHeaderText("Before you " + action);
-        backup.setContentText("Have you backed up today's data? It is recommended to create a backup before logging out or closing the application.");
+        backup.setContentText("Have you backed up today's data?\nIt is recommended to create a backup before logging out or closing the application.");
         ButtonType backupNow = new ButtonType("Backup Now", ButtonBar.ButtonData.OK_DONE);
         ButtonType continueWithout = new ButtonType("Continue Without Backup", ButtonBar.ButtonData.OTHER);
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
