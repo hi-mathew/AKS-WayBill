@@ -7,6 +7,8 @@ import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.ProgressIndicator;
 import javafx.application.Platform;
@@ -17,7 +19,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 
 /** UI helper for saving generated waybill documents. */
@@ -92,11 +96,7 @@ public final class WaybillReportActions {
 
         task.setOnSucceeded(event -> {
             dismissProgressDialog(progressDialog);
-            alert(javafx.scene.control.Alert.AlertType.INFORMATION,
-                    "Document Generated",
-                    "The " + (pdf ? "PDF" : "Word document") + " was generated successfully.\n\n"
-                            + "File name: " + output.getFileName() + "\nSaved to: " + output.getParent(),
-                    owner);
+            showGeneratedDocumentDialog(output, pdf, owner);
             if (onComplete != null) onComplete.run();
         });
 
@@ -115,6 +115,51 @@ public final class WaybillReportActions {
         Thread worker = new Thread(task, pdf ? "wasp-pdf-generation" : "wasp-word-generation");
         worker.setDaemon(true);
         worker.start();
+    }
+
+
+    private static void showGeneratedDocumentDialog(Path output, boolean pdf, Window owner) {
+        String format = pdf ? "PDF" : "Word document";
+        ButtonType openButton = new ButtonType(pdf ? "Open PDF" : "Open Word Document", ButtonBar.ButtonData.OTHER);
+        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.INFORMATION);
+        alert.setTitle("Document Generated");
+        alert.setHeaderText(format + " generated successfully");
+        alert.setContentText("The " + format + " was generated successfully.\n\n"
+                + "File name: " + output.getFileName() + "\nSaved to: " + output.getParent());
+        alert.getButtonTypes().setAll(openButton, closeButton);
+        alert.getDialogPane().setMinWidth(560);
+        alert.getDialogPane().setPrefWidth(560);
+        StackPane circle = new StackPane();
+        circle.getStyleClass().addAll("wasp-dialog-icon", "wasp-dialog-info");
+        circle.setMinSize(34, 34);
+        circle.setPrefSize(34, 34);
+        circle.setMaxSize(34, 34);
+        circle.setTranslateY(8);
+        Label glyph = new Label("i");
+        glyph.getStyleClass().add("wasp-dialog-icon-glyph");
+        glyph.setMinSize(34, 34);
+        glyph.setPrefSize(34, 34);
+        glyph.setMaxSize(34, 34);
+        glyph.setAlignment(Pos.CENTER);
+        circle.getChildren().add(glyph);
+        alert.getDialogPane().setGraphic(circle);
+        if (owner != null) alert.initOwner(owner);
+        ButtonType selected = alert.showAndWait().orElse(closeButton);
+        if (selected == openButton) {
+            try {
+                if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                    throw new IOException("Opening documents from W.A.S.P. is not supported on this computer.");
+                }
+                Desktop.getDesktop().open(output.toFile());
+            } catch (Exception ex) {
+                alert(javafx.scene.control.Alert.AlertType.ERROR, "Unable to Open Document",
+                        "The document was generated, but W.A.S.P. could not open it automatically.\n\n"
+                                + "You can open it from: " + output.toAbsolutePath() + "\n\nDetails: "
+                                + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()), owner);
+            }
+        }
     }
 
     /**

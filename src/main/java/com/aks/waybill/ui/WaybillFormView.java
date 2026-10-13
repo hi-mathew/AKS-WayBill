@@ -890,9 +890,22 @@ public class WaybillFormView extends AppView {
     }
 
     private void confirmFinalize() {
-        Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Mark this waybill as Final? Normal users will no longer be able to edit it.",ButtonType.OK,ButtonType.CANCEL);
-        a.setTitle("Finalize Waybill"); a.setHeaderText("Finalize Waybill");
-        if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{WaybillService.finalizeWaybill(waybillId); loadedStatus="FINAL"; applyMode(); onCancel.run();}catch(Exception e){showError(e.getMessage());}}
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION,
+                "Before finalizing, manually review the final waybill document and verify that all information and details are correct.\n\n"
+                        + "Once finalized, normal users will no longer be able to edit this waybill. Do you want to continue?",
+                ButtonType.OK, ButtonType.CANCEL);
+        a.setTitle("Finalize Waybill");
+        a.setHeaderText("Verify Waybill Before Finalizing");
+        if (a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            try {
+                WaybillService.finalizeWaybill(waybillId);
+                loadedStatus = "FINAL";
+                applyMode();
+                onCancel.run();
+            } catch (Exception e) {
+                showError(e.getMessage());
+            }
+        }
     }
 
     private void confirmRevert() {

@@ -147,8 +147,16 @@ public final class SavedWaybillsView extends AppView {
                 lifecycle.setOnAction(event -> {
                     try {
                         if ("DRAFT".equalsIgnoreCase(row.status())) {
-                            Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Mark this waybill as Final? Normal users will no longer be able to edit it.",ButtonType.OK,ButtonType.CANCEL);
-                            if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){WaybillService.finalizeWaybill(waybillId);loadPage(currentPage);}
+                            Alert a = new Alert(Alert.AlertType.CONFIRMATION,
+                                    "Before finalizing, manually review the final waybill document and verify that all information and details are correct.\n\n"
+                                            + "Once finalized, normal users will no longer be able to edit this waybill. Do you want to continue?",
+                                    ButtonType.OK, ButtonType.CANCEL);
+                            a.setTitle("Finalize Waybill");
+                            a.setHeaderText("Verify Waybill Before Finalizing");
+                            if (a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                                WaybillService.finalizeWaybill(waybillId);
+                                loadPage(currentPage);
+                            }
                         } else if(SessionContext.isAdmin()) {
                             TextInputDialog d=new TextInputDialog(); d.setTitle("Return to Draft"); d.setHeaderText("Return Finalized Waybill to Draft"); d.setContentText("Reason:");
                             d.showAndWait().ifPresent(reason->{if(reason!=null&&!reason.isBlank()){try{WaybillService.revertToDraft(waybillId,reason);loadPage(currentPage);}catch(Exception ex){showError(ex.getMessage());}}});
