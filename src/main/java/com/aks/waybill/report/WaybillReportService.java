@@ -170,12 +170,23 @@ public final class WaybillReportService {
         setRunText(company, 5, profile.vatNumber());
 
         XWPFTableCell meta = cell(table, 0, 1);
+        // Keep the complete waybill number on one line at the template's normal
+        // font size. Rebalance the header columns to give the right-hand metadata
+        // cell more room rather than shrinking the number's font.
+        setHeaderColumnWidths(table, 4.0, 3.5);
+        setCellNoWrap(meta);
         // The approved template stores the header as these runs:
         // 0 = "WAYBILL NO: ", 1..3 = sample waybill number parts,
         // 4 = line break, 5 = "Date: ", 6 = sample date.
         // Keep the labels intact and replace only the dynamic values.
         setRunText(meta, 0, "WAYBILL NO:");
         setRunText(meta, 1, "\u00A0" + safe(waybill.waybillNumber()));
+        if (meta.getParagraphs() != null && !meta.getParagraphs().isEmpty()) {
+            XWPFParagraph headerParagraph = meta.getParagraphs().get(0);
+            // Do not override the template font size for long waybill numbers.
+            // The widened metadata column and no-wrap cell property handle the
+            // longer identifiers while retaining the established typography.
+        }
         setRunText(meta, 2, "");
         setRunText(meta, 3, "");
         setRunText(meta, 5, "Date:");
@@ -356,18 +367,21 @@ public final class WaybillReportService {
         if (references.isEmpty()) return "";
         String numbers;
         if (references.size() == 1) {
-            numbers = "Section " + safePrintedNumber(references.get(0));
+            numbers = "Section " + safeReferencePrintedNumber(references.get(0));
         } else if (references.size() == 2) {
-            numbers = "Sections " + safePrintedNumber(references.get(0)) + " and " + safePrintedNumber(references.get(1));
+            numbers = "Sections " + safeReferencePrintedNumber(references.get(0)) + " and " + safeReferencePrintedNumber(references.get(1));
         } else {
             StringBuilder b = new StringBuilder("Sections ");
             for (int i = 0; i < references.size(); i++) {
                 if (i > 0) b.append(i == references.size() - 1 ? " and " : ", ");
-                b.append(safePrintedNumber(references.get(i)));
+                b.append(safeReferencePrintedNumber(references.get(i)));
             }
             numbers = b.toString();
         }
-        return "Subject to " + numbers + " of Terms & Conditions on Page 2";
+        // These clauses can appear on different pages in the two-column T&C
+        // layout. A single page number here would be misleading, so reference
+        // the sections without claiming that all of them are on the T&C start page.
+        return "Subject to " + numbers + " of Terms & Conditions";
     }
 
     private static void populateDeclarations(XWPFTable table, WaybillService.WaybillDetails waybill) {
@@ -446,6 +460,52 @@ public final class WaybillReportService {
     private static String safePrintedNumber(TermsConditionService.Clause clause) {
         String number = clause == null ? null : clause.printedNumber();
         return number == null || number.isBlank() ? String.valueOf(clause == null ? "" : clause.displayOrder()) : number.trim();
+    }
+
+    /** Formats clause numbers in the short hazardous-material cross-reference only. */
+    private static String safeReferencePrintedNumber(TermsConditionService.Clause clause) {
+        return safePrintedNumber(clause).replaceFirst("\\.+$", "");
+    }
+
+    /**
+     * Rebalances the existing header table (7.5 inches total) so the Waybill No.
+     * has more horizontal room without reducing its font size.
+     */
+    private static void setHeaderColumnWidths(XWPFTable table, double leftInches, double rightInches) {
+        if (table == null || table.getNumberOfRows() == 0 || table.getRow(0).getTableCells().size() < 2) return;
+        int leftTwips = (int) Math.round(leftInches * 1440);
+        int rightTwips = (int) Math.round(rightInches * 1440);
+        try {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid grid = table.getCTTbl().getTblGrid();
+            if (grid != null && grid.sizeOfGridColArray() >= 2) {
+                grid.getGridColArray(0).setW(java.math.BigInteger.valueOf(leftTwips));
+                grid.getGridColArray(1).setW(java.math.BigInteger.valueOf(rightTwips));
+            }
+            for (XWPFTableRow row : table.getRows()) {
+                if (row.getTableCells().size() < 2) continue;
+                setCellWidthTwips(row.getCell(0), leftTwips);
+                setCellWidthTwips(row.getCell(1), rightTwips);
+            }
+        } catch (RuntimeException ex) {
+            WaspLogger.warning("Unable to rebalance waybill header columns; retaining template widths. " + ex.getMessage());
+        }
+    }
+
+    private static void setCellWidthTwips(XWPFTableCell cell, int widthTwips) {
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr properties = cell.getCTTc().getTcPr();
+        if (properties == null) properties = cell.getCTTc().addNewTcPr();
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth width =
+                properties.isSetTcW() ? properties.getTcW() : properties.addNewTcW();
+        width.setW(java.math.BigInteger.valueOf(widthTwips));
+        width.setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth.DXA);
+    }
+
+    /** Prevents Word from wrapping the waybill number inside the header metadata cell. */
+    private static void setCellNoWrap(XWPFTableCell cell) {
+        if (cell == null) return;
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr properties = cell.getCTTc().getTcPr();
+        if (properties == null) properties = cell.getCTTc().addNewTcPr();
+        if (!properties.isSetNoWrap()) properties.addNewNoWrap();
     }
 
     private static void populateTermsAndConditions(XWPFTable table) {
@@ -828,10 +888,12 @@ public final class WaybillReportService {
 
     private static void setTermsPageLiteral(Path docx, int page) throws IOException {
         rewriteDocxXml(docx, xml -> {
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile("(<w:t[^>]*>[^<]*Subject to [^<]*Page )2(\\)\\*</w:t>)");
+            // The page reference is repeated in the hazardous-material note and
+            // in all three declaration texts. Replace each occurrence, not just
+            // the hazardous-material note, so every cross-reference stays in sync.
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("((?:Carrier )?Terms &amp; Conditions on Page )2");
             java.util.regex.Matcher m = p.matcher(xml);
-            if (!m.find()) return xml;
-            return m.replaceFirst(java.util.regex.Matcher.quoteReplacement(m.group(1) + page + m.group(2)));
+            return m.replaceAll("$1" + page);
         });
     }
 

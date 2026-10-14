@@ -143,3 +143,10 @@
 - Draft marker: grey (#9aa9b6).
 - Final marker: orange (#e99a2b).
 - No dashboard dimensions, spacing, table sizing, or application functionality changed.
+
+
+## Report refinements — 2026-10-14
+
+- Keep the Waybill No. on one line in the report header using a no-wrap metadata cell and smaller number text only for longer identifiers.
+- Remove trailing periods from clause numbers in the Hazardous Materials cross-reference only; the Terms & Conditions configuration remains unchanged.
+- Resolve the Terms & Conditions start page from a rendered preview and update all Waybill references (Hazardous Materials and shipper/carrier/consignee declarations), rather than updating only the Hazardous Materials note.
