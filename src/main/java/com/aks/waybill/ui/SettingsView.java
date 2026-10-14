@@ -148,18 +148,22 @@ public final class SettingsView extends AppView {
     private VBox termsCard() {
         VBox card=card();
         Label title=new Label("Terms & Conditions"); title.getStyleClass().add("settings-card-title");
-        Label desc=new Label("Manage the clauses printed on generated waybills. Clause numbers follow the current display order automatically. Mark the clause(s) that should be referenced by the Hazardous Materials declaration. Double-click a clause to edit it."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
+        Label desc=new Label("Manage numbered clauses, unnumbered headings and group headings. The Order column is internal sorting only; Printed Number is entered separately and appears in the report. The existing two-column print layout is retained."); desc.setWrapText(true); desc.getStyleClass().add("settings-card-description");
 
         termsTable=new TableView<>();
         termsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        termsTable.setPlaceholder(new Label("No Terms & Conditions clauses found."));
+        termsTable.setPlaceholder(new Label("No Terms & Conditions items found."));
 
-        TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("No.");
+        TableColumn<TermsConditionService.Clause,String> no=new TableColumn<>("Order");
         no.setMinWidth(55); no.setPrefWidth(65); no.setMaxWidth(75);
-        no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().clauseNumber())));
+        no.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(String.valueOf(d.getValue().displayOrder())));
+        TableColumn<TermsConditionService.Clause,String> typeCol=new TableColumn<>("Type");
+        typeCol.setMinWidth(105); typeCol.setPrefWidth(125);
+        typeCol.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(switch(d.getValue().itemType()){case "HEADING" -> "Heading"; case "GROUP_HEADING" -> "Group Heading"; default -> "Clause";}));
         TableColumn<TermsConditionService.Clause,String> clause=new TableColumn<>("Clause");
         clause.setMinWidth(160); clause.setPrefWidth(190);
-        clause.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().title()));
+        clause.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(
+                (d.getValue().printedNumber()==null?"":d.getValue().printedNumber()+" ") + d.getValue().title()));
         TableColumn<TermsConditionService.Clause,String> text=new TableColumn<>("Text");
         text.setMinWidth(300);
         text.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().text()));
@@ -169,9 +173,9 @@ public final class SettingsView extends AppView {
         TableColumn<TermsConditionService.Clause,String> active=new TableColumn<>("Status");
         active.setMinWidth(85); active.setPrefWidth(95); active.setMaxWidth(110);
         active.setCellValueFactory(d->new javafx.beans.property.SimpleStringProperty(d.getValue().active()?"Active":"Inactive"));
-        termsTable.getColumns().setAll(no,clause,text,hazardousRef,active);
-        // Clause display order is authoritative because it determines the T&C section numbers.
-        no.setSortable(false); clause.setSortable(false); text.setSortable(false); hazardousRef.setSortable(false); active.setSortable(false);
+        termsTable.getColumns().setAll(no,typeCol,clause,text,hazardousRef,active);
+        // Internal order controls display order only; printed numbers are independently configurable.
+        no.setSortable(false); typeCol.setSortable(false); clause.setSortable(false); text.setSortable(false); hazardousRef.setSortable(false); active.setSortable(false);
         termsTable.setRowFactory(tv -> {
             TableRow<TermsConditionService.Clause> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -186,11 +190,11 @@ public final class SettingsView extends AppView {
 
         termsPagination.setPageLoader(this::reloadTermsPage);
 
-        Button add=primary("Add Clause"); add.setOnAction(e->editTermsClause(termsTable,null,this::reloadTermsPage));
+        Button add=primary("Add Item"); add.setOnAction(e->editTermsClause(termsTable,null,this::reloadTermsPage));
         Button edit=secondary("Edit"); edit.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}editTermsClause(termsTable,x,this::reloadTermsPage);});
         Button up=secondary("Move Up"); up.setOnAction(e->moveClause(termsTable,true,this::reloadTermsPage));
         Button down=secondary("Move Down"); down.setOnAction(e->moveClause(termsTable,false,this::reloadTermsPage));
-        Button delete=secondary("Delete"); delete.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete clause "+x.clauseNumber()+"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reloadTermsPage();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
+        Button delete=secondary("Delete"); delete.setOnAction(e->{var x=termsTable.getSelectionModel().getSelectedItem();if(x==null){showSimpleError("Select a clause first.");return;}Alert a=new Alert(Alert.AlertType.CONFIRMATION,"Delete Terms & Conditions item \"" + x.title() + "\"? This will remove it from future reports.",ButtonType.OK,ButtonType.CANCEL);a.setTitle("Delete Terms & Conditions Clause");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){try{TermsConditionService.delete(x.id());reloadTermsPage();}catch(Exception ex){showSimpleError(ex.getMessage());}}});
         HBox buttons=new HBox(8,add,edit,up,down,delete); buttons.setAlignment(Pos.CENTER_RIGHT);
         card.setMinHeight(0); card.setMaxHeight(Double.MAX_VALUE);
         card.getChildren().addAll(title,desc,termsTableScroll,buttons,termsPagination);
@@ -241,16 +245,85 @@ public final class SettingsView extends AppView {
     }
 
     private void editTermsClause(TableView<TermsConditionService.Clause> table, TermsConditionService.Clause existing, Runnable reload) {
-        Dialog<ButtonType> dialog=new Dialog<>(); dialog.setTitle(existing==null?"Add Terms & Conditions Clause":"Edit Terms & Conditions Clause");
-        TextField title=new TextField(existing==null?"":existing.title()); TextArea text=new TextArea(existing==null?"":existing.text()); CheckBox active=new CheckBox("Active"); active.setSelected(existing==null||existing.active());
-        CheckBox hazardousReference=new CheckBox("Reference this clause from the Hazardous Materials declaration"); hazardousReference.setSelected(existing != null && existing.hazardousMaterialsReference());
-        InputLimits.maxLength(title,300); InputLimits.maxLength(text,3000); text.setWrapText(true); text.setPrefRowCount(7);
-        Label numberValue = new Label(existing == null ? "Assigned automatically when saved" : "Clause " + existing.clauseNumber());
-        numberValue.getStyleClass().add("settings-note");
-        VBox form=new VBox(8,new Label("Clause Number"),numberValue,new Label("Clause Title"),title,new Label("Clause Text"),text,hazardousReference,active); form.setPrefWidth(650); dialog.getDialogPane().setContent(form);
-        ButtonType save=new ButtonType(existing==null?"Add":"Save",ButtonBar.ButtonData.OK_DONE); dialog.getDialogPane().getButtonTypes().addAll(save,ButtonType.CANCEL);
-        dialog.setResultConverter(b->{if(b!=save)return null;try{if(existing==null)TermsConditionService.create(title.getText(),text.getText(),active.isSelected());else TermsConditionService.update(existing.id(),title.getText(),text.getText(),existing.displayOrder(),active.isSelected(),hazardousReference.isSelected());reload.run();return b;}catch(Exception ex){showSimpleError(ex.getMessage());return null;}}); dialog.showAndWait();
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle(existing == null ? "Add Terms & Conditions Item" : "Edit Terms & Conditions Item");
+
+        javafx.scene.control.ComboBox<String> type = new javafx.scene.control.ComboBox<>();
+        type.getItems().setAll("CLAUSE", "HEADING", "GROUP_HEADING");
+        type.setValue(existing == null ? "CLAUSE" : existing.itemType());
+        type.setMaxWidth(Double.MAX_VALUE);
+
+        TextField printedNumber = new TextField(existing == null ? "" : safeTerms(existing.printedNumber()));
+        printedNumber.setPromptText("e.g. 1. / 13A. / 28–29. (leave blank for no number)");
+        TextField title = new TextField(existing == null ? "" : existing.title());
+        title.setPromptText("Clause title or heading text");
+        TextArea text = new TextArea(existing == null ? "" : existing.text());
+        text.setPromptText("Clause body text");
+        text.setWrapText(true);
+        text.setPrefRowCount(7);
+        CheckBox active = new CheckBox("Active");
+        active.setSelected(existing == null || existing.active());
+        CheckBox hazardousReference = new CheckBox("Reference this clause from the Hazardous Materials declaration");
+        hazardousReference.setSelected(existing != null && existing.hazardousMaterialsReference());
+        Label order = new Label(existing == null
+                ? "Order will be assigned automatically; use Move Up / Move Down to reorder."
+                : "Internal order: " + existing.displayOrder() + " (not printed)");
+        order.getStyleClass().add("settings-note");
+
+        Runnable adjustFields = () -> {
+            boolean clause = "CLAUSE".equals(type.getValue());
+            boolean group = "GROUP_HEADING".equals(type.getValue());
+            printedNumber.setDisable(!clause);
+            if (!clause) printedNumber.clear();
+            text.setDisable(group);
+            if (group) text.clear();
+            hazardousReference.setDisable(!clause);
+            if (!clause) hazardousReference.setSelected(false);
+        };
+        type.valueProperty().addListener((obs, oldValue, newValue) -> adjustFields.run());
+        adjustFields.run();
+
+        GridPane form = new GridPane();
+        form.setHgap(12);
+        form.setVgap(8);
+        form.add(new Label("Content Type"), 0, 0); form.add(type, 1, 0);
+        form.add(new Label("Internal Order"), 0, 1); form.add(order, 1, 1);
+        form.add(new Label("Printed Number"), 0, 2); form.add(printedNumber, 1, 2);
+        form.add(new Label("Title / Heading"), 0, 3); form.add(title, 1, 3);
+        form.add(new Label("Body Text"), 0, 4); form.add(text, 1, 4);
+        form.add(hazardousReference, 1, 5);
+        form.add(active, 1, 6);
+        GridPane.setHgrow(type, Priority.ALWAYS);
+        GridPane.setHgrow(printedNumber, Priority.ALWAYS);
+        GridPane.setHgrow(title, Priority.ALWAYS);
+        GridPane.setHgrow(text, Priority.ALWAYS);
+        form.setPrefWidth(680);
+        dialog.getDialogPane().setContent(form);
+        ButtonType save = new ButtonType(existing == null ? "Add Item" : "Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(save, ButtonType.CANCEL);
+        dialog.setResultConverter(button -> {
+            if (button != save) return null;
+            try {
+                String selectedType = type.getValue();
+                int orderValue = existing == null ? 0 : existing.displayOrder();
+                if (existing == null) {
+                    TermsConditionService.create(printedNumber.getText(), selectedType, title.getText(),
+                            text.getText(), orderValue, active.isSelected(), hazardousReference.isSelected());
+                } else {
+                    TermsConditionService.update(existing.id(), printedNumber.getText(), selectedType, title.getText(),
+                            text.getText(), orderValue, active.isSelected(), hazardousReference.isSelected());
+                }
+                reload.run();
+                return button;
+            } catch (Exception ex) {
+                showSimpleError(ex.getMessage());
+                return null;
+            }
+        });
+        dialog.showAndWait();
     }
+
+    private static String safeTerms(String value) { return value == null ? "" : value; }
 
     private void showSimpleError(String message){new Alert(Alert.AlertType.ERROR,message==null?"Operation failed.":message,ButtonType.OK).showAndWait();}
 

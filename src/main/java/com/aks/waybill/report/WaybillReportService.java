@@ -356,14 +356,14 @@ public final class WaybillReportService {
         if (references.isEmpty()) return "";
         String numbers;
         if (references.size() == 1) {
-            numbers = "Section " + references.get(0).clauseNumber();
+            numbers = "Section " + safePrintedNumber(references.get(0));
         } else if (references.size() == 2) {
-            numbers = "Sections " + references.get(0).clauseNumber() + " and " + references.get(1).clauseNumber();
+            numbers = "Sections " + safePrintedNumber(references.get(0)) + " and " + safePrintedNumber(references.get(1));
         } else {
             StringBuilder b = new StringBuilder("Sections ");
             for (int i = 0; i < references.size(); i++) {
                 if (i > 0) b.append(i == references.size() - 1 ? " and " : ", ");
-                b.append(references.get(i).clauseNumber());
+                b.append(safePrintedNumber(references.get(i)));
             }
             numbers = b.toString();
         }
@@ -439,6 +439,11 @@ public final class WaybillReportService {
         }
     }
 
+    private static String safePrintedNumber(TermsConditionService.Clause clause) {
+        String number = clause == null ? null : clause.printedNumber();
+        return number == null || number.isBlank() ? String.valueOf(clause == null ? "" : clause.displayOrder()) : number.trim();
+    }
+
     private static void populateTermsAndConditions(XWPFTable table) {
         List<TermsConditionService.Clause> clauses = TermsConditionService.findActive();
         if (table == null || table.getNumberOfRows() == 0 || table.getRow(0).getTableCells().size() < 2) return;
@@ -464,22 +469,34 @@ public final class WaybillReportService {
             for (int i = start; i < end; i++) {
                 TermsConditionService.Clause clause = clauses.get(i);
 
+                String itemType = clause.itemType() == null ? "CLAUSE" : clause.itemType();
                 XWPFParagraph title = cell.addParagraph();
-                title.setSpacingBefore(80);
-                title.setSpacingAfter(20);
+                title.setSpacingBefore("GROUP_HEADING".equals(itemType) ? 150 : ("HEADING".equals(itemType) ? 110 : 80));
+                title.setSpacingAfter("GROUP_HEADING".equals(itemType) ? 70 : 20);
                 XWPFRun titleRun = title.createRun();
-                titleRun.setText(clause.clauseNumber() + ". " + safe(clause.title()));
+                String printedNumber = clause.printedNumber() == null ? "" : clause.printedNumber().trim();
+                String titleText = "CLAUSE".equals(itemType) && !printedNumber.isBlank()
+                        ? printedNumber + " " + safe(clause.title()) : safe(clause.title());
+                titleRun.setText(titleText);
                 titleRun.setBold(true);
                 titleRun.setFontSize(9);
                 titleRun.setColor("1F4E79");
+                if ("GROUP_HEADING".equals(itemType)) {
+                    title.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+                    titleRun.setFontSize(9);
+                } else if ("HEADING".equals(itemType)) {
+                    titleRun.setItalic(true);
+                }
 
-                XWPFParagraph content = cell.addParagraph();
-                content.setSpacingBefore(0);
-                content.setSpacingAfter(70);
-                XWPFRun contentRun = content.createRun();
-                contentRun.setText(safe(clause.text()));
-                contentRun.setFontSize(8);
-                contentRun.setColor("262626");
+                if (clause.text() != null && !clause.text().isBlank()) {
+                    XWPFParagraph content = cell.addParagraph();
+                    content.setSpacingBefore(0);
+                    content.setSpacingAfter(70);
+                    XWPFRun contentRun = content.createRun();
+                    contentRun.setText(safe(clause.text()));
+                    contentRun.setFontSize(8);
+                    contentRun.setColor("262626");
+                }
             }
         }
     }

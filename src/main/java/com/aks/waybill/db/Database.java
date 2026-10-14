@@ -121,9 +121,13 @@ public final class Database {
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)");
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)");
                 s.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)");
-                s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, hazardous_materials_reference INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+                s.execute("CREATE TABLE IF NOT EXISTS terms_condition (id INTEGER PRIMARY KEY AUTOINCREMENT, clause_number INTEGER NOT NULL, printed_number TEXT, item_type TEXT NOT NULL DEFAULT 'CLAUSE', clause_title TEXT NOT NULL, clause_text TEXT NOT NULL, display_order INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, hazardous_materials_reference INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
                 ensureHazardousTermsReferenceColumn(c);
+                ensureTermsStructureColumns(c);
                 seedTermsConditions(c);
+                try (Statement termsNumbering = c.createStatement()) {
+                    termsNumbering.execute("UPDATE terms_condition SET printed_number=CAST(clause_number AS TEXT) || '.' WHERE printed_number IS NULL AND item_type='CLAUSE'");
+                }
                 normalizeTermsConditionOrder(c);
 
                 // W.A.S.P. 2.0.0 Data Exchange foundation. Local numeric IDs remain
@@ -233,6 +237,29 @@ public final class Database {
                 s.execute("UPDATE terms_condition SET hazardous_materials_reference=1 WHERE clause_number=4");
             }
             WaspLogger.info("Added hazardous-material Terms & Conditions reference configuration.");
+        }
+    }
+
+    private static void ensureTermsStructureColumns(Connection c) throws SQLException {
+        boolean printedExists = false;
+        boolean typeExists = false;
+        try (PreparedStatement p = c.prepareStatement("PRAGMA table_info(terms_condition)"); ResultSet r = p.executeQuery()) {
+            while (r.next()) {
+                String name = r.getString("name");
+                if ("printed_number".equalsIgnoreCase(name)) printedExists = true;
+                if ("item_type".equalsIgnoreCase(name)) typeExists = true;
+            }
+        }
+        try (Statement st = c.createStatement()) {
+            if (!printedExists) {
+                st.execute("ALTER TABLE terms_condition ADD COLUMN printed_number TEXT");
+                WaspLogger.info("Added independent printed numbering for Terms & Conditions.");
+            }
+            if (!typeExists) {
+                st.execute("ALTER TABLE terms_condition ADD COLUMN item_type TEXT NOT NULL DEFAULT 'CLAUSE'");
+                WaspLogger.info("Added Terms & Conditions item types.");
+            }
+            st.execute("UPDATE terms_condition SET printed_number=CAST(clause_number AS TEXT) || '.' WHERE printed_number IS NULL AND item_type='CLAUSE'");
         }
     }
 
