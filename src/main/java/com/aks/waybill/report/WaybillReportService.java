@@ -381,6 +381,10 @@ public final class WaybillReportService {
             setDeclarationCell(table.getRows().get(2).getCell(0), "Signature: " + safe(waybill.shipperDeclarationName()), "Date: " + formatLongDate(waybill.shipperDeclarationDate()), "");
             setDeclarationCell(table.getRows().get(2).getCell(1), "Driver Signature: " + safe(waybill.carrierReceiptDriverName()), "Date: " + formatLongDate(waybill.carrierReceiptDate()), "");
             setDeclarationCell(table.getRows().get(2).getCell(2), "Receiver Signature: " + safe(waybill.consigneePodReceiverName()), "Date: " + formatLongDate(waybill.consigneePodDate()), "");
+            // Remove excess bottom padding from the signature cells so the lower rule sits closer to the date.
+            for (XWPFTableCell signatureCell : table.getRows().get(2).getTableCells()) {
+                setCellBottomMargin(signatureCell, 0);
+            }
         }
     }
 
@@ -448,6 +452,15 @@ public final class WaybillReportService {
         List<TermsConditionService.Clause> clauses = TermsConditionService.findActive();
         if (table == null || table.getNumberOfRows() == 0 || table.getRow(0).getTableCells().size() < 2) return;
 
+        // Keep the approved font size for a short, one-page set of terms. When
+        // the content is longer, use a slightly smaller body font and tighter
+        // paragraph spacing to reduce page count without making legal text tiny.
+        int totalContentCharacters = clauses.stream()
+                .mapToInt(c -> safe(c.title()).length() + safe(c.text()).length() + safe(c.printedNumber()).length())
+                .sum();
+        boolean compactTerms = totalContentCharacters > 2800;
+        int bodyFontHalfPoints = compactTerms ? 14 : 16; // 7 pt for long terms; retain 8 pt for short terms
+
         int split = (clauses.size() + 1) / 2;
         for (int col = 0; col < 2; col++) {
             XWPFTableCell cell = table.getRow(0).getCell(col);
@@ -471,8 +484,11 @@ public final class WaybillReportService {
 
                 String itemType = clause.itemType() == null ? "CLAUSE" : clause.itemType();
                 XWPFParagraph title = cell.addParagraph();
-                title.setSpacingBefore("GROUP_HEADING".equals(itemType) ? 150 : ("HEADING".equals(itemType) ? 110 : 80));
-                title.setSpacingAfter("GROUP_HEADING".equals(itemType) ? 70 : 20);
+                title.setSpacingBefore(compactTerms
+                        ? ("GROUP_HEADING".equals(itemType) ? 100 : ("HEADING".equals(itemType) ? 75 : 55))
+                        : ("GROUP_HEADING".equals(itemType) ? 150 : ("HEADING".equals(itemType) ? 110 : 80)));
+                title.setSpacingAfter(compactTerms ? 10 : ("GROUP_HEADING".equals(itemType) ? 70 : 20));
+                title.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT);
                 XWPFRun titleRun = title.createRun();
                 String printedNumber = clause.printedNumber() == null ? "" : clause.printedNumber().trim();
                 String titleText = "CLAUSE".equals(itemType) && !printedNumber.isBlank()
@@ -482,7 +498,7 @@ public final class WaybillReportService {
                 titleRun.setFontSize(9);
                 titleRun.setColor("1F4E79");
                 if ("GROUP_HEADING".equals(itemType)) {
-                    title.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+                    // Group headings align with the clause text in each column.
                     titleRun.setFontSize(9);
                 } else if ("HEADING".equals(itemType)) {
                     titleRun.setItalic(true);
@@ -490,11 +506,15 @@ public final class WaybillReportService {
 
                 if (clause.text() != null && !clause.text().isBlank()) {
                     XWPFParagraph content = cell.addParagraph();
+                    content.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT);
                     content.setSpacingBefore(0);
-                    content.setSpacingAfter(70);
+                    content.setSpacingAfter(compactTerms ? 10 : 70);
+                    if (compactTerms) {
+                        content.setSpacingBetween(compactTerms ? 0.95 : 1.0);
+                    }
                     XWPFRun contentRun = content.createRun();
                     contentRun.setText(safe(clause.text()));
-                    contentRun.setFontSize(8);
+                    setFontSizeHalfPoints(contentRun, bodyFontHalfPoints);
                     contentRun.setColor("262626");
                 }
             }
@@ -852,14 +872,56 @@ public final class WaybillReportService {
 
     private static void populateFooter(XWPFDocument document, ReportProfileService.ReportProfile profile) {
         String footerText = safe(profile.companyName()) + ", " + safe(profile.address());
+        // Keep the footer in Word's fixed footer area and place it closer to the
+        // physical page edge, while leaving a small printer-safe clearance.
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr section =
+                document.getDocument().getBody().getSectPr();
+        if (section != null) {
+            if (section.getPgMar() == null) section.addNewPgMar();
+            section.getPgMar().setFooter(java.math.BigInteger.valueOf(240)); // 0.167 inch from page edge
+            // Reclaim a little vertical space for the document while retaining a printer-safe margin.
+            section.getPgMar().setBottom(java.math.BigInteger.valueOf(540)); // 0.375 inch
+        }
         for (XWPFFooter footer : document.getFooterList()) {
             for (XWPFParagraph paragraph : footer.getParagraphs()) {
                 if (!paragraphText(paragraph).isBlank()) {
                     replaceParagraphText(paragraph, footerText);
+                    paragraph.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+                    paragraph.setSpacingBefore(0);
+                    paragraph.setSpacingAfter(0);
+                    paragraph.setSpacingBetween(1.0);
+                    // Do not add a new footer top border. The template already owns
+                    // the original page-one blue rule; an extra border duplicated it.
+                    // Remove the border introduced by the previous report revision.
+                    org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr pPr =
+                            paragraph.getCTP().getPPr();
+                    if (pPr != null && pPr.isSetPBdr() && pPr.getPBdr().isSetTop()) {
+                        pPr.getPBdr().unsetTop();
+                    }
+                    for (XWPFRun run : paragraph.getRuns()) {
+                        run.setFontSize(7);
+                    }
                     return;
                 }
             }
         }
+    }
+
+    /** Applies a Word font size expressed in half-points (e.g. 15 = 7.5 pt). */
+    private static void setFontSizeHalfPoints(XWPFRun run, int halfPoints) {
+        run.setFontSize(Math.max(1, halfPoints / 2));
+        if (run.getCTR().getRPr() == null) {
+            run.getCTR().addNewRPr();
+        }
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr rPr = run.getCTR().getRPr();
+        if (rPr.sizeOfSzArray() == 0) {
+            rPr.addNewSz();
+        }
+        rPr.getSzArray(0).setVal(java.math.BigInteger.valueOf(halfPoints));
+        if (rPr.sizeOfSzCsArray() == 0) {
+            rPr.addNewSzCs();
+        }
+        rPr.getSzCsArray(0).setVal(java.math.BigInteger.valueOf(halfPoints));
     }
 
     /**
@@ -1114,7 +1176,11 @@ public final class WaybillReportService {
         // Leave a physical signature area above the printed signature/name line.
         // Use paragraph spacing rather than blank lines so the three declaration
         // columns stay aligned and the approved report layout is preserved.
-        paragraph.setSpacingBefore(360); // 18 pt signature space
+        // Explicitly override the template's inherited 48 pt spacing and loose line spacing.
+        // 720 twips = 36 pt, providing two clear signing lines above the signature labels.
+        paragraph.setSpacingBefore(720);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBetween(1.0); // Single line spacing keeps the date close to the lower rule.
         run.setText(safe(line1));
         if (line2 != null && !line2.isBlank()) {
             run.addBreak();
@@ -1125,6 +1191,15 @@ public final class WaybillReportService {
             run.setText(line3);
         }
         run.setFontSize(8);
+    }
+
+    private static void setCellBottomMargin(XWPFTableCell cell, int twips) {
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr tcPr = cell.getCTTc().getTcPr();
+        if (tcPr == null) tcPr = cell.getCTTc().addNewTcPr();
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcMar margins = tcPr.isSetTcMar() ? tcPr.getTcMar() : tcPr.addNewTcMar();
+        if (margins.isSetBottom()) margins.unsetBottom();
+        margins.addNewBottom().setW(java.math.BigInteger.valueOf(Math.max(0, twips)));
+        margins.getBottom().setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth.DXA);
     }
 
     private static void setCellText(XWPFTableCell cell, String value) {
