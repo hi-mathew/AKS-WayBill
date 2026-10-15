@@ -1232,17 +1232,29 @@ public final class WaybillReportService {
     }
 
     private static void setDeclarationCell(XWPFTableCell cell, String line1, String line2, String line3) {
-        XWPFParagraph paragraph = cell.getParagraphs().isEmpty() ? cell.addParagraph() : cell.getParagraphs().get(0);
+        // Match the approved Modified.docx layout exactly: one real blank paragraph
+        // above the signature labels, followed by a compact signature/date paragraph.
+        // Do not use paragraph spacing or trailing blank lines: Word can place those
+        // inconsistently when the declaration row is close to a page boundary.
+        XWPFParagraph spacer;
+        if (cell.getParagraphs().isEmpty()) {
+            spacer = cell.addParagraph();
+        } else {
+            spacer = cell.getParagraphs().get(0);
+        }
+        for (XWPFRun run : spacer.getRuns()) run.setText("", 0);
+        spacer.setSpacingBefore(0);
+        spacer.setSpacingAfter(0);
+        spacer.setSpacingBetween(1.0);
+
+        XWPFParagraph paragraph = cell.getParagraphs().size() > 1
+                ? cell.getParagraphs().get(1)
+                : cell.addParagraph();
         for (XWPFRun run : paragraph.getRuns()) run.setText("", 0);
-        XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
-        // Leave a physical signature area above the printed signature/name line.
-        // Use paragraph spacing rather than blank lines so the three declaration
-        // columns stay aligned and the approved report layout is preserved.
-        // Explicitly override the template's inherited 48 pt spacing and loose line spacing.
-        // 720 twips = 36 pt, providing two clear signing lines above the signature labels.
-        paragraph.setSpacingBefore(720);
+        paragraph.setSpacingBefore(0);
         paragraph.setSpacingAfter(0);
-        paragraph.setSpacingBetween(1.0); // Single line spacing keeps the date close to the lower rule.
+        paragraph.setSpacingBetween(1.0);
+        XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
         run.setText(safe(line1));
         if (line2 != null && !line2.isBlank()) {
             run.addBreak();
@@ -1253,6 +1265,24 @@ public final class WaybillReportService {
             run.setText(line3);
         }
         run.setFontSize(8);
+
+        // Keep one additional blank paragraph after the signature/date paragraph,
+        // matching the latest Modified(1).docx reference.
+        while (cell.getParagraphs().size() > 3) {
+            cell.removeParagraph(cell.getParagraphs().size() - 1);
+        }
+        XWPFParagraph trailingSpacer;
+        if (cell.getParagraphs().size() < 3) {
+            trailingSpacer = cell.addParagraph();
+        } else {
+            trailingSpacer = cell.getParagraphs().get(2);
+        }
+        for (XWPFRun trailingRun : trailingSpacer.getRuns()) {
+            trailingRun.setText("", 0);
+        }
+        trailingSpacer.setSpacingBefore(0);
+        trailingSpacer.setSpacingAfter(0);
+        trailingSpacer.setSpacingBetween(1.0);
     }
 
     private static void setCellBottomMargin(XWPFTableCell cell, int twips) {
